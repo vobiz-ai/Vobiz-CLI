@@ -1,9 +1,12 @@
 # Weekly dependency update PRs (GitHub Dependabot). Updates are grouped to keep the PR count low.
 version: 2
 updates:
+  # cooldown: new upstream releases are proposed only after 7 days, past the window in which hijacked npm releases
+  # are usually caught and unpublished.
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     groups:
       production: { dependency-type: production }
       development: { dependency-type: development }
@@ -14,12 +17,14 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     groups:
       actions: { patterns: ["*"] }
   # Bumps the node:24-alpine@sha256 digest pinned in the Dockerfile (both stages).
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     ignore:
       # The image tracks the current Node.js LTS (24); move to the next LTS deliberately, not on release day.
       - dependency-name: node

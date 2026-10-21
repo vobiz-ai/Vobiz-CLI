@@ -4,8 +4,8 @@ A release is one tag. Pushing `vX.Y.Z` runs [`release.yml`](../.github/workflows
 
 | Job | Publishes | Notes |
 |---|---|---|
-| `verify` | — | Tag matches `package.json`, `package-lock.json` and a `## [X.Y.Z]` section in `CHANGELOG.md`; `npm run check` passes |
-| `npm` | `@vobiz/cli` on npm | Trusted publishing (OIDC) with provenance, in the `npm` environment. Prereleases use the `next` dist-tag |
+| `verify` | — | Tag matches `package.json`, `package-lock.json` and a `## [X.Y.Z]` section in `CHANGELOG.md`; `npm run check` and `npm audit --audit-level=high` (dev included) pass; packs the npm tarball |
+| `npm` | `@vobiz/cli` on npm | Trusted publishing (OIDC) with provenance, in the `npm` environment. Publishes the tarball `verify` packed with `--ignore-scripts` (no checkout, install or build next to the OIDC token). Prereleases use the `next` dist-tag |
 | `binaries` | — | Single-executable builds on macOS arm64 (`macos-14`), macOS x64 (`macos-15-intel`), Linux x64 (`ubuntu-24.04`), Linux arm64 (`ubuntu-24.04-arm`), Windows x64 (`windows-2022`) |
 | `github-release` | GitHub release | Archives, `SHA256SUMS`, build-provenance attestations, generated notes |
 | `docker` | `ghcr.io/vobiz-ai/vobiz-cli` | `linux/amd64` + `linux/arm64`, tags `X.Y.Z` and `vX.Y.Z`; `:latest` only for the highest stable tag |

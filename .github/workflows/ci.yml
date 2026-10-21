@@ -63,6 +63,9 @@ jobs:
           npm install --global --ignore-scripts --prefix "$RUNNER_TEMP/global" "$RUNNER_TEMP"/vobiz-cli-*.tgz
           "$RUNNER_TEMP/global/bin/vobiz" --version
       - run: npm audit --omit=dev --audit-level=high
+      # Dev dependencies too (the build and test toolchain, esbuild/postject for the SEA), once per run.
+      - if: matrix.node == 24
+        run: npm audit --audit-level=high
 
   docker:
     runs-on: ubuntu-latest

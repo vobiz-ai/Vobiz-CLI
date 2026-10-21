@@ -16,7 +16,8 @@ export function register(program: Command, ctx: Ctx): void {
       examples(
         "vobiz apps list",
         "vobiz apps create --app-name 'IVR' --answer-url https://example.com/answer --answer-method POST",
-        "vobiz apps update <app-id> --app-name 'IVR v2' --no-default-number-app",
+        "vobiz apps update <app-id> --app-name 'IVR v2' --no-default-number-app --answer-url https://example.com/v2/answer",
+        "vobiz numbers update +919876543210 --app <app-id>",
       ),
     );
   crud(apps, ctx, {
@@ -31,6 +32,9 @@ export function register(program: Command, ctx: Ctx): void {
     update: op("update-application"),
     delete: op("delete-application"),
     summaryKeys: ["app_name", "answer_method", "default_number_app"],
-    createExamples: ["vobiz apps create --app-name 'IVR' --answer-url https://example.com/answer --answer-method POST"],
+    createExamples: [
+      "vobiz apps create --app-name 'IVR' --answer-url https://example.com/answer --answer-method POST",
+      "vobiz apps create --app-name 'IVR' --answer-url https://example.com/answer --answer-method POST --hangup-url https://example.com/hangup --hangup-method POST",
+    ],
   });
 }

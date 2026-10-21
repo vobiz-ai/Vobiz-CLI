@@ -23,6 +23,7 @@ import {
 import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
+import { REDACTED } from "../core/redact.js";
 
 interface ModeOpts {
   hosted?: boolean;
@@ -156,7 +157,8 @@ Examples:
         },
       });
       if (ctx.flags.dryRun) {
-        ctx.stdout.write(snippet(spec, mode, name, creds));
+        // Dry-run output must never contain the token; show where it would go instead.
+        ctx.stdout.write(snippet(spec, mode, name, creds ? { ...creds, authToken: REDACTED } : undefined));
         return;
       }
       const backup = writeConfig(file, merged.text, !!creds);

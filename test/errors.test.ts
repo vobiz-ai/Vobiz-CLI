@@ -79,6 +79,8 @@ describe("exit codes from run()", () => {
     expect((await runCli(["whoami", "--no-such-flag"])).code).toBe(2);
     expect((await runCli(["--output", "xml", "whoami"])).code).toBe(2);
     expect((await runCli(["--timeout", "abc", "whoami"])).code).toBe(2);
+    for (const t of ["0.5", "0", "3601"]) expect((await runCli(["--timeout", t, "whoami"])).code, t).toBe(2);
+    expect((await runCli(["whoami"], { env: { VOBIZ_TIMEOUT: "0.5" } })).err).toContain("between 1 and 3600");
   });
 
   it("missing credentials exit 3 with a hint", async () => {

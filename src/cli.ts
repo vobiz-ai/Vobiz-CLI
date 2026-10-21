@@ -67,7 +67,7 @@ function addGlobalOptions(program: Command): void {
 export function resolveGlobalFlags(raw: RawGlobals, env: NodeJS.ProcessEnv): GlobalFlags {
   const timeoutText = raw.timeout ?? env.VOBIZ_TIMEOUT;
   const timeout = timeoutText === undefined ? 30 : Number(timeoutText);
-  if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 3600) throw new VobizError("invalid_input", `--timeout must be a number of seconds between 1 and 3600 (got "${timeoutText}").`);
+  if (!Number.isFinite(timeout) || timeout < 1 || timeout > 3600) throw new VobizError("invalid_input", `--timeout must be a number of seconds between 1 and 3600 (got "${timeoutText}").`);
   if (raw.baseUrl !== undefined) assertSecureBaseUrl(raw.baseUrl, "--base-url", env);
   if (raw.smsBaseUrl !== undefined) assertSecureBaseUrl(raw.smsBaseUrl, "--sms-base-url", env);
   return {

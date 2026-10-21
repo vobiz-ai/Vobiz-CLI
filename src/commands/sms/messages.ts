@@ -17,6 +17,7 @@ import { EXIT, VobizError, usage } from "../../core/errors.js";
 import { op } from "../../core/ops.js";
 import { toE164 } from "../../core/phone.js";
 import { parseRange } from "../../core/time.js";
+import { MESSAGE_TEXT_KEYS, untrustedAction } from "../../core/untrusted.js";
 import {
   collect,
   httpsUrl,
@@ -290,7 +291,7 @@ function registerMessages(sms: Command, ctx: Ctx): void {
     20,
   )
     .addHelpText("after", "\nExamples:\n  vobiz sms messages list --direction in --since 7d\n  vobiz sms messages list --tag october-notice --all --output json")
-    .action(async (o: ListOpts) => {
+    .action(untrustedAction(ctx, MESSAGE_TEXT_KEYS, async (o: ListOpts) => {
       const range = parseRange(o.since, o.until, ctx.now());
       const from = o.from && /^[+\d\s()-]+$/.test(o.from) ? toE164(o.from) : o.from;
       const query = {
@@ -304,15 +305,15 @@ function registerMessages(sms: Command, ctx: Ctx): void {
         endDate: range.to?.toISOString(),
       };
       await listCommand(ctx, LIST, { query }, o, 20, 100, "messages", { columns: MESSAGE_COLUMNS, idKey: "id", empty: "No messages match." });
-    });
+    }));
 
   messages
     .command("get")
     .description("Show one message with its status history")
     .argument("<id>", "message id")
-    .action(async (id: string) => {
+    .action(untrustedAction(ctx, MESSAGE_TEXT_KEYS, async (id: string) => {
       ctx.out.print(await ctx.client.call(GET, { path: { id } }));
-    });
+    }));
 }
 
 function registerCost(sms: Command, ctx: Ctx): void {

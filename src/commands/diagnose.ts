@@ -9,6 +9,7 @@
  */
 import type { Command } from "commander";
 import type { Ctx } from "../core/context.js";
+import { CALLER_KEYS, MESSAGE_TEXT_KEYS, RESOURCE_NAME_KEYS, untrustedAction } from "../core/untrusted.js";
 import { VobizError } from "../core/errors.js";
 import { op } from "../core/ops.js";
 import { extractItems, paginate } from "../core/pagination.js";
@@ -283,6 +284,9 @@ export function printDiagnosis(ctx: Ctx, d: Diagnosis): void {
   ctx.stdout.write(lines.join("\n") + "\n");
 }
 
+/** Third-party text in diagnosed records (S6 #4). */
+const DIAGNOSE_UNTRUSTED = [...CALLER_KEYS, ...RESOURCE_NAME_KEYS, ...MESSAGE_TEXT_KEYS];
+
 export function register(program: Command, ctx: Ctx): void {
   const diagnose = program.command("diagnose").description("Explain why a call or message ended the way it did (read-only)");
 
@@ -301,17 +305,17 @@ Examples:
 
 Explanations come from the hangup-cause tables in the Vobiz docs (${DOCS.hangupCauses}).`,
     )
-    .action(async (uuid: string, o: { scan?: number }) => {
+    .action(untrustedAction(ctx, DIAGNOSE_UNTRUSTED, async (uuid: string, o: { scan?: number }) => {
       printDiagnosis(ctx, await diagnoseCall(ctx, uuid.trim(), { scan: o.scan ?? 200 }));
-    });
+    }));
 
   diagnose
     .command("message")
     .argument("<message-id>", "message ID (UUID) from `vobiz sms send` or `sms messages list`")
     .description("Explain a message's delivery status and history, and what to check next")
     .addHelpText("after", "\nExamples:\n  vobiz diagnose message 9b2e1c40-8a3d-4f5e-9c1a-7d6b2e8f4a01\n  vobiz diagnose message <id> --json")
-    .action(async (id: string) => {
+    .action(untrustedAction(ctx, DIAGNOSE_UNTRUSTED, async (id: string) => {
       const body = await ctx.client.call<Rec>(GET_MESSAGE, { path: { id: id.trim() } });
       printDiagnosis(ctx, explainMessage(isRec(body) ? body : {}));
-    });
+    }));
 }

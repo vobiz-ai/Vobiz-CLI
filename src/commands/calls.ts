@@ -16,6 +16,7 @@ import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
 import { op } from "../core/ops.js";
 import { toE164 } from "../core/phone.js";
+import { CALLER_KEYS, RESOURCE_NAME_KEYS, untrustedAction } from "../core/untrusted.js";
 import { checkUrl, hostOf, intArg, isRec, normalizeDestinations, secondsArg, watchCall, type Rec } from "./voice-shared.js";
 
 const MAKE_CALL = op("make-call");
@@ -261,7 +262,7 @@ function registerReads(calls: Command, ctx: Ctx) {
     .option("--queued", "list queued calls (placed, not yet connected; max 20) instead of live ones")
     .option("--details", "fetch each call's details (one request per call)")
     .addHelpText("after", "\nExamples:\n  vobiz calls list\n  vobiz calls list --queued --details")
-    .action(async (o: { queued?: boolean; details?: boolean }) => {
+    .action(untrustedAction(ctx, CALL_UNTRUSTED, async (o: { queued?: boolean; details?: boolean }) => {
       const status = o.queued ? "queued" : "live";
       const body = await ctx.client.call<Rec>(o.queued ? LIST_QUEUED : LIST_LIVE, { query: { status } });
       const uuids = Array.isArray(body?.calls) ? (body.calls as unknown[]).map(String) : [];
@@ -280,17 +281,17 @@ function registerReads(calls: Command, ctx: Ctx) {
         }
       }
       ctx.out.print(rows, { columns: ["call_uuid", "call_status", "direction", "from", "to", "session_start"], idKey: "call_uuid", empty: `No ${status} calls.` });
-    });
+    }));
 
   calls
     .command("get")
     .argument("<uuid>", "call UUID (the request_uuid from calls create)")
     .description("Show a live call (or a queued one with --queued)")
     .option("--queued", "look the call up among queued calls")
-    .action(async (uuid: string, o: { queued?: boolean }) => {
+    .action(untrustedAction(ctx, CALL_UNTRUSTED, async (uuid: string, o: { queued?: boolean }) => {
       const res = await ctx.client.call(o.queued ? GET_QUEUED : GET_LIVE, { path: { call_uuid: uuid }, query: { status: o.queued ? "queued" : "live" } });
       ctx.out.print(res);
-    });
+    }));
 
   waitOptions(
     calls
@@ -299,9 +300,9 @@ function registerReads(calls: Command, ctx: Ctx) {
       .description("Follow a call until it ends (status on stderr), then print its call record"),
   )
     .addHelpText("after", "\nExample:\n  vobiz calls watch 2ded13fe-4f9b-4958-9bfb-093ea2f29f91 --interval 1")
-    .action(async (uuid: string, o: { interval?: number; maxWait?: number }) => {
+    .action(untrustedAction(ctx, CALL_UNTRUSTED, async (uuid: string, o: { interval?: number; maxWait?: number }) => {
       ctx.out.print(await watchCall(ctx, uuid, { interval: o.interval ?? 2, maxWait: o.maxWait ?? 600 }));
-    });
+    }));
 
   calls
     .command("hangup")
@@ -513,6 +514,9 @@ function registerControl(calls: Command, ctx: Ctx) {
       });
     });
 }
+
+/** Third-party text in call details (S6 #4). */
+const CALL_UNTRUSTED = [...CALLER_KEYS, ...RESOURCE_NAME_KEYS];
 
 export function register(program: Command, ctx: Ctx): void {
   const calls = program.command("calls").description("Place, list, watch, hang up and control voice calls");

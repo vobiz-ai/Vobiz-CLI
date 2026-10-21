@@ -173,3 +173,87 @@ describe("numbers release/cancel-release/assign", () => {
     expect(api.last()).toMatchObject({ method: "DELETE", query: { force: "true" } });
   });
 });
+
+describe("numbers update (application / trunk links)", () => {
+  const TRUNK = "e3e55a78-1234-5678-90ab-cdef12345678";
+  const onTrunk = { items: [{ e164: NUM, trunk_group_id: TRUNK, application_id: null }] };
+  const onApp = { items: [{ e164: NUM, trunk_group_id: null, application_id: "2057" }] };
+  const writeRoutes = {
+    [`POST ${A}/numbers/${NUM}/application`]: { message: "linked" },
+    [`DELETE ${A}/numbers/${NUM}/application`]: { message: "unlinked" },
+    [`POST ${A}/numbers/${NUM}/assign`]: reply(204),
+    [`DELETE ${A}/numbers/${NUM}/assign`]: reply(204),
+  };
+  const writes = (calls: { method: string; path: string; body?: unknown }[]) => calls.filter((c) => c.method !== "GET").map((c) => [c.method, c.path, c.body]);
+
+  it("--app links the number, removing it from its trunk first", async () => {
+    const api = fakeFetch({ [`GET ${A}/numbers`]: onTrunk, ...writeRoutes });
+    const r = await runCli(["numbers", "update", NUM, "--app", "12345678901234567", "--yes", "--json"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(api.calls[0]).toMatchObject({ method: "GET", path: `${A}/numbers`, query: { search: NUM } });
+    expect(writes(api.calls)).toEqual([
+      ["DELETE", `${A}/numbers/${ENC}/assign`, undefined],
+      ["POST", `${A}/numbers/${ENC}/application`, { application_id: "12345678901234567" }],
+    ]);
+    expect(r.err).toContain(`Remove ${NUM} from trunk ${TRUNK}, then Link ${NUM} to application 12345678901234567`);
+    expect(r.err).toContain(`current trunk: ${TRUNK}`);
+    expect(r.json()).toMatchObject({ e164: NUM, application_id: "12345678901234567", trunk_group_id: null });
+  });
+
+  it("--app on a number without a trunk sends only the link", async () => {
+    const api = fakeFetch({ [`GET ${A}/numbers`]: owned, ...writeRoutes });
+    const r = await runCli(["numbers", "update", NUM, "--app", "99", "--yes"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(writes(api.calls)).toEqual([["POST", `${A}/numbers/${ENC}/application`, { application_id: "99" }]]);
+  });
+
+  it("--unlink-app --trunk switches from an application to a trunk (unlink first)", async () => {
+    const api = fakeFetch({ [`GET ${A}/numbers`]: onApp, ...writeRoutes });
+    const r = await runCli(["numbers", "update", NUM, "--unlink-app", "--trunk", TRUNK, "--yes", "--json"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(writes(api.calls)).toEqual([
+      ["DELETE", `${A}/numbers/${ENC}/application`, undefined],
+      ["POST", `${A}/numbers/${ENC}/assign`, { trunk_group_id: TRUNK }],
+    ]);
+    expect(r.json()).toMatchObject({ application_id: null, trunk_group_id: TRUNK });
+  });
+
+  it("--unlink-trunk and --unlink-app each send one DELETE", async () => {
+    let api = fakeFetch({ [`GET ${A}/numbers`]: onTrunk, ...writeRoutes });
+    expect((await runCli(["numbers", "update", NUM, "--unlink-trunk", "--yes"], { fetch: api.fetch })).code).toBe(0);
+    expect(writes(api.calls)).toEqual([["DELETE", `${A}/numbers/${ENC}/assign`, undefined]]);
+    api = fakeFetch({ [`GET ${A}/numbers`]: onApp, ...writeRoutes });
+    expect((await runCli(["numbers", "update", NUM, "--unlink-app", "--yes"], { fetch: api.fetch })).code).toBe(0);
+    expect(writes(api.calls)).toEqual([["DELETE", `${A}/numbers/${ENC}/application`, undefined]]);
+  });
+
+  it("refuses conflicting or missing flags before any request", async () => {
+    const api = fakeFetch({ [`GET ${A}/numbers`]: owned, ...writeRoutes });
+    for (const args of [["--app", "1", "--trunk", TRUNK], ["--app", "1", "--unlink-app"], ["--trunk", TRUNK, "--unlink-trunk"], []]) {
+      const r = await runCli(["numbers", "update", NUM, ...args, "--yes"], { fetch: api.fetch });
+      expect(r.code, args.join(" ")).toBe(2);
+    }
+    expect(api.calls).toHaveLength(0);
+  });
+
+  it("needs --yes off a terminal, --dry-run sends no writes, an unknown number is not found", async () => {
+    const api = fakeFetch({ [`GET ${A}/numbers`]: onTrunk, ...writeRoutes });
+    expect((await runCli(["numbers", "update", NUM, "--app", "1"], { fetch: api.fetch })).code).toBe(6);
+    const d = await runCli(["numbers", "update", NUM, "--app", "1", "--dry-run", "--json"], { fetch: api.fetch });
+    expect(d.code, d.err).toBe(0);
+    expect(d.json().steps.map((s: any) => [s.method, s.operation])).toEqual([
+      ["DELETE", "unassign-number-from-trunk"],
+      ["POST", "link-number-to-application"],
+    ]);
+    expect(writes(api.calls)).toHaveLength(0);
+    expect((await runCli(["numbers", "update", "+14155550100", "--app", "1", "--yes"], { fetch: api.fetch })).code).toBe(4);
+  });
+
+  it("a failed link after the trunk was removed says how to finish", async () => {
+    const api = fakeFetch({ [`GET ${A}/numbers`]: onTrunk, ...writeRoutes, [`POST ${A}/numbers/${NUM}/application`]: reply(404, { error: "application not found" }) });
+    const r = await runCli(["numbers", "update", NUM, "--app", "1", "--yes"], { fetch: api.fetch });
+    expect(r.code).toBe(4);
+    expect(r.err).toContain(`Done: Remove ${NUM} from trunk ${TRUNK}. Failed: Link ${NUM} to application 1`);
+    expect(r.err).toContain(`vobiz numbers update ${NUM} --app 1`);
+  });
+});

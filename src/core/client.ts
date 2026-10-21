@@ -110,6 +110,9 @@ export class VobizClient {
       if (ACCOUNT_PARAMS.has(name)) return encodeURIComponent(this.authId);
       const v = params[name];
       if (v === undefined || v === null || v === "") throw new VobizError("invalid_input", `Missing required path parameter "${name}".`);
+      // "." and ".." survive encodeURIComponent and would be collapsed by URL parsing, so `calls hangup ..`
+      // would otherwise DELETE the parent resource.
+      if (v === "." || v === "..") throw new VobizError("invalid_input", `Invalid path parameter "${name}": "${v}".`);
       return encodeURIComponent(String(v));
     });
   }

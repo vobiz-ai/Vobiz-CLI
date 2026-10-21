@@ -110,6 +110,9 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
   - [`vobiz config path`](#vobiz-config-path)
   - [`vobiz config set`](#vobiz-config-set)
   - [`vobiz config unset`](#vobiz-config-unset)
+- [`vobiz docs`](#vobiz-docs)
+  - [`vobiz docs open`](#vobiz-docs-open)
+  - [`vobiz docs search`](#vobiz-docs-search)
 - [`vobiz doctor`](#vobiz-doctor)
 - [`vobiz endpoints`](#vobiz-endpoints)
   - [`vobiz endpoints create`](#vobiz-endpoints-create)
@@ -119,6 +122,9 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
   - [`vobiz endpoints update`](#vobiz-endpoints-update)
 - [`vobiz login`](#vobiz-login)
 - [`vobiz logout`](#vobiz-logout)
+- [`vobiz mcp`](#vobiz-mcp)
+  - [`vobiz mcp config`](#vobiz-mcp-config)
+  - [`vobiz mcp install`](#vobiz-mcp-install)
 - [`vobiz numbers`](#vobiz-numbers)
   - [`vobiz numbers assign`](#vobiz-numbers-assign)
   - [`vobiz numbers assign-subaccount`](#vobiz-numbers-assign-subaccount)
@@ -158,6 +164,10 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
   - [`vobiz recordings export`](#vobiz-recordings-export)
   - [`vobiz recordings get`](#vobiz-recordings-get)
   - [`vobiz recordings list`](#vobiz-recordings-list)
+- [`vobiz skills`](#vobiz-skills)
+  - [`vobiz skills install`](#vobiz-skills-install)
+  - [`vobiz skills list`](#vobiz-skills-list)
+  - [`vobiz skills update`](#vobiz-skills-update)
 - [`vobiz sms`](#vobiz-sms)
   - [`vobiz sms 10dlc`](#vobiz-sms-10dlc)
     - [`vobiz sms 10dlc brands`](#vobiz-sms-10dlc-brands)
@@ -293,7 +303,14 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
     - [`vobiz trunks origination-uris update`](#vobiz-trunks-origination-uris-update)
   - [`vobiz trunks update`](#vobiz-trunks-update)
 - [`vobiz update`](#vobiz-update)
+- [`vobiz webhooks`](#vobiz-webhooks)
+  - [`vobiz webhooks listen`](#vobiz-webhooks-listen)
+  - [`vobiz webhooks verify`](#vobiz-webhooks-verify)
 - [`vobiz whoami`](#vobiz-whoami)
+- [`vobiz xml`](#vobiz-xml)
+  - [`vobiz xml build`](#vobiz-xml-build)
+  - [`vobiz xml serve`](#vobiz-xml-serve)
+  - [`vobiz xml validate`](#vobiz-xml-validate)
 
 ### vobiz account
 
@@ -1219,6 +1236,44 @@ vobiz config unset <key> [options]
 |---|---|---|
 | `key` | yes | setting name |
 
+### vobiz docs
+
+Search the Vobiz documentation and open pages in your browser
+
+```
+vobiz docs <command> [options]
+```
+
+Subcommands: [`open`](#vobiz-docs-open), [`search`](#vobiz-docs-search)
+
+### vobiz docs open
+
+Open a Vobiz docs page in your browser
+
+```
+vobiz docs open [path] [options]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `path` | no | page path such as xml/gather or concepts/validating-callbacks (default: the docs home) |
+
+### vobiz docs search
+
+Search the Vobiz docs (via the Vobiz Docs MCP server) and list matching pages
+
+```
+vobiz docs search <query...> [options]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `query...` | yes | what to look for, e.g. "gather speech input" |
+
+| Option | Description |
+|---|---|
+| `--limit <n>` | show at most this many results |
+
 ### vobiz doctor
 
 Check Node.js, config permissions, connectivity, credentials, clock skew and proxy settings
@@ -1349,6 +1404,57 @@ vobiz logout [options]
 | Option | Description |
 |---|---|
 | `--all` | remove every saved profile |
+
+### vobiz mcp
+
+Connect Claude, Cursor, Codex, VS Code and other AI clients to the Vobiz MCP server
+
+```
+vobiz mcp <command> [options]
+```
+
+Subcommands: [`config`](#vobiz-mcp-config), [`install`](#vobiz-mcp-install)
+
+### vobiz mcp config
+
+Print the config snippet for an AI client without writing anything
+
+```
+vobiz mcp config <client> [options]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `client` | yes | claude \| claude-code \| cursor \| codex \| windsurf \| vscode \| gemini \| zed |
+
+| Option | Description |
+|---|---|
+| `--hosted` | use the hosted connector https://mcp.vobiz.ai/mcp with OAuth sign-in (default) |
+| `--local` | run `npx -y @vobiz/mcp` on this machine with your Auth ID and Auth Token |
+| `--project` | use the project config in the current directory (claude-code, cursor, vscode, gemini) |
+| `--dir <path>` | project directory for --project (default: the current directory) |
+| `--name <name>` | server name in the client config |
+
+### vobiz mcp install
+
+Add the Vobiz MCP server to an AI client's config file (merged; other servers are kept)
+
+```
+vobiz mcp install <client> [options]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `client` | yes | claude \| claude-code \| cursor \| codex \| windsurf \| vscode \| gemini \| zed |
+
+| Option | Description |
+|---|---|
+| `--hosted` | use the hosted connector https://mcp.vobiz.ai/mcp with OAuth sign-in (default) |
+| `--local` | run `npx -y @vobiz/mcp` on this machine with your Auth ID and Auth Token |
+| `--project` | use the project config in the current directory (claude-code, cursor, vscode, gemini) |
+| `--dir <path>` | project directory for --project (default: the current directory) |
+| `--name <name>` | server name in the client config |
+| `--with-credentials` | with --local: copy the current profile's Auth ID and Auth Token into the file (the file will then contain your token) |
 
 ### vobiz numbers
 
@@ -1908,6 +2014,54 @@ Aliases: `ls`
 |---|---|
 | `--limit <n>` | maximum number of rows to fetch (default: 20) |
 | `--all` | fetch every page |
+
+### vobiz skills
+
+Install the Vobiz Agent Skills into a project for Claude Code, Codex and other agents
+
+```
+vobiz skills <command> [options]
+```
+
+Subcommands: [`install`](#vobiz-skills-install), [`list`](#vobiz-skills-list), [`update`](#vobiz-skills-update)
+
+### vobiz skills install
+
+Copy the bundled Vobiz skills into a project's skills folder (existing ones are left alone)
+
+```
+vobiz skills install [options]
+```
+
+| Option | Description |
+|---|---|
+| `--dir <path>` | skills folder in your project: .claude/skills (Claude Code) or .agents/skills (Codex and others) |
+| `--only <names...>` | only these skills (space- or comma-separated; see `vobiz skills list`) |
+
+### vobiz skills list
+
+List the Vobiz Agent Skills bundled with this CLI
+
+```
+vobiz skills list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--dir <path>` | also show whether each skill is installed in this folder |
+
+### vobiz skills update
+
+Re-copy installed Vobiz skills from this CLI version (replaces local edits)
+
+```
+vobiz skills update [options]
+```
+
+| Option | Description |
+|---|---|
+| `--dir <path>` | skills folder in your project: .claude/skills (Claude Code) or .agents/skills (Codex and others) |
+| `--only <names...>` | only these skills (space- or comma-separated; see `vobiz skills list`) |
 
 ### vobiz sms
 
@@ -3979,6 +4133,49 @@ vobiz update [options]
 |---|---|
 | `--check` | only report whether an update exists (exit 0 either way) |
 
+### vobiz webhooks
+
+Verify Vobiz webhook signatures and receive webhooks locally
+
+```
+vobiz webhooks <command> [options]
+```
+
+Subcommands: [`listen`](#vobiz-webhooks-listen), [`verify`](#vobiz-webhooks-verify)
+
+### vobiz webhooks listen
+
+Run a local webhook receiver that prints every request as JSON (and optionally forwards it)
+
+```
+vobiz webhooks listen [options]
+```
+
+| Option | Description |
+|---|---|
+| `--port <port>` | port to listen on (0 picks a free one) |
+| `--host <address>` | address to bind; use 0.0.0.0 to accept connections from other machines |
+| `--forward <url>` | also send each request to this URL (e.g. your app) and relay its response back to Vobiz |
+| `--secret <secret>` | check each request's signature with this secret (env: VOBIZ_WEBHOOK_SECRET) |
+| `--public-url <url>` | the https URL Vobiz calls (your tunnel), needed to check voice-callback signatures |
+
+### vobiz webhooks verify
+
+Check a Vobiz webhook signature (voice callback V3/V2, or a body HMAC for messaging, campaign, KYC and NDNC webhooks)
+
+```
+vobiz webhooks verify [options]
+```
+
+| Option | Description |
+|---|---|
+| `--signature <value>` | the signature header value (X-Vobiz-Signature-V3, -V2, X-Webhook-Signature or X-Vobiz-Signature) |
+| `--url <callback-url>` | voice callbacks: the full URL Vobiz called (the query string is ignored) |
+| `--nonce <nonce>` | voice callbacks: the X-Vobiz-Signature-V3-Nonce (or -V2-Nonce) header value |
+| `--scheme <v3\|v2>` | voice callbacks: which signature version to check (default: try V3, then V2) |
+| `--body <text\|@file\|@->` | body-signed webhooks: the raw request body, @file for a file, @- for stdin |
+| `--secret <secret>` | signing secret: your Auth Token for voice callbacks (parent account's for -MA- headers), the subscription secret for messaging (env: VOBIZ_WEBHOOK_SECRET) |
+
 ### vobiz whoami
 
 Show the account, Auth ID and credential source in use (offline; --check verifies with the API)
@@ -3990,3 +4187,68 @@ vobiz whoami [options]
 | Option | Description |
 |---|---|
 | `--check` | verify the credentials with GET /api/v1/auth/me |
+
+### vobiz xml
+
+Build, validate and locally serve VobizXML call-control documents
+
+```
+vobiz xml <command> [options]
+```
+
+Subcommands: [`build`](#vobiz-xml-build), [`serve`](#vobiz-xml-serve), [`validate`](#vobiz-xml-validate)
+
+### vobiz xml build
+
+Compose a VobizXML <Response> from flags, in the order you give them, and print it
+
+```
+vobiz xml build [options]
+```
+
+| Option | Description |
+|---|---|
+| `--say <text>` | speak text with text-to-speech (<Speak>) |
+| `--play <url>` | play an https .mp3 or .wav file (<Play>) |
+| `--gather <action-url>` | collect digits or speech and post them to this https URL (<Gather>) |
+| `--prompt <text>` | speak this inside the preceding --gather (up to 5 prompts) |
+| `--prompt-play <url>` | play this file inside the preceding --gather |
+| `--dial <destination>` | connect the caller to a number (+919876543210) or SIP URI (sip:alice@example.com) (<Dial>) |
+| `--record <action-url>` | record the caller; Vobiz posts the RecordingID to this https URL (<Record>) |
+| `--pause <seconds>` | wait silently for this many seconds (<Wait>) |
+| `--redirect <url>` | fetch the next VobizXML from this https URL (<Redirect>; ends this document) |
+| `--hangup [reason]` | end the call, optionally with reason rejected or busy (<Hangup>) |
+| `--attr <key=value>` | set an attribute on the element before it, e.g. voice=MAN, numDigits=1, callerId=+918000000000 (repeatable) |
+
+### vobiz xml serve
+
+Serve a VobizXML file over local HTTP so you can use it as an answer URL while developing
+
+```
+vobiz xml serve <file> [options]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `file` | yes | XML file to serve (re-read on every request) |
+
+| Option | Description |
+|---|---|
+| `--port <port>` | port to listen on (0 picks a free one) |
+| `--host <address>` | address to bind; use 0.0.0.0 to accept connections from other machines |
+
+### vobiz xml validate
+
+Check a VobizXML file against the documented elements and attributes
+
+```
+vobiz xml validate <file> [options]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `file` | yes | XML file to check, or - for stdin |
+
+| Option | Description |
+|---|---|
+| `--strict` | treat warnings as failures too |

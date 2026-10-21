@@ -65,6 +65,8 @@ Commands:
                                  and desk-phone clients
   sub-accounts                   Sub-accounts (SA_…) under your main account,
                                  and their KYC
+  partner                        Partner API (resellers): profile, dashboard,
+                                 customer accounts and KYC sessions
   api [options] [method] [path]  Send a raw request to the Vobiz API, or list
                                  and describe every operation in the spec
   completion <shell>             Print a shell completion script (bash, zsh,

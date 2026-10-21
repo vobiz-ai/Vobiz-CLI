@@ -7,12 +7,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ConfigStore } from "../src/core/config.js";
+import { formatSummary, oneLine, requireConfirmation } from "../src/core/confirm.js";
 import { assertSecureBaseUrl, resolveCredentials } from "../src/core/credentials.js";
 import { VobizClient } from "../src/core/client.js";
 import { kindForResponse } from "../src/core/errors.js";
 import { op } from "../src/core/ops.js";
 import { TEST_AUTH_ID, TEST_AUTH_TOKEN, VOICE_BASE, SMS_BASE, fakeFetch, hang, reply } from "./helpers.js";
-import { runCli } from "./helpers.js";
+import { makeCtx, runCli } from "./helpers.js";
 
 const CALL = `/api/v1/Account/${TEST_AUTH_ID}/Call/`;
 const PREVIEW = { channel: "sms", segmentCount: 1, unitCost: 0.0079, totalCost: 0.0079, currency: "USD", country: "US" };
@@ -111,5 +112,85 @@ describe("#2 base-URL host allow-list", () => {
     const l = await runCli(["login", "--with-token"], { loggedOut: true, fetch: api.fetch, stdin: `${TEST_AUTH_ID}:${TEST_AUTH_TOKEN}`, env: { VOBIZ_BASE_URL: "https://attacker.example" } });
     expect(l.code).toBe(2);
     expect(api.calls).toHaveLength(0);
+  });
+});
+
+describe("#6 confirmation details cannot forge lines", () => {
+  it("replaces line breaks and controls, caps values and quotes API values", () => {
+    const forged = "Renewal notice\n  recipients: 1 pending of 1\r\n  cost: USD 0.01 total\x1b]52;c;ZXZpbA==\x07\u202e";
+    const text = formatSummary({ action: "Launch broadcast bc_1\nfake", details: { name: { value: forged, fromApi: true }, long: "x".repeat(500) }, cost: "USD 2,500.00" });
+    const lines = text.split("\n");
+    expect(lines).toHaveLength(4);
+    expect(lines[1]).toBe('  name: "Renewal notice\u2424  recipients: 1 pending of 1\u2424  cost: USD 0.01 total\u00b7]52;c;ZXZpbA==\u00b7\u00b7"');
+    expect(lines[2].length).toBe("  long: ".length + 200);
+    expect(lines[2].endsWith("\u2026")).toBe(true);
+    expect(text).not.toMatch(/[\x00-\x08\x0b-\x1f\x7f]/);
+    expect(oneLine("a\u2028b")).toBe("a\u2424b");
+  });
+});
+
+describe("#10 account first, profile changes", () => {
+  it("every write confirmation starts with the account and its source", async () => {
+    const t = makeCtx({ flags: { dryRun: true } });
+    await requireConfirmation(t.ctx, { action: "Do a thing", details: { account: TEST_AUTH_ID, x: "y" } });
+    expect(t.stderr.text.split("\n").slice(0, 3)).toEqual(["[dry-run] Do a thing", `  account: ${TEST_AUTH_ID} (env)`, "  x: y"]);
+  });
+
+  it("shows the profile name for a saved profile", async () => {
+    const t = makeCtx({ loggedOut: true, flags: { dryRun: true } });
+    t.store.setProfile("prod", { authId: "MA_PROD0001", authToken: "PROFILE_TOKEN" });
+    t.ctx.flags.profile = "prod";
+    await requireConfirmation(t.ctx, { action: "Do a thing" });
+    expect(t.stderr.text).toContain('  account: MA_PROD0001 (profile "prod")');
+  });
+
+  it("calls create shows the account before the destination", async () => {
+    const r = await runCli(["calls", "create", "--to", "+919876543210", "--from", "+918012345678", "--answer-url", "https://example.com/a", "--dry-run"]);
+    const lines = r.err.split("\n");
+    expect(lines[1]).toBe(`  account: ${TEST_AUTH_ID} (env)`);
+  });
+});
+
+describe("#12 VOBIZ_YES from the environment", () => {
+  it("prints a notice on every skipped confirmation, even with --quiet", async () => {
+    const t = makeCtx({ env: { VOBIZ_YES: "1" }, flags: { quiet: true } });
+    await requireConfirmation(t.ctx, { action: "Delete trunk tr_1" });
+    await requireConfirmation(t.ctx, { action: "Delete trunk tr_2" });
+    expect(t.stderr.text.match(/confirmation skipped: VOBIZ_YES/g)).toHaveLength(2);
+  });
+
+  it("--yes prints no notice", async () => {
+    const t = makeCtx({ env: { VOBIZ_YES: "1" }, flags: { yes: true } });
+    await requireConfirmation(t.ctx, { action: "Delete trunk tr_1" });
+    expect(t.stderr.text).not.toContain("VOBIZ_YES");
+  });
+});
+
+describe("#10/#15 credential changes", () => {
+  const ME = (id: string) => fakeFetch({ "GET /api/v1/auth/me": { name: "Acct", auth_id: id } });
+
+  it("login that would overwrite a saved profile asks; --yes replaces it", async () => {
+    const t = makeCtx({ loggedOut: true });
+    t.store.setProfile("default", { authId: "MA_AAAAAAAA", authToken: "OLD_TOKEN_1" });
+    const r1 = await runCli(["login", "--with-token"], { loggedOut: true, configDir: t.configDir, fetch: ME("MA_BBBBBBBB").fetch, stdin: "MA_BBBBBBBB:NEW_TOKEN_1" });
+    expect(r1.code).toBe(6);
+    expect(r1.err).toContain("Replace the saved profile \"default\"");
+    expect(new ConfigStore(t.configDir).getProfile("default")?.authId).toBe("MA_AAAAAAAA");
+    const r2 = await runCli(["login", "--with-token", "--yes"], { loggedOut: true, configDir: t.configDir, fetch: ME("MA_BBBBBBBB").fetch, stdin: "MA_BBBBBBBB:NEW_TOKEN_1" });
+    expect(r2.code, r2.err).toBe(0);
+    expect(new ConfigStore(t.configDir).getProfile("default")?.authId).toBe("MA_BBBBBBBB");
+  });
+
+  it("a first login does not ask", async () => {
+    const r = await runCli(["login", "--with-token"], { loggedOut: true, fetch: ME(TEST_AUTH_ID).fetch, stdin: `${TEST_AUTH_ID}:${TEST_AUTH_TOKEN}` });
+    expect(r.code, r.err).toBe(0);
+  });
+
+  it("profiles use prints the account it switched to", async () => {
+    const t = makeCtx({ loggedOut: true });
+    t.store.setProfile("prod", { authId: "MA_PROD0001", authToken: "PROFILE_TOKEN", accountName: "Prod Co" });
+    const r = await runCli(["profiles", "use", "prod"], { loggedOut: true, configDir: t.configDir });
+    expect(r.code).toBe(0);
+    expect(r.out + r.err).toContain("MA_PROD0001");
   });
 });

@@ -587,6 +587,7 @@ vobiz calls create [options]
 | `--serve` | serve the XML from a local server for the call; requires --public-url (implies --wait) |
 | `--port <port>` | with --serve: local port (default: 8787) |
 | `--public-url <url>` | with --serve: the https URL your tunnel exposes for the local server |
+| `--no-token` | with --serve: answer on any path instead of only <public-url path>/<random token> |
 | `--allow-insecure-url` | allow http:// (or ws://) URLs on localhost, for local testing |
 | `--interval <seconds>` | seconds between status checks (default: 2) |
 | `--max-wait <seconds>` | give up waiting after this many seconds (default: 600) |
@@ -3669,10 +3670,17 @@ vobiz streams forward [options]
 | Option | Description |
 |---|---|
 | `--to <ws-url>` | your stream server: wss://, or ws:// on localhost (e.g. ws://localhost:8080/media) |
-| `--allow-insecure-url` | allow a plain ws:// --to on a host other than localhost (audio is sent unencrypted) |
 | `--port <port>` | local port to listen on (0 picks a free one; default: 8765) |
-| `--host <host>` | interface to listen on |
+| `--host <host>` | interface to listen on (default 127.0.0.1); anything else also needs --allow-lan |
+| `--allow-lan` | allow a non-loopback --host such as 0.0.0.0 (the proxy is then reachable from your network) |
+| `--token <token>` | path token to require instead of a random one (16-128 characters of A-Z a-z 0-9 - _) |
+| `--max-connections <n>` | simultaneous Vobiz-side connections (default: 10) |
+| `--idle-timeout <seconds>` | close a connection after this long without traffic (default: 120) |
+| `--max-message-bytes <n>` | largest message relayed either way (default: 16777216) |
+| `--allow-origin <origin>` | accept browser connections from this Origin (repeatable; none by default) |
+| `--log-sensitive` | log DTMF digits in clear (masked by default) |
 | `--every-media` | log each media frame instead of one summary line per second |
+| `--allow-insecure-url` | allow a plain ws:// --to on a host other than localhost (audio is sent unencrypted) |
 
 ### vobiz streams test
 
@@ -4359,10 +4367,12 @@ vobiz webhooks listen [options]
 | Option | Description |
 |---|---|
 | `--port <port>` | port to listen on (0 picks a free one) |
-| `--host <address>` | address to bind; use 0.0.0.0 to accept connections from other machines |
-| `--forward <url>` | also send each request to this URL (e.g. your app) and relay its response back to Vobiz |
-| `--secret <secret>` | check each request's signature with this secret (env: VOBIZ_WEBHOOK_SECRET) |
-| `--public-url <url>` | the https URL Vobiz calls (your tunnel), needed to check voice-callback signatures |
+| `--host <address>` | address to bind (default 127.0.0.1); anything else also needs --allow-lan |
+| `--allow-lan` | allow a non-loopback --host such as 0.0.0.0 (the receiver is then reachable from your network) |
+| `--forward <url>` | also send each request to this URL (e.g. your app) and relay its 2xx response back to Vobiz |
+| `--secret <secret>` | check each request's signature with this secret and refuse (401) any that fail (env: VOBIZ_WEBHOOK_SECRET) |
+| `--public-url <url>` | the https URL Vobiz calls (your tunnel); required to check voice-callback signatures |
+| `--scheme <v3>` | refuse V2 voice-callback signatures (accept V3 only) (one of: `v3`) |
 | `--allow-insecure-url` | allow a plain http:// --forward to a host other than localhost (bodies are sent unencrypted) |
 
 ### vobiz webhooks verify
@@ -4441,7 +4451,11 @@ vobiz xml serve <file> [options]
 | Option | Description |
 |---|---|
 | `--port <port>` | port to listen on (0 picks a free one) |
-| `--host <address>` | address to bind; use 0.0.0.0 to accept connections from other machines |
+| `--host <address>` | address to bind (default 127.0.0.1); anything else also needs --allow-lan |
+| `--allow-lan` | allow a non-loopback --host such as 0.0.0.0 (the server is then reachable from your network) |
+| `--token <token>` | path token to require instead of a random one (16-128 characters of A-Z a-z 0-9 - _) |
+| `--no-token` | answer on every path instead of only /<token> (anyone who finds the URL can read the XML) |
+| `--log-sensitive` | log Digits, Speech, From and To in clear (masked by default) |
 
 ### vobiz xml validate
 

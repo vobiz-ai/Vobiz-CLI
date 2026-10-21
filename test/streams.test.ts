@@ -258,3 +258,123 @@ describe("vobiz streams forward", () => {
     expect(r.json()).toEqual({ dry_run: true, listen: "ws://127.0.0.1:0", forward_to: "ws://localhost:8080/…" });
   });
 });
+
+/** A WebSocket server built from raw sockets: completes the handshake, then lets `onSocket` misbehave. */
+async function hostile(onSocket: (sock: import("node:stream").Duplex) => void): Promise<string> {
+  const sockets: import("node:stream").Duplex[] = [];
+  const server = await startServer((_q, res) => void res.end("no"), { port: 0, host: "127.0.0.1" });
+  server.server.on("upgrade", (req, socket) => {
+    sockets.push(socket);
+    socket.on("error", () => {});
+    socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${acceptKey(String(req.headers["sec-websocket-key"]))}\r\n\r\n`);
+    onSocket(socket);
+  });
+  servers.push({
+    ...server,
+    close: async () => {
+      for (const s of sockets) s.destroy();
+      await server.close();
+    },
+  });
+  return `ws://127.0.0.1:${server.port}/media`;
+}
+
+describe("vobiz streams test against hostile servers", () => {
+  it("caps the size of a server message", async () => {
+    const url = await hostile((sock) => sock.write(encodeFrame(OPCODE.text, "x".repeat(5 * 1024 * 1024))));
+    const r = await test(url);
+    expect(r.code).toBe(1);
+    expect(r.json().errors.join()).toContain("larger than");
+  });
+
+  it("finishes even when the server ignores the close handshake", async () => {
+    const url = await hostile((sock) => sock.on("data", () => {})); // reads everything, never answers or closes
+    const t0 = Date.now();
+    const r = await test(url);
+    expect(Date.now() - t0).toBeLessThan(6000);
+    expect(r.code, r.err).toBe(0);
+  }, 10_000);
+
+  it("keeps at most 50 distinct errors and event names", async () => {
+    const url = await hostile((sock) => {
+      for (let i = 0; i < 300; i++) sock.write(encodeFrame(OPCODE.text, JSON.stringify({ event: `bad${i}\u001b[2J` })));
+    });
+    const r = await test(url);
+    const report = r.json();
+    expect(report.errors.length).toBeLessThanOrEqual(51);
+    expect(report.errors.at(-1)).toMatch(/more distinct errors/);
+    expect(Object.keys(report.events).length).toBeLessThanOrEqual(51);
+    expect(JSON.stringify(report)).not.toContain("\\u001b");
+  });
+});
+
+describe("vobiz streams forward hardening", () => {
+  const TOKEN = "tok_abcdefghijklmnop";
+  const open = (url: string) =>
+    new Promise<WebSocket>((res, rej) => {
+      const c = new WebSocket(url);
+      c.addEventListener("open", () => res(c));
+      c.addEventListener("error", () => rej(new Error("refused")));
+    });
+
+  it("accepts only the token path, caps connections, sanitises logs and masks DTMF", async () => {
+    const a = await agent();
+    const t = makeCtx();
+    const fwd = await startForwarder(t.ctx, { to: a.url, port: 0, host: "127.0.0.1", token: TOKEN, maxConnections: 1 });
+    servers.push(fwd);
+    const base = `ws://127.0.0.1:${fwd.port}`;
+    expect(fwd.url).toBe(`${base}/${TOKEN}`);
+    await expect(open(`${base}/`)).rejects.toThrow();
+    await expect(open(`${base}/wrong-token-xxxxxxxx`)).rejects.toThrow();
+    const c = await open(`${fwd.url}/stream`);
+    await expect(open(fwd.url)).rejects.toThrow(); // over the cap of 1
+    c.send(JSON.stringify({ event: "\u001b]52;c;cm0gLXJmIH4=\u0007evil", streamId: "S1" }));
+    c.send(JSON.stringify({ event: "dtmf", dtmf: { digit: "7" } }));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(a.received).toHaveLength(2);
+    const log = t.stderr.text;
+    expect(log).toContain("wrong or missing path token");
+    expect(log).toContain("connection limit reached");
+    expect(log).not.toContain("\u001b");
+    expect(log).not.toContain("\u0007");
+    expect(log).toContain("dtmf digit=*");
+    expect(log).not.toContain("digit=7");
+    expect(log).not.toContain(TOKEN);
+    c.close();
+  });
+
+  it("times out an upstream handshake and bounds the pending queue", async () => {
+    const { createServer } = await import("node:net");
+    const held: import("node:net").Socket[] = [];
+    const black = createServer((s) => held.push(s));
+    await new Promise<void>((r) => black.listen(0, "127.0.0.1", () => r()));
+    const port = (black.address() as { port: number }).port;
+    try {
+      const t = makeCtx();
+      const fwd = await startForwarder(t.ctx, { to: `ws://127.0.0.1:${port}/m`, port: 0, host: "127.0.0.1", connectTimeoutMs: 300 });
+      servers.push(fwd);
+      const c = await open(fwd.url);
+      const closed = new Promise<number>((r) => c.addEventListener("close", (ev) => r(ev.code)));
+      c.send("x".repeat(700 * 1024));
+      c.send("x".repeat(700 * 1024));
+      expect(await closed).toBe(1013);
+      const c2 = await open(fwd.url);
+      const closed2 = new Promise<number>((r) => c2.addEventListener("close", (ev) => r(ev.code)));
+      expect(await closed2).toBe(1011);
+      expect(t.stderr.text).toContain("could not reach");
+    } finally {
+      for (const s of held) s.destroy();
+      black.close();
+    }
+  });
+
+  it("needs --allow-lan for a non-loopback --host and --allow-insecure-url for a remote ws:// --to", async () => {
+    let r = await runCli(["streams", "forward", "--to", "ws://localhost:8080/media", "--host", "0.0.0.0", "--port", "0"]);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("--allow-lan");
+    r = await runCli(["streams", "forward", "--to", "ws://agent.example.com/media", "--dry-run", "--json"]);
+    expect(r.code).toBe(2);
+    r = await runCli(["streams", "forward", "--to", "ws://agent.example.com/media", "--allow-insecure-url", "--dry-run", "--json"]);
+    expect(r.code).toBe(0);
+  });
+});

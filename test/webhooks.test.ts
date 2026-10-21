@@ -2,9 +2,10 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { baseUrlOf, verifyRequest } from "../src/agent/webhooks.js";
+import { connect } from "node:net";
+import { NonceCache, baseUrlOf, signV2, signV3, verifyRequest } from "../src/agent/webhooks.js";
 import { startWebhookListener } from "../src/commands/webhooks.js";
-import { fakeFetch, makeCtx, reply, runCli } from "./helpers.js";
+import { fakeFetch, hang, makeCtx, reply, runCli, textReply } from "./helpers.js";
 
 // Vectors computed independently with Python's hmac module, following concepts/validating-callbacks.
 const SECRET = "YOUR_AUTH_TOKEN";
@@ -138,5 +139,117 @@ describe("webhooks listen", () => {
   it("rejects a bad --forward URL", async () => {
     const r = await runCli(["webhooks", "listen", "--forward", "ftp://x"]);
     expect(r.code).toBe(2);
+  });
+});
+
+describe("webhooks listen hardening", () => {
+  const PUBLIC = "https://abc.trycloudflare.com";
+  const signed = (path: string, nonce: string) => ({ "x-vobiz-signature-v3": signV3(SECRET, `${PUBLIC}${path}`, nonce), "x-vobiz-signature-v3-nonce": nonce });
+  /** Sends a raw HTTP/1.1 request (for request-targets fetch cannot produce) and returns the status code. */
+  const rawStatus = (port: number, line: string) =>
+    new Promise<number>((resolve) => {
+      const s = connect(port, "127.0.0.1");
+      let buf = "";
+      s.on("data", (c) => (buf += c.toString("latin1")));
+      s.on("close", () => resolve(Number(/^HTTP\/1\.1 (\d+)/.exec(buf)?.[1] ?? 0)));
+      s.on("error", () => resolve(0));
+      s.end(`${line}\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n`);
+    });
+
+  it("forwards only verified, fresh requests, with an allow-list of headers", async () => {
+    const app = fakeFetch({ "POST /hooks": () => textReply(200, "<Response/>", { "content-type": "application/xml" }) });
+    const t = makeCtx({ fetch: app.fetch });
+    const server = await startWebhookListener(t.ctx, { port: 0, host: "127.0.0.1", forward: "http://localhost:8080/hooks", secret: SECRET, publicUrl: PUBLIC });
+    const post = (headers: Record<string, string>) =>
+      fetch(`${server.url}/vobiz/answer?x=1`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", ...headers }, body: "CallUUID=abc" });
+    try {
+      // unsigned and forged requests are refused and never reach the app
+      expect((await post({ cookie: "sid=1" })).status).toBe(401);
+      expect((await post(signed("/other/path", "11111111111111111111"))).status).toBe(401);
+      expect(app.calls).toHaveLength(0);
+      // a valid one is forwarded without Cookie/Authorization/X-Forwarded-For, keeping the Host as X-Forwarded-Host
+      const ok = await post({ ...signed("/vobiz/answer", "22222222222222222222"), cookie: "sid=1", authorization: "Bearer x", "x-forwarded-for": "10.0.0.1" });
+      expect(ok.status).toBe(200);
+      expect(await ok.text()).toBe("<Response/>");
+      const h = app.last().headers;
+      expect(h.cookie).toBeUndefined();
+      expect(h.authorization).toBeUndefined();
+      expect(h["x-forwarded-for"]).toBeUndefined();
+      expect(h["x-forwarded-host"]).toBe(`127.0.0.1:${server.port}`);
+      expect(h["x-forwarded-proto"]).toBe("https");
+      expect(h["x-vobiz-signature-v3-nonce"]).toBe("22222222222222222222");
+      // the same nonce again is a replay
+      const replay = await post(signed("/vobiz/answer", "22222222222222222222"));
+      expect(replay.status).toBe(401);
+      expect(app.calls).toHaveLength(1);
+      expect(t.stdout.text).toContain("nonce already used");
+      // only GET/POST, only origin-form targets, only the tunnel or loopback Host
+      expect((await fetch(`${server.url}/vobiz/answer`, { method: "DELETE" })).status).toBe(405);
+      expect(await rawStatus(server.port, "POST https://other-app.example.com/answer HTTP/1.1")).toBe(400);
+      expect(await rawStatus(server.port, "POST //other-app.example.com/answer HTTP/1.1")).toBe(400);
+      const misdirected = await new Promise<number>((resolve) => {
+        const s = connect(server.port, "127.0.0.1");
+        let buf = "";
+        s.on("data", (c) => (buf += c.toString("latin1")));
+        s.on("close", () => resolve(Number(/^HTTP\/1\.1 (\d+)/.exec(buf)?.[1] ?? 0)));
+        s.end("POST /vobiz/answer HTTP/1.1\r\nHost: rebind.evil.example\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+      });
+      expect(misdirected).toBe(421);
+      expect(app.calls).toHaveLength(1);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("keeps the app's error pages local and times out a hung app", async () => {
+    let hung = false;
+    const app = fakeFetch({ "POST /hooks": () => (hung ? hang() : textReply(500, "<pre>Error: DB password=hunter2 \u001b]0;x\u0007</pre>")) });
+    const t = makeCtx({ fetch: app.fetch });
+    const server = await startWebhookListener(t.ctx, { port: 0, host: "127.0.0.1", forward: "http://localhost:8080/hooks", forwardTimeoutMs: 100 });
+    try {
+      const res = await fetch(`${server.url}/x`, { method: "POST", body: "a=1" });
+      expect(res.status).toBe(500);
+      const text = await res.text();
+      expect(text).toBe("upstream answered 500\n");
+      expect(t.stderr.text).toContain("hunter2");
+      expect(t.stderr.text).not.toContain("\u001b");
+      hung = true;
+      const slow = await fetch(`${server.url}/x`, { method: "POST", body: "a=1" });
+      expect(slow.status).toBe(504);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("refuses V2 when V3 headers are present, malformed nonces, and V2 under --scheme v3", () => {
+    const body = Buffer.alloc(0);
+    const v2 = { "x-vobiz-signature-v2": V2, "x-vobiz-signature-v2-nonce": NONCE };
+    expect(verifyRequest(v2, URL_, body, SECRET)).toMatchObject({ valid: true, version: "v2" });
+    expect(verifyRequest({ ...v2, "x-vobiz-signature-v3": "garbage" }, URL_, body, SECRET)).toMatchObject({ valid: false, version: "v3" });
+    expect(verifyRequest(v2, URL_, body, SECRET, { scheme: "v3" })).toMatchObject({ valid: false, reason: expect.stringContaining("--scheme v3") });
+    // the V2 boundary shift: a signature for /hook1 + nonce "234…" must not verify /hook12 + "34…"
+    const shifted = { "x-vobiz-signature-v2": signV2(SECRET, "https://example.com/hook1", "2345678901234567890"), "x-vobiz-signature-v2-nonce": "345678901234567890" };
+    expect(verifyRequest(shifted, "https://example.com/hook12", body, SECRET)).toMatchObject({ valid: false, reason: expect.stringContaining("20 digits") });
+    expect(verifyRequest({ "x-vobiz-signature-v3": V3, "x-vobiz-signature-v3-nonce": NONCE }, undefined, body, SECRET)).toMatchObject({ valid: false, reason: expect.stringContaining("--public-url") });
+  });
+
+  it("bounds the nonce cache and expires entries", () => {
+    let now = 0;
+    const c = new NonceCache(3, 1000, () => now);
+    for (const k of ["a", "b", "c", "d"]) expect(c.seenBefore(k)).toBe(false);
+    expect(c.size).toBe(3);
+    expect(c.seenBefore("d")).toBe(true);
+    expect(c.seenBefore("a")).toBe(false); // evicted
+    now = 5000;
+    expect(c.seenBefore("d")).toBe(false); // expired
+  });
+
+  it("needs --allow-lan for a non-loopback --host and --allow-insecure-url for a remote http:// --forward", async () => {
+    let r = await runCli(["webhooks", "listen", "--host", "0.0.0.0", "--port", "0"]);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("--allow-lan");
+    r = await runCli(["webhooks", "listen", "--forward", "http://app.internal:8080/x", "--port", "0"]);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("--allow-insecure-url");
   });
 });

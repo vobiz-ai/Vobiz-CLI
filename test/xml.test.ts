@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -163,13 +163,70 @@ describe("xml serve", () => {
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("application/xml");
       expect(await res.text()).toBe("<Response><Speak>One</Speak></Response>");
-      expect(t.stderr.text).toContain("POST /answer  CallUUID=abc From=+919876543210 To=+918000000000");
+      expect(t.stderr.text).toContain("POST /answer  CallUUID=abc From=*********3210 To=*********0000");
+      expect(t.stderr.text).not.toContain("+919876543210");
 
       writeFileSync(file, "<Response><Speak>Two</Speak></Response>");
       expect(await (await fetch(server.url)).text()).toContain("Two");
     } finally {
       await server.close();
     }
+  });
+
+  it("serves only on the path token, only GET/POST, and never echoes errors or escape sequences", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "vobiz-xml-"));
+    const file = join(dir, "answer.xml");
+    writeFileSync(file, "<Response><Hangup/></Response>");
+    const t = makeCtx();
+    const token = "tok_abcdefghijklmnop";
+    const server = await startXmlServer(t.ctx, file, { port: 0, host: "127.0.0.1", token });
+    const base = `http://127.0.0.1:${server.port}`;
+    try {
+      expect(server.url).toBe(`${base}/${token}`);
+      expect((await fetch(base)).status).toBe(404);
+      expect((await fetch(`${base}/answer`)).status).toBe(404);
+      expect((await fetch(`${base}/${token}x`)).status).toBe(404);
+      expect((await fetch(`${base}/${token}/answer`)).status).toBe(200);
+      expect((await fetch(server.url, { method: "DELETE" })).status).toBe(405);
+      const res = await fetch(server.url, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "CallUUID=%1B%5B2J%1B%5D0%3Bpwned%07abc&Digits=4271&Speech=my%20card%20number",
+      });
+      expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(t.stderr.text).not.toContain("\x1b");
+      expect(t.stderr.text).not.toContain("\x07");
+      expect(t.stderr.text).toContain("CallUUID=abc");
+      expect(t.stderr.text).toContain("Digits=<4 chars hidden>");
+      expect(t.stderr.text).not.toContain("4271");
+      expect(t.stderr.text).not.toContain("card number");
+      expect(t.stderr.text).not.toContain(token);
+      const big = await fetch(server.url, { method: "POST", body: "x".repeat(300 * 1024) }).catch(() => undefined);
+      if (big) expect(big.status).toBe(413);
+      rmSync(file);
+      const missing = await fetch(server.url);
+      expect(missing.status).toBe(500);
+      expect(await missing.text()).toBe("internal error\n");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("--log-sensitive shows the fields; a non-loopback --host needs --allow-lan", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "vobiz-xml-"));
+    const file = join(dir, "answer.xml");
+    writeFileSync(file, "<Response><Hangup/></Response>");
+    const t = makeCtx();
+    const server = await startXmlServer(t.ctx, file, { port: 0, host: "127.0.0.1", logSensitive: true });
+    try {
+      await fetch(`${server.url}/a?Digits=1234`);
+      expect(t.stderr.text).toContain("Digits=1234");
+    } finally {
+      await server.close();
+    }
+    const r = await runCli(["xml", "serve", file, "--host", "0.0.0.0", "--port", "0"]);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("--allow-lan");
   });
 
   it("`xml serve -` reads stdin once and serves that text on every request", async () => {

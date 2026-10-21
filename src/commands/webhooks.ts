@@ -4,9 +4,22 @@
  */
 import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { Command } from "commander";
-import { decodeBody, parsePort, readBody, startServer, tunnelHint, untilInterrupted, type LocalServer } from "../agent/http.js";
-import { isBodySignature, verifyBody, verifyCallback, verifyRequest, type CallbackVersion, type VerifyResult } from "../agent/webhooks.js";
+import { Option, type Command } from "commander";
+import {
+  checkBindHost,
+  decodeBody,
+  isLoopback,
+  parsePort,
+  readBody,
+  rejectMethod,
+  requestPath,
+  safeLogText,
+  startServer,
+  tunnelHint,
+  untilInterrupted,
+  type LocalServer,
+} from "../agent/http.js";
+import { NonceCache, isBodySignature, verifyBody, verifyCallback, verifyRequest, type CallbackVersion, type VerifyResult } from "../agent/webhooks.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
 import { rememberSecret } from "../core/redact.js";
@@ -50,68 +63,148 @@ function interestingHeaders(req: IncomingMessage): Record<string, string> {
   return out;
 }
 
-const HOP_BY_HOP = new Set(["host", "connection", "content-length", "transfer-encoding", "keep-alive", "upgrade", "proxy-connection"]);
+/** Request headers relayed to --forward: only what a Vobiz webhook carries. Everything else (Cookie, Authorization, X-Forwarded-*, …) is dropped. */
+function forwardHeaders(req: IncomingMessage, publicUrl: URL | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(req.headers)) {
+    if (v === undefined) continue;
+    if (k === "content-type" || k === "user-agent" || k === "accept" || k.startsWith("x-vobiz-") || k.startsWith("x-webhook-")) out[k] = Array.isArray(v) ? v.join(", ") : v;
+  }
+  const host = req.headers.host;
+  if (host && /^[A-Za-z0-9.\-:[\]]{1,255}$/.test(host)) out["x-forwarded-host"] = host;
+  out["x-forwarded-proto"] = publicUrl ? publicUrl.protocol.slice(0, -1) : "http";
+  return out;
+}
+
+/** Forward timeout: Vobiz gives up on a callback well before this. */
+export const FORWARD_TIMEOUT_MS = 15_000;
+/** Largest app response relayed back to the caller. */
+export const MAX_RELAY_BYTES = 1024 * 1024;
+
+/** Reads at most `limit` bytes of a fetch body (undefined when it is larger). */
+async function readCapped(res: Response, limit: number): Promise<Buffer | undefined> {
+  if (!res.body) return Buffer.alloc(0);
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const c of res.body as unknown as AsyncIterable<Uint8Array>) {
+    size += c.length;
+    if (size > limit) {
+      await res.body.cancel().catch(() => {});
+      return undefined;
+    }
+    chunks.push(Buffer.from(c));
+  }
+  return Buffer.concat(chunks);
+}
 
 export interface ListenOptions {
   port: number;
   host: string;
   forward?: string;
   secret?: string;
-  /** Public URL that Vobiz calls (the tunnel), used to check URL-based signatures. */
+  /** Public URL that Vobiz calls (the tunnel); its scheme and host are used to check URL-based signatures. */
   publicUrl?: string;
+  /** "v3" refuses V2 voice-callback signatures. */
+  scheme?: CallbackVersion;
+  /** Skip the Host check (for a --allow-lan bind reached by LAN address). */
+  anyHost?: boolean;
+  /** Forward timeout in ms (default 15 s). */
+  forwardTimeoutMs?: number;
 }
 
-/** Starts the `webhooks listen` receiver; each request is printed to stdout as pretty JSON. */
+/**
+ * Starts the `webhooks listen` receiver; each request is printed to stdout as pretty JSON. With a secret, only
+ * requests whose signature verifies (and whose nonce is new) are forwarded; the rest get 401.
+ */
 export async function startWebhookListener(ctx: Ctx, o: ListenOptions): Promise<LocalServer> {
-  let base = "";
+  const publicUrl = o.publicUrl ? new URL(o.publicUrl) : undefined;
+  const nonces = new NonceCache();
   const handler = async (req: IncomingMessage, res: ServerResponse) => {
+    // Only origin-form targets ("/path?query"): absolute-form and "//host" would let a caller pick the signed URL.
+    const path = requestPath(req.url);
+    if (!path) {
+      req.resume();
+      res.writeHead(400, { "content-type": "text/plain", connection: "close" });
+      res.end("bad request target\n");
+      ctx.out.warn(`refused a request with request-target ${safeLogText(req.url, 80)}`);
+      return;
+    }
+    if (rejectMethod(req, res)) {
+      ctx.out.warn(`refused a ${safeLogText(req.method, 10)} request (only GET and POST are accepted)`);
+      return;
+    }
+    // DNS-rebinding guard: with --public-url, the Host must be the tunnel's or a loopback name.
+    const hostHeader = String(req.headers.host ?? "");
+    const hostName = hostHeader.replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+    if (publicUrl && !o.anyHost && hostName.toLowerCase() !== publicUrl.hostname.toLowerCase() && !isLoopback(hostName)) {
+      req.resume();
+      res.writeHead(421, { "content-type": "text/plain", connection: "close" });
+      res.end("misdirected request\n");
+      ctx.out.warn(`refused a request for host ${safeLogText(hostHeader, 80)}`);
+      return;
+    }
     const raw = await readBody(req);
     const u = new URL(req.url ?? "/", "http://localhost");
     const event: Record<string, unknown> = {
       received_at: ctx.now().toISOString(),
       method: req.method,
-      path: u.pathname,
+      path,
       query: Object.fromEntries(u.searchParams),
       headers: interestingHeaders(req),
       body: decodeBody(raw, req.headers["content-type"]) ?? null,
     };
+    let verified = true;
     if (o.secret) {
-      const signedUrl = new URL(req.url ?? "/", o.publicUrl ?? base).toString();
-      event.signature = verifyRequest(req.headers, signedUrl, raw, o.secret);
+      // The signed URL is the configured public origin plus the request's path, never anything the caller chose.
+      const signedUrl = publicUrl ? `${publicUrl.origin}${path}` : undefined;
+      const sig = verifyRequest(req.headers, signedUrl, raw, o.secret, { scheme: o.scheme, nonces });
+      event.signature = sig;
+      verified = sig.valid;
     }
     let status = 200;
     let reply: Buffer | string = "";
     let replyType = "text/plain";
-    if (o.forward) {
+    if (!verified) {
+      status = 401;
+      reply = "invalid signature\n";
+      if (o.forward) event.forwarded = { skipped: "signature not valid" };
+      ctx.out.warn(`refused ${req.method} ${safeLogText(path, 80)}: ${safeLogText((event.signature as VerifyResult).reason ?? "invalid signature")}`);
+    } else if (o.forward) {
       const target = new URL(o.forward);
       u.searchParams.forEach((v, k) => target.searchParams.append(k, v));
-      const headers: Record<string, string> = {};
-      for (const [k, v] of Object.entries(req.headers)) if (v !== undefined && !HOP_BY_HOP.has(k)) headers[k] = Array.isArray(v) ? v.join(", ") : v;
       try {
         const fwd = await ctx.fetch(target.toString(), {
           method: req.method,
-          headers,
-          body: req.method === "GET" || req.method === "HEAD" ? undefined : new Uint8Array(raw),
+          headers: forwardHeaders(req, publicUrl),
+          body: req.method === "GET" ? undefined : new Uint8Array(raw),
           redirect: "manual",
+          signal: AbortSignal.timeout(o.forwardTimeoutMs ?? FORWARD_TIMEOUT_MS),
         });
         status = fwd.status;
-        replyType = fwd.headers.get("content-type") ?? "text/plain";
-        reply = Buffer.from(await fwd.arrayBuffer());
         event.forwarded = { url: target.toString(), status };
+        const body = await readCapped(fwd, MAX_RELAY_BYTES);
+        if (status >= 200 && status < 300 && body !== undefined) {
+          replyType = fwd.headers.get("content-type") ?? "text/plain";
+          reply = body;
+        } else {
+          // Error pages and redirects stay local: the caller gets the status and a generic body.
+          reply = `upstream answered ${status}\n`;
+          const text = body === undefined ? `(more than ${MAX_RELAY_BYTES} bytes)` : body.toString("utf8");
+          ctx.out.warn(`your app answered ${status}${text ? `: ${safeLogText(text, 500)}` : ""}`);
+        }
       } catch (e) {
-        status = 502;
-        reply = "forward failed\n";
-        event.forwarded = { url: target.toString(), error: (e as Error).message };
-        ctx.out.warn(`could not forward to ${target.origin}: ${(e as Error).message}`);
+        const timedOut = (e as Error)?.name === "TimeoutError" || (e as Error)?.name === "AbortError";
+        status = timedOut ? 504 : 502;
+        reply = timedOut ? "forward timed out\n" : "forward failed\n";
+        event.forwarded = { url: target.toString(), error: timedOut ? `no answer within ${(o.forwardTimeoutMs ?? FORWARD_TIMEOUT_MS) / 1000}s` : (e as Error).message };
+        ctx.out.warn(`could not forward to ${target.origin}: ${safeLogText(timedOut ? "timed out" : (e as Error).message)}`);
       }
     }
     ctx.stdout.write(JSON.stringify(event, null, 2) + "\n");
-    res.writeHead(status, { "content-type": replyType });
+    res.writeHead(status, { "content-type": replyType, "x-content-type-options": "nosniff" });
     res.end(reply);
   };
-  const server = await startServer(handler, { port: o.port, host: o.host });
-  base = server.url;
-  return server;
+  return startServer(handler, { port: o.port, host: o.host, onError: (e) => ctx.out.warn(`webhooks listen: ${safeLogText((e as Error)?.message ?? e)}`) });
 }
 
 export function register(program: Command, ctx: Ctx): void {
@@ -174,38 +267,59 @@ Docs: https://www.vobiz.ai/docs/concepts/validating-callbacks`,
     .command("listen")
     .description("Run a local webhook receiver that prints every request as JSON (and optionally forwards it)")
     .option("--port <port>", "port to listen on (0 picks a free one)", "4000")
-    .option("--host <address>", "address to bind; use 0.0.0.0 to accept connections from other machines", "127.0.0.1")
-    .option("--forward <url>", "also send each request to this URL (e.g. your app) and relay its response back to Vobiz")
-    .option("--secret <secret>", "check each request's signature with this secret (env: VOBIZ_WEBHOOK_SECRET)")
-    .option("--public-url <url>", "the https URL Vobiz calls (your tunnel), needed to check voice-callback signatures")
+    .option("--host <address>", "address to bind (default 127.0.0.1); anything else also needs --allow-lan", "127.0.0.1")
+    .option("--allow-lan", "allow a non-loopback --host such as 0.0.0.0 (the receiver is then reachable from your network)")
+    .option("--forward <url>", "also send each request to this URL (e.g. your app) and relay its 2xx response back to Vobiz")
+    .option("--secret <secret>", "check each request's signature with this secret and refuse (401) any that fail (env: VOBIZ_WEBHOOK_SECRET)")
+    .option("--public-url <url>", "the https URL Vobiz calls (your tunnel); required to check voice-callback signatures")
+    .addOption(new Option("--scheme <v3>", "refuse V2 voice-callback signatures (accept V3 only)").choices(["v3"]))
     .option("--allow-insecure-url", "allow a plain http:// --forward to a host other than localhost (bodies are sent unencrypted)")
     .addHelpText(
       "after",
       `
-Each request is printed to stdout as pretty JSON (method, path, query, Vobiz headers, decoded body and, with a
-secret, the signature result). Without --forward it answers 200 with an empty body. Stop with Ctrl-C.
+Each request is printed to stdout as pretty JSON (method, path, query, Vobiz headers, the full decoded body and,
+with a secret, the signature result); bodies include phone numbers and message text. Without --forward it answers
+200 with an empty body. Only GET and POST with a plain path are accepted. Stop with Ctrl-C.
+
+With --secret, a request whose signature does not verify, or whose nonce was already used, gets 401 and is not
+forwarded. Without --secret, --forward relays every request to your app, from anyone who knows the URL. Only
+Content-Type, User-Agent, Accept and X-Vobiz-*/X-Webhook-* headers are forwarded, plus X-Forwarded-Host/-Proto;
+your app's non-2xx answers are printed here and the caller only gets the status.
 
 Examples:
   vobiz webhooks listen --port 4000
   vobiz webhooks listen --forward http://localhost:8080/vobiz/hangup --public-url https://abc.trycloudflare.com`,
     )
-    .action(async (opts: { port?: string; host: string; forward?: string; secret?: string; publicUrl?: string; allowInsecureUrl?: boolean }) => {
-      if (opts.forward !== undefined) checkForwardUrl(opts.forward, "--forward", { allowInsecure: opts.allowInsecureUrl });
-      for (const [flag, value] of [["--forward", opts.forward], ["--public-url", opts.publicUrl]] as const) {
-        if (value === undefined) continue;
-        try {
-          const u = new URL(value);
-          if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error();
-        } catch {
-          throw new VobizError("invalid_input", `${flag} must be an http(s) URL.`);
+    .action(
+      async (opts: { port?: string; host: string; allowLan?: boolean; forward?: string; secret?: string; publicUrl?: string; scheme?: "v3"; allowInsecureUrl?: boolean }) => {
+        if (opts.forward !== undefined) checkForwardUrl(opts.forward, "--forward", { allowInsecure: opts.allowInsecureUrl });
+        for (const [flag, value] of [["--forward", opts.forward], ["--public-url", opts.publicUrl]] as const) {
+          if (value === undefined) continue;
+          try {
+            const u = new URL(value);
+            if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error();
+          } catch {
+            throw new VobizError("invalid_input", `${flag} must be an http(s) URL.`);
+          }
         }
-      }
-      const secret = secretFrom(ctx, opts.secret, false);
-      const server = await startWebhookListener(ctx, { port: parsePort(opts.port, 4000), host: opts.host, forward: opts.forward, secret, publicUrl: opts.publicUrl });
-      ctx.out.status(`Listening for webhooks at ${server.url}${opts.forward ? `, forwarding to ${opts.forward}` : ""} (Ctrl-C to stop).`);
-      ctx.out.status(tunnelHint(server.port));
-      if (secret && !opts.publicUrl) ctx.out.status("Voice-callback signatures cover the public URL; pass --public-url with your tunnel URL to check them.");
-      await untilInterrupted();
-      await server.close();
-    });
+        checkBindHost(ctx, opts.host, opts.allowLan);
+        const secret = secretFrom(ctx, opts.secret, false);
+        const server = await startWebhookListener(ctx, {
+          port: parsePort(opts.port, 4000),
+          host: opts.host,
+          forward: opts.forward,
+          secret,
+          publicUrl: opts.publicUrl,
+          scheme: opts.scheme,
+          anyHost: !!opts.allowLan,
+        });
+        ctx.out.status(`Listening for webhooks at ${server.url} (bound to ${server.bind})${opts.forward ? `, forwarding to ${opts.forward}` : ""} (Ctrl-C to stop).`);
+        ctx.out.status(tunnelHint(server.port));
+        if (secret && !opts.publicUrl)
+          ctx.out.warn("Voice-callback signatures cover the public URL: without --public-url (your tunnel URL) they cannot be checked and those requests get 401.");
+        if (opts.forward && !secret) ctx.out.warn("--forward without --secret relays every request to your app, from anyone who knows this URL.");
+        await untilInterrupted();
+        await server.close();
+      },
+    );
 }

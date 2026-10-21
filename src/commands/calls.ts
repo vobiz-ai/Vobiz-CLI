@@ -9,7 +9,7 @@
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import { logPath, newToken, notFound, rejectMethod, requestPath, safeLogText, startServer, type LocalServer } from "../agent/http.js";
 import { Option, type Command } from "commander";
 import { escapeXml as escapeXmlText } from "../agent/xml.js";
 import { requireConfirmation } from "../core/confirm.js";
@@ -110,6 +110,8 @@ interface CreateOpts {
   serve?: boolean;
   port?: number;
   publicUrl?: string;
+  /** false with --no-token: answer on any path instead of only the token path. */
+  token?: boolean;
   allowInsecureUrl?: boolean;
   interval?: number;
   maxWait?: number;
@@ -136,22 +138,36 @@ function answerXml(o: CreateOpts): string | undefined {
   return undefined;
 }
 
-/** Serves `xml` for every request until closed. Logs each fetch to stderr. */
-async function serveXml(ctx: Ctx, xml: string, port: number): Promise<{ server: Server; port: number }> {
-  const server = createServer((req, res) => {
-    ctx.out.status(`answer server: ${req.method} ${req.url} from ${req.socket.remoteAddress ?? "?"}`);
-    req.resume();
-    res.writeHead(200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "no-store" });
-    res.end(xml);
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", (e: NodeJS.ErrnoException) =>
-      reject(new VobizError("invalid_input", e.code === "EADDRINUSE" ? `Port ${port} is in use; pick another with --port.` : e.message)),
-    );
-    server.listen(port, "127.0.0.1", () => resolve());
-  });
-  const addr = server.address();
-  return { server, port: typeof addr === "object" && addr ? addr.port : port };
+/**
+ * Serves `xml` on 127.0.0.1 until closed: only GET and POST, and only on `path` when given (other paths get 404).
+ * Uses the shared local-server limits (connection cap, timeouts, generic 500) and logs each fetch, sanitised and
+ * without the path token, to stderr.
+ */
+async function serveXml(ctx: Ctx, xml: string, port: number, o: { path?: string; token?: string } = {}): Promise<LocalServer> {
+  const want = o.path?.replace(/\/+$/, "");
+  return startServer(
+    (req, res) => {
+      const path = requestPath(req.url)?.replace(/\/+$/, "");
+      const shown = `${safeLogText(req.method, 10)} ${logPath(req.url, o.token)} from ${safeLogText(req.socket.remoteAddress ?? "?", 60)}`;
+      if (path === undefined || (want !== undefined && path !== want)) {
+        ctx.out.status(`answer server: ${shown} → 404`);
+        return notFound(req, res);
+      }
+      if (rejectMethod(req, res)) return void ctx.out.status(`answer server: ${shown} → 405`);
+      ctx.out.status(`answer server: ${shown}`);
+      req.resume();
+      res.writeHead(200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+      res.end(xml);
+    },
+    { port, host: "127.0.0.1", onError: (e) => ctx.out.warn(`answer server: ${safeLogText((e as Error)?.message ?? e)}`) },
+  );
+}
+
+/** Appends `/<token>` to the public URL's path; that path is the only one the local server answers. */
+function withToken(publicUrl: string, token: string): string {
+  const u = new URL(publicUrl);
+  u.pathname = `${u.pathname.replace(/\/+$/, "")}/${token}`;
+  return u.toString();
 }
 
 function registerCreate(calls: Command, ctx: Ctx) {
@@ -172,6 +188,7 @@ function registerCreate(calls: Command, ctx: Ctx) {
     .option("--serve", "serve the XML from a local server for the call; requires --public-url (implies --wait)")
     .option("--port <port>", "with --serve: local port (default: 8787)", intArg(0, 65_535))
     .option("--public-url <url>", "with --serve: the https URL your tunnel exposes for the local server")
+    .option("--no-token", "with --serve: answer on any path instead of only <public-url path>/<random token>")
     .addOption(insecureOption());
   waitOptions(cmd)
     .addHelpText(
@@ -206,11 +223,16 @@ Examples:
       if (o.serve && !xml) throw usage("--serve needs --say, --play or --xml-file.");
       if (o.serve && !o.publicUrl) throw usage("--serve needs --public-url: the https address of a tunnel (cloudflared, ngrok…) to the local port.");
       if (!o.serve && (o.publicUrl || o.port !== undefined)) throw usage("--public-url and --port apply only to --serve.");
+      if (!o.serve && o.token === false) throw usage("--no-token applies only to --serve.");
       if (!o.to || !o.from) throw usage("--to and --from are required.");
 
       const destinations = capFanout(normalizeDestinations(o.to), o.maxFanout);
+      if (o.serve && destinations.length > 1) throw usage("--serve hosts the XML for one call; for several destinations host it yourself and pass --answer-url.");
       const from = toE164(o.from);
-      const answerUrl = checkUrl((o.serve ? o.publicUrl : o.answerUrl)!, o.serve ? "--public-url" : "--answer-url", { allowInsecure: o.allowInsecureUrl });
+      const checked = checkUrl((o.serve ? o.publicUrl : o.answerUrl)!, o.serve ? "--public-url" : "--answer-url", { allowInsecure: o.allowInsecureUrl });
+      // With --serve the answer URL carries a random path token, so only Vobiz (which gets this URL) can read the XML.
+      const token = o.serve && o.token !== false ? newToken() : undefined;
+      const answerUrl = token ? withToken(checked, token) : checked;
       const body = { from, to: destinations.join("<"), answer_url: answerUrl, answer_method: o.answerMethod };
       const wait = !!ctx.flags.wait || !!o.serve;
 
@@ -229,11 +251,11 @@ Examples:
         },
       });
 
-      let served: { server: Server; port: number } | undefined;
+      let served: LocalServer | undefined;
       if (o.serve && !ctx.flags.dryRun) {
-        served = await serveXml(ctx, xml!, o.port ?? 8787);
+        served = await serveXml(ctx, xml!, o.port ?? 8787, token ? { path: new URL(answerUrl).pathname, token } : {});
         ctx.out.status(
-          `Serving the answer XML on http://127.0.0.1:${served.port}/ . Vobiz will fetch ${answerUrl}, which must reach this port (keep the tunnel running).`,
+          `Serving the answer XML on http://${served.bind}${token ? `${new URL(answerUrl).pathname.replace(token, "<token>")}` : "/"} . Vobiz will fetch ${hostOf(answerUrl)}${token ? " (with a random path token)" : ""}, which must reach this port (keep the tunnel running).`,
         );
       }
       try {
@@ -249,7 +271,7 @@ Examples:
         const result = await watchCall(ctx, uuid, { interval: o.interval ?? 2, maxWait: o.maxWait ?? 600 });
         ctx.out.print({ ...res, ...result });
       } finally {
-        if (served) await new Promise<void>((r) => served!.server.close(() => r()));
+        if (served) await served.close(); // also drops connections still open
       }
     });
 }

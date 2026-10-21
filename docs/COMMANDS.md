@@ -2061,6 +2061,7 @@ vobiz recordings download <id> [options]
 |---|---|
 | `--out <file>` | where to write it (default: <id>.<format> in the current directory; - for stdout) |
 | `--force` | overwrite an existing file |
+| `--allow-insecure-url` | allow a recording_url on a loopback, private or link-local host (local testing only) |
 
 ### vobiz recordings export
 
@@ -3664,7 +3665,8 @@ vobiz streams forward [options]
 
 | Option | Description |
 |---|---|
-| `--to <ws-url>` | your stream server, e.g. ws://localhost:8080/media |
+| `--to <ws-url>` | your stream server: wss://, or ws:// on localhost (e.g. ws://localhost:8080/media) |
+| `--allow-insecure-url` | allow a plain ws:// --to on a host other than localhost (audio is sent unencrypted) |
 | `--port <port>` | local port to listen on (0 picks a free one; default: 8765) |
 | `--host <host>` | interface to listen on |
 | `--every-media` | log each media frame instead of one summary line per second |
@@ -4358,6 +4360,7 @@ vobiz webhooks listen [options]
 | `--forward <url>` | also send each request to this URL (e.g. your app) and relay its response back to Vobiz |
 | `--secret <secret>` | check each request's signature with this secret (env: VOBIZ_WEBHOOK_SECRET) |
 | `--public-url <url>` | the https URL Vobiz calls (your tunnel), needed to check voice-callback signatures |
+| `--allow-insecure-url` | allow a plain http:// --forward to a host other than localhost (bodies are sent unencrypted) |
 
 ### vobiz webhooks verify
 

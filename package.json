@@ -11,13 +11,14 @@
   "bin": { "vobiz": "dist/index.js" },
   "main": "dist/cli.js",
   "man": "./man/vobiz.1",
-  "files": ["dist/**/*.js", "spec/*.yaml", "skills/**", "README.md", "LICENSE", "completions/**", "man/**"],
+  "files": ["dist/**/*.js", "!dist/internal/**", "spec/*.yaml", "skills/**", "README.md", "LICENSE", "completions/**", "man/**"],
   "engines": { "node": ">=22.12" },
   "repository": { "type": "git", "url": "git+https://github.com/vobiz-ai/Vobiz-CLI.git" },
   "publishConfig": { "access": "public", "provenance": true },
   "scripts": {
     "gen": "node scripts/gen-operations.mjs",
-    "build": "npm run gen && tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && npm run gen && tsc -p tsconfig.json",
     "build:internal": "node scripts/build-internal.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "npm run gen && tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
@@ -33,9 +34,9 @@
     "docs:commands": "node scripts/gen-command-docs.mjs",
     "build:assets": "npm run completions:gen && npm run man:gen",
     "build:sea": "node scripts/build-sea.mjs",
-    "prepack": "npm run build:assets",
+    "prepack": "node scripts/pack-guard.mjs && npm run build:assets",
     "skills:sync": "node scripts/sync-skills.mjs",
-    "prepublishOnly": "npm run check"
+    "prepublishOnly": "node scripts/pack-guard.mjs"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.7.4",

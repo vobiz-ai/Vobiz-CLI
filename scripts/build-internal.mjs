@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Internal build: compiles the CLI with the `vobiz internal …` group enabled (src/internal, present only in the
-// private vobiz-ai/the internal repository repository). It sets INTERNAL_BUILD=true in src/generated/build-flags.ts,
+// internal repository). It sets INTERNAL_BUILD=true in src/generated/build-flags.ts,
 // runs `npm run build`, and always restores the committed file (INTERNAL_BUILD=false) afterwards, so the working
 // tree stays clean and a later plain `npm run build` is public again.
 // Usage: npm run build:internal        (equivalent at runtime without rebuilding: VOBIZ_INTERNAL=1 vobiz …)

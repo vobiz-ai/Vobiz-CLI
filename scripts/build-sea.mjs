@@ -95,6 +95,10 @@ npx(`esbuild@${ESBUILD_VERSION}`, [
 const assets = { "package.json": join(root, "package.json") };
 for (const f of listFiles(join(root, "spec"))) if (f.endsWith(".yaml")) assets[`spec/${relative(join(root, "spec"), f).split("\\").join("/")}`] = f;
 for (const f of listFiles(join(root, "skills"))) assets[`skills/${relative(join(root, "skills"), f).split("\\").join("/")}`] = f;
+// node:sea has no "list assets" API, so src/core/bundled.ts reads this manifest to know which skills/* keys exist.
+const skillsManifest = join(stage, "skills.manifest.json");
+writeFileSync(skillsManifest, JSON.stringify(Object.keys(assets).filter((k) => k.startsWith("skills/"))));
+assets["skills.manifest.json"] = skillsManifest;
 const blob = join(stage, "sea-prep.blob");
 const seaConfig = join(stage, "sea-config.json");
 writeFileSync(

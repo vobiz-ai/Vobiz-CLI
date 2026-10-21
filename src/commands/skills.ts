@@ -6,14 +6,13 @@
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Command } from "commander";
 import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
 
-/** The skills/ folder shipped with the package (two levels up from dist/commands or src/commands). */
-export const BUNDLED_SKILLS_DIR = fileURLToPath(new URL("../../skills/", import.meta.url));
+/** The skills/ folder shipped with the package, or the unpacked assets inside a single-executable build. */
+import { bundledSkillsDir } from "../core/bundled.js";
 export const DEFAULT_SKILLS_DIR = ".claude/skills";
 
 export interface SkillInfo {
@@ -36,7 +35,7 @@ function frontMatter(text: string): Record<string, string> {
   return out;
 }
 
-export function bundledSkills(dir = BUNDLED_SKILLS_DIR): SkillInfo[] {
+export function bundledSkills(dir = bundledSkillsDir()): SkillInfo[] {
   if (!existsSync(dir)) throw new VobizError("internal_error", `The bundled skills folder is missing (${dir}). Reinstall the Vobiz CLI.`);
   return readdirSync(dir, { withFileTypes: true })
     .filter((d) => d.isDirectory() && existsSync(join(dir, d.name, "SKILL.md")))

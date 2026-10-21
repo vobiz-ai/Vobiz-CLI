@@ -2,7 +2,9 @@ import { appendFileSync, existsSync, mkdtempSync, readdirSync, readFileSync } fr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BUNDLED_SKILLS_DIR, bundledSkills } from "../src/commands/skills.js";
+import { bundledSkills } from "../src/commands/skills.js";
+import { bundledSkillsDir } from "../src/core/bundled.js";
+const BUNDLED_SKILLS_DIR = bundledSkillsDir();
 import { runCli } from "./helpers.js";
 
 const tempDir = () => join(mkdtempSync(join(tmpdir(), "vobiz-skills-")), ".claude", "skills");

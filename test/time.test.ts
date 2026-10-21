@@ -43,3 +43,14 @@ describe("phone", () => {
     expect(encodeURIComponent("+14155550100")).toBe("%2B14155550100");
   });
 });
+
+describe("toE164 strictness (S3 #8)", () => {
+  it("rejects characters it would otherwise drop", () => {
+    for (const bad of ["+1 415 555 0100 #2", "+1 415 555 0100 / 7", "+44 20 7946 0958 (×3)", "+91９876543210", "+91​98765٣ 43210", "+91+9876543210", "91 98765 43210+", "+1\t4155550100"])
+      expect(() => toE164(bad), JSON.stringify(bad)).toThrow(/ASCII digits/);
+  });
+  it("still accepts the usual punctuation", () => {
+    expect(toE164(" +1 (415) 555-0100 ")).toBe("+14155550100");
+    expect(toE164("+91.98765.43210")).toBe("+919876543210");
+  });
+});

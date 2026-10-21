@@ -59,6 +59,10 @@ Commands:
                                  sub-account
   trunks                         SIP trunks, their credentials, IP
                                  access-control lists and origination URIs
+  apps                           Applications: the answer URL Vobiz fetches
+                                 VobizXML from for numbers and endpoints
+  endpoints                      SIP endpoints: registered soft-phone, WebRTC
+                                 and desk-phone clients
   api [options] [method] [path]  Send a raw request to the Vobiz API, or list
                                  and describe every operation in the spec
   completion <shell>             Print a shell completion script (bash, zsh,

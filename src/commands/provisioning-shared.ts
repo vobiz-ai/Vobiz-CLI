@@ -238,6 +238,16 @@ export function hostOf(url: unknown): string | undefined {
   }
 }
 
+/** `<name>_host: host` for every `<name>_url` in a body, so a confirmation shows where callbacks will go. */
+export function urlHosts(body: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(body)) {
+    const host = /_url$/.test(k) ? hostOf(v) : undefined;
+    if (host) out[`${k.replace(/_url$/, "")}_host`] = host;
+  }
+  return out;
+}
+
 /** Summary details from a body: the listed keys that are set, as strings (secrets never included). */
 export function detailsFrom(body: Record<string, unknown>, keys: string[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -305,7 +315,7 @@ export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
   create.action(async (opts: Opts) => {
     const body = await buildBody(ctx, opts, createSpec, s.create);
     const details = detailsFrom(body, s.summaryKeys);
-    if (typeof body.webhook_url === "string") details.webhook_host = hostOf(body.webhook_url)!;
+    Object.assign(details, urlHosts(body));
     const data = await confirmedCall<Record<string, unknown>>(ctx, { action: `Create a ${s.noun}`, details: { account: ctx.client.authId, ...details } }, s.create, { body });
     if (s.secretPaths) revealOnce(ctx, data, s.secretPaths, s.secretLabel ?? "Password");
     ctx.out.status(`Created ${s.noun}${data && data[s.idKey] ? ` ${String(data[s.idKey])}` : ""}.`);
@@ -317,7 +327,7 @@ export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
   update.action(async (id: string, opts: Opts) => {
     const body = await buildBody(ctx, opts, updateSpec, s.update, { requireSomething: true });
     const details = detailsFrom(body, s.summaryKeys);
-    if (typeof body.webhook_url === "string") details.webhook_host = hostOf(body.webhook_url)!;
+    Object.assign(details, urlHosts(body));
     if ("password" in body) details.password = "(changed)";
     const data = await confirmedCall(ctx, { action: `Update ${s.noun} ${id}`, details: { changes: Object.keys(body).join(", "), ...details } }, s.update, {
       path: { [s.idParam]: id },

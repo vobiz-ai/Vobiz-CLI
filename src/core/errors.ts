@@ -1,3 +1,5 @@
+import { scrubSecrets } from "./redact.js";
+
 /**
  * Error categories the CLI reports. Mirrors the Vobiz MCP server's model so scripts and agents see one
  * vocabulary across tools. Raw backend bodies, headers and stack traces are never printed without --verbose.
@@ -82,9 +84,24 @@ export function kindForStatus(status: number): ErrorKind {
 
 const MAX_BACKEND_MESSAGE = 300;
 
-/** Pulls a human message out of a Vobiz error body without echoing the whole payload. */
+/** An HTML page (a proxy or gateway error page) is never echoed: it can repeat request headers, tokens included. */
+const looksLikeHtml = (s: string): boolean => /^\s*</.test(s) || /<(html|body|head|title)\b/i.test(s);
+
+/**
+ * Pulls a human message out of a Vobiz error body without echoing the whole payload. The result is capped, and
+ * every known secret value (the active Auth Token, secret flags given this run) is replaced by "[redacted]",
+ * because a backend can echo a submitted value ("password 'x' is too short") or a header.
+ */
 export function extractBackendMessage(body: unknown): string | undefined {
-  if (!body || typeof body !== "object") return typeof body === "string" && body.trim() ? body.trim().slice(0, MAX_BACKEND_MESSAGE) : undefined;
+  const m = rawBackendMessage(body);
+  return m === undefined ? undefined : scrubSecrets(m);
+}
+
+function rawBackendMessage(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") {
+    if (typeof body !== "string" || !body.trim() || looksLikeHtml(body)) return undefined;
+    return body.trim().slice(0, MAX_BACKEND_MESSAGE);
+  }
   const b = body as Record<string, unknown>;
   const cands = [b.message, b.error, b.detail, b.error_description, (b.error as Record<string, unknown> | undefined)?.message];
   for (const c of cands) if (typeof c === "string" && c.trim()) return c.trim().slice(0, MAX_BACKEND_MESSAGE);

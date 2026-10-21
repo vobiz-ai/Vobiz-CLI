@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import type { Ctx } from "./context.js";
 import { VobizError } from "./errors.js";
+import { rememberSecret } from "./redact.js";
 
 const chomp = (s: string): string => s.replace(/\r?\n$/, "");
 
@@ -20,8 +21,10 @@ export async function readSecretArg(ctx: Ctx, value: string, flag: string): Prom
     }
   } else {
     ctx.log("warn", `${flag} on the command line is saved in your shell history. Prefer ${flag} @file or ${flag} @- (stdin).`);
+    rememberSecret(value);
     return value;
   }
   if (!secret) throw new VobizError("invalid_input", `${flag}: ${value === "@-" ? "stdin" : value.slice(1)} is empty.`);
+  rememberSecret(secret);
   return secret;
 }

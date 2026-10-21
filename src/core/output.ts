@@ -15,7 +15,7 @@
 import pc from "picocolors";
 import YAML from "yaml";
 import { VobizError, isRetryable, type ErrorKind } from "./errors.js";
-import { redact } from "./redact.js";
+import { redact, scrubSecrets } from "./redact.js";
 import { renderTable } from "./table.js";
 
 export const OUTPUT_MODES = ["table", "json", "yaml", "tsv", "plain", "jsonl"] as const;
@@ -337,15 +337,16 @@ export class Printer {
   /** Prints an error to stderr as `vobiz: <kind>: <message>` plus a hint, or as JSON when --output json. */
   printError(err: unknown): void {
     const e = toVobizError(err);
+    const message = scrubSecrets(e.message);
     if (this.explicitJson) {
-      const body = { error: e.kind, message: e.message, status: e.status ?? null, retryable: isRetryable(e.kind), hint: hintFor(e.kind) ?? null };
+      const body = { error: e.kind, message, status: e.status ?? null, retryable: isRetryable(e.kind), hint: hintFor(e.kind) ?? null };
       this.host.stderr.write(JSON.stringify(this.safe(body)) + "\n");
       return;
     }
     const c = this.colors;
-    this.host.stderr.write(`${c.red("vobiz:")} ${e.kind}: ${e.message}\n`);
+    this.host.stderr.write(`${c.red("vobiz:")} ${e.kind}: ${message}\n`);
     const hint = hintFor(e.kind);
-    if (hint && !e.message.includes(hint)) this.host.stderr.write(`${c.dim(hint)}\n`);
+    if (hint && !message.includes(hint)) this.host.stderr.write(`${c.dim(hint)}\n`);
   }
 }
 

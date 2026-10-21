@@ -11,6 +11,7 @@ import { ConfigStore } from "./config.js";
 import { resolveCredentials, type ResolvedCredentials } from "./credentials.js";
 import { VobizClient, type LogLevel } from "./client.js";
 import { Printer, type OutputMode, type Stream } from "./output.js";
+import { rememberSecret, scrubSecrets } from "./redact.js";
 
 export interface GlobalFlags {
   profile?: string;
@@ -122,7 +123,11 @@ export class Ctx {
 
   /** Resolved credentials (flags > env > profile). Throws missing_credentials on first use when there are none. */
   get creds(): ResolvedCredentials {
-    return (this._creds ??= resolveCredentials(this.flags, this.store, this.env));
+    if (!this._creds) {
+      this._creds = resolveCredentials(this.flags, this.store, this.env);
+      rememberSecret(this._creds.authToken);
+    }
+    return this._creds;
   }
 
   /** Client bound to `creds`, the global timeout and --dry-run. */
@@ -154,7 +159,9 @@ export class Ctx {
     if (level === "verbose" && !(this.flags.verbose || debug)) return;
     if (level === "info" && this.flags.quiet) return;
     const prefix = level === "warn" ? "warning: " : level === "info" ? "" : `[${level}] `;
-    this.stderr.write(prefix + message + "\n");
+    // Known secret values never reach a log line, except with --debug --show-secrets (which asks for them).
+    const text = this.flags.debug && this.flags.showSecrets ? message : scrubSecrets(message);
+    this.stderr.write(prefix + text + "\n");
   }
 }
 

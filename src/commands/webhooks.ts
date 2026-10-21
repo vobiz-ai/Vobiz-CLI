@@ -9,14 +9,19 @@ import { decodeBody, parsePort, readBody, startServer, tunnelHint, untilInterrup
 import { isBodySignature, verifyBody, verifyCallback, verifyRequest, type CallbackVersion, type VerifyResult } from "../agent/webhooks.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
+import { rememberSecret } from "../core/redact.js";
 
 function secretFrom(ctx: Ctx, flag: string | undefined, required: boolean): string | undefined {
   if (flag) {
     ctx.out.warn("--secret is saved in your shell history. Prefer VOBIZ_WEBHOOK_SECRET.");
+    rememberSecret(flag);
     return flag;
   }
   const env = ctx.env.VOBIZ_WEBHOOK_SECRET;
-  if (env) return env;
+  if (env) {
+    rememberSecret(env);
+    return env;
+  }
   if (required) throw new VobizError("invalid_input", "Give the signing secret with VOBIZ_WEBHOOK_SECRET or --secret (for voice callbacks it is your Auth Token).");
   return undefined;
 }

@@ -114,6 +114,17 @@ export function rememberSecret(value: string | undefined | null): void {
   if (typeof value === "string" && value.length >= MIN_SECRET_LENGTH) knownSecrets.add(value);
 }
 
+/** Remembers the value of every secret-named key in a request body (e.g. a `--body` with a `password`). */
+export function rememberSecretsIn(value: unknown): void {
+  if (Array.isArray(value)) value.forEach(rememberSecretsIn);
+  else if (value && typeof value === "object" && !(value instanceof Date) && !(value instanceof FormData)) {
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (isSecretKey(k) && (typeof v === "string" || typeof v === "number")) rememberSecret(String(v));
+      else rememberSecretsIn(v);
+    }
+  }
+}
+
 /** `text` with every known secret value (and its URL-encoded form) replaced by "[redacted]". */
 export function scrubSecrets(text: string): string {
   if (!text || knownSecrets.size === 0) return text;

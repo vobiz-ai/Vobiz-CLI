@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.claude/*
+!.claude/skills/
+*.log
+*.tmp
+.DS_Store
+.vscode/
+.idea/
+bin/

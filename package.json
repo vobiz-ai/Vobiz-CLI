@@ -1,0 +1,42 @@
+{
+  "name": "@vobiz/cli",
+  "version": "0.1.0",
+  "description": "Official Vobiz CLI: voice calls, in-call control, conferences, SMS/MMS/RCS, phone numbers, SIP trunks, VobizXML, call records, sub-accounts and the Vobiz Agent Skills, from your terminal and CI.",
+  "keywords": ["vobiz", "cli", "telephony", "voice-api", "sms", "rcs", "sip-trunking", "ivr", "vobizxml", "ai-agents", "mcp"],
+  "homepage": "https://www.vobiz.ai/docs/resources/cli",
+  "bugs": { "url": "https://github.com/vobiz-ai/Vobiz-CLI/issues", "email": "support@vobiz.ai" },
+  "author": { "name": "Vobiz", "email": "support@vobiz.ai", "url": "https://www.vobiz.ai" },
+  "license": "MIT",
+  "type": "module",
+  "bin": { "vobiz": "dist/index.js" },
+  "main": "dist/cli.js",
+  "files": ["dist/**/*.js", "spec/*.yaml", "skills/**", "README.md", "LICENSE", "completions/**"],
+  "engines": { "node": ">=22.9" },
+  "repository": { "type": "git", "url": "git+https://github.com/vobiz-ai/Vobiz-CLI.git" },
+  "publishConfig": { "access": "public", "provenance": true },
+  "scripts": {
+    "gen": "node scripts/gen-operations.mjs",
+    "build": "npm run gen && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "npm run gen && tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
+    "test": "vitest run",
+    "test:all": "npm run build && vitest run",
+    "check": "npm run lint && npm run test:all",
+    "start": "node dist/index.js",
+    "dev": "npm run build && node dist/index.js",
+    "spec:sync": "node scripts/sync-spec.mjs",
+    "prepublishOnly": "npm run check"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.2.0",
+    "commander": "^14.0.2",
+    "picocolors": "^1.1.1",
+    "yaml": "^2.8.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.6"
+  }
+}

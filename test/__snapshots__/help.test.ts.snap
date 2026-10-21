@@ -54,6 +54,16 @@ Commands:
                                  settings
   update [options]               Check for a newer CLI version and show how to
                                  upgrade
+  account                        Account details, balance, concurrency,
+                                 transactions and capacity
+  calls                          Place, list, watch, hang up and control voice
+                                 calls
+  conferences                    List, inspect, end, moderate and record
+                                 conference rooms
+  recordings                     List, download, delete and bulk-export call
+                                 recordings
+  cdr                            Call detail records: list, search, recent, get
+                                 and CSV export
   api [options] [method] [path]  Send a raw request to the Vobiz API, or list
                                  and describe every operation in the spec
   completion <shell>             Print a shell completion script (bash, zsh,

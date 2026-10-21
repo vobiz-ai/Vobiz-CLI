@@ -12,6 +12,11 @@ import { register as doctor } from "./doctor.js";
 import { register as update } from "./update.js";
 
 // ── W2 voice: account, calls, conferences, recordings, cdr ──
+import { register as account } from "./account.js";
+import { register as calls } from "./calls.js";
+import { register as conferences } from "./conferences.js";
+import { register as recordings } from "./recordings.js";
+import { register as cdr } from "./cdr.js";
 
 // ── W3 provisioning: numbers, trunks, apps, endpoints, sub-accounts, partner ──
 
@@ -31,6 +36,11 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   update,
 
   // W2 voice
+  account,
+  calls,
+  conferences,
+  recordings,
+  cdr,
 
   // W3 provisioning
 

@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Read-only smoke test against a REAL Vobiz account. Run with `npm run test:live` (node --env-file=.env).
 // It never places calls, sends messages, buys numbers or changes anything: only GET requests.
-// Output is pass/fail per check; response bodies are never printed, and the run fails if the Auth Token
-// (or any value of a secret field) shows up anywhere in the CLI's stdout or stderr.
+// Output is pass/fail per check; response bodies are never printed, and the run fails if the Auth Token, or the
+// value of any secret-named field of GET /api/v1/auth/me (auth_secret, ...; fetched once here, never printed),
+// shows up anywhere in the CLI's stdout or stderr.
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const bin = join(root, "dist", "index.js");
@@ -18,6 +19,24 @@ if (!process.env.VOBIZ_AUTH_ID || !token || token === "YOUR_AUTH_TOKEN") {
 }
 
 // A throwaway config dir so a saved profile on this machine never interferes, and no update check.
+// Every secret value this run knows: the token, plus each secret-named field of /auth/me read straight from the API
+// (with the CLI's own isSecretKey rule), so a leak of auth_secret under any key is caught too.
+const { isSecretKey } = await import(pathToFileURL(join(root, "dist", "core", "redact.js")).href);
+const secrets = new Set([token]);
+try {
+  const base = (process.env.VOBIZ_BASE_URL ?? "https://api.vobiz.ai").replace(/\/+$/, "");
+  const res = await fetch(`${base}/api/v1/auth/me`, { headers: { "X-Auth-ID": process.env.VOBIZ_AUTH_ID, "X-Auth-Token": token, Accept: "application/json" } });
+  const walk = (v) => {
+    if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) (isSecretKey(k) && typeof x === "string" && x.length >= 4 ? secrets.add(x) : walk(x));
+  };
+  if (res.ok) walk(await res.json());
+  else console.log(`note: GET /api/v1/auth/me answered ${res.status}; checking the Auth Token value only`);
+} catch {
+  console.log("note: could not read /api/v1/auth/me directly; checking the Auth Token value only");
+}
+const redactAll = (text) => [...secrets].reduce((t, s) => t.replaceAll(s, "[redacted]"), text);
+
 const configDir = mkdtempSync(join(tmpdir(), "vobiz-live-"));
 const env = { ...process.env, VOBIZ_CONFIG_DIR: configDir, VOBIZ_NO_UPDATE_CHECK: "1", NO_COLOR: "1" };
 
@@ -34,9 +53,9 @@ for (const c of checks) {
   const all = `${r.stdout}\n${r.stderr}`;
   let ok = r.status === 0;
   let why = ok ? "" : `exit ${r.status}`;
-  if (all.includes(token)) {
+  if ([...secrets].some((s) => all.includes(s))) {
     ok = false;
-    why = "the Auth Token appeared in the output";
+    why = all.includes(token) ? "the Auth Token appeared in the output" : "a secret field value (e.g. auth_secret) appeared in the output";
   } else if (ok) {
     try {
       if (!c.expect(JSON.parse(r.stdout))) {
@@ -50,7 +69,7 @@ for (const c of checks) {
   }
   if (!ok) failed++;
   // Only the first stderr line on failure: it is the CLI's own error message, which never contains secrets.
-  console.log(`${ok ? "ok  " : "FAIL"} ${c.name}${why ? ` (${why}${!ok && r.stderr ? `: ${r.stderr.split("\n")[0].replaceAll(token, "[redacted]")}` : ""})` : ""}`);
+  console.log(`${ok ? "ok  " : "FAIL"} ${c.name}${why ? ` (${why}${!ok && r.stderr ? `: ${redactAll(r.stderr.split("\n")[0])}` : ""})` : ""}`);
 }
 rmSync(configDir, { recursive: true, force: true });
 console.log(failed ? `${failed} check(s) failed` : "all live checks passed");

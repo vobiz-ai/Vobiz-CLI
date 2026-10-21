@@ -38,10 +38,12 @@ With --output json, errors are printed to stderr as one JSON line:
   VOBIZ_YES                         1 or true: skip confirmation prompts (like --yes)
   VOBIZ_BASE_URL                    voice API base URL (default https://api.vobiz.ai)
   VOBIZ_SMS_BASE_URL                Messaging API base URL (default https://api.vobiz.ai/api/v1/sms)
+  VOBIZ_ALLOW_INSECURE_BASE_URL=1   allow http base URLs on localhost only (base URLs must otherwise be https)
   VOBIZ_TIMEOUT                     per-request timeout in seconds (default 30)
   VOBIZ_LOG=debug                   like --debug (request and response bodies, secrets redacted)
   VOBIZ_CONFIG_DIR                  config directory (default $XDG_CONFIG_HOME/vobiz or ~/.config/vobiz)
   VOBIZ_NO_UPDATE_CHECK, CI         disable the daily version check
+  VOBIZ_NO_BROWSER                  never open a browser; print the URL instead (also when CI is set or not a TTY)
   NO_COLOR, FORCE_COLOR             standard color control
   HTTPS_PROXY, NO_PROXY             used by Node's fetch only when NODE_USE_ENV_PROXY=1
 

@@ -7,6 +7,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import { baseUrlProblem } from "./credentials.js";
 
 export const VOICE_BASE_URL = "https://api.vobiz.ai";
 export const SMS_BASE_URL = "https://api.vobiz.ai/api/v1/sms";
@@ -17,8 +18,8 @@ export const profileSchema = z.object({
   authId: z.string().min(3),
   authToken: z.string().min(8),
   /** Overrides for staging or self-hosted gateways. */
-  voiceBaseUrl: z.string().url().optional(),
-  smsBaseUrl: z.string().url().optional(),
+  voiceBaseUrl: z.string().url().refine((u) => !baseUrlProblem(u, true), "voiceBaseUrl must use https (http only for localhost)").optional(),
+  smsBaseUrl: z.string().url().refine((u) => !baseUrlProblem(u, true), "smsBaseUrl must use https (http only for localhost)").optional(),
   /** Set on `vobiz login` from GET /auth/me so `whoami` works offline. */
   accountName: z.string().optional(),
   createdAt: z.string().optional(),

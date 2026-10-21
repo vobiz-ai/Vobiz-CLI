@@ -13,7 +13,7 @@
 import type { ResolvedCredentials } from "./credentials.js";
 import { VobizError, extractBackendMessage, kindForStatus } from "./errors.js";
 import type { Api, HttpMethod, Operation } from "../generated/operations.js";
-import { REDACTED, redact } from "./redact.js";
+import { REDACTED, redact, redactForLog, redactUrl, rememberSecret, rememberSecretsIn } from "./redact.js";
 import { USER_AGENT } from "./version.js";
 
 export type LogLevel = "warn" | "info" | "verbose" | "debug";
@@ -161,14 +161,16 @@ export class VobizClient {
       ...(operation ? { operation } : {}),
       api,
       method,
-      url: url.toString(),
+      // Secret-named query parameters (`?password=`, `?token=`) are hidden like headers and body fields.
+      url: redactUrl(url.toString()),
       headers: { ...headers, "X-Auth-Token": REDACTED },
-      ...(sendsBody(method, args.body) ? { body: args.body instanceof FormData ? "[multipart form data]" : redact(args.body ?? {}) } : {}),
+      ...(sendsBody(method, args.body) ? { body: args.body instanceof FormData ? "[multipart form data]" : redactForLog(args.body ?? {}) } : {}),
     };
   }
 
   private headers(method: HttpMethod, body: unknown): Record<string, string> {
     const c = this.creds; // throws missing_credentials before any I/O
+    rememberSecret(c.authToken); // so an error text that echoes it is scrubbed (see extractBackendMessage)
     const h: Record<string, string> = {
       "X-Auth-ID": c.authId,
       "X-Auth-Token": c.authToken,
@@ -199,8 +201,9 @@ export class VobizClient {
     if (this.isDryRun(args)) throw new DryRunSignal(this.prepare(api, method, path, args, operation));
     const url = this.buildUrl(api, path, args.query);
     const headers = this.headers(method, args.body);
+    rememberSecretsIn(args.body);
     const body = sendsBody(method, args.body) ? (args.body instanceof FormData ? args.body : JSON.stringify(args.body ?? {})) : undefined;
-    if (body !== undefined) this.log("debug", `request body: ${args.body instanceof FormData ? "[multipart form data]" : JSON.stringify(redact(args.body ?? {}))}`);
+    if (body !== undefined) this.log("debug", `request body: ${args.body instanceof FormData ? "[multipart form data]" : JSON.stringify(redactForLog(args.body ?? {}))}`);
 
     const timeoutMs = this.opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const controller = new AbortController();
@@ -253,7 +256,7 @@ export class VobizClient {
         data = undefined;
       }
     }
-    if (data !== undefined) this.log("debug", `response body: ${JSON.stringify(redact(data)).slice(0, 4000)}`);
+    if (data !== undefined) this.log("debug", `response body: ${JSON.stringify(redactForLog(data)).slice(0, 4000)}`);
 
     if (res.status >= 200 && res.status < 300) {
       if (args.responseType === "text") return text as T;
@@ -263,6 +266,7 @@ export class VobizClient {
     if (res.status >= 300 && res.status < 400)
       throw new VobizError("unexpected_response", `Vobiz answered with an unexpected redirect (${res.status}).`, res.status);
 
+    if (data === undefined && text) this.log("verbose", `${label}: non-JSON error body (${contentType ?? "no content type"}, ${text.length} bytes) not shown`);
     const message = extractBackendMessage(data ?? text) ?? `HTTP ${res.status}`;
     throw new VobizError(kindForStatus(res.status), message, res.status, data === undefined ? undefined : redact(data));
   }

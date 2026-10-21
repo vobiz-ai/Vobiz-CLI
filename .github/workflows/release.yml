@@ -58,7 +58,21 @@ jobs:
           grep -q "^## \[$TAG\]" CHANGELOG.md || { echo "CHANGELOG.md has no ## [$TAG] section"; exit 1; }
           echo "version=$TAG" >> "$GITHUB_OUTPUT"
           case "$TAG" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac >> "$GITHUB_OUTPUT"
+      # The full check (lint, build, tests) and the dev-inclusive audit run here, in a job without id-token, so the
+      # test toolchain and its ~80 dev dependencies never run next to the npm OIDC token.
       - run: npm run check
+      - run: npm audit --audit-level=high
+      - name: Pack the npm tarball (prepack checks dist/internal is excluded and builds completions + man)
+        run: |
+          mkdir -p "$RUNNER_TEMP/pack"
+          npm pack --pack-destination "$RUNNER_TEMP/pack"
+          ls "$RUNNER_TEMP/pack"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/pack/*.tgz
+          if-no-files-found: error
+          retention-days: 7
 
   npm:
     needs: verify
@@ -70,15 +84,16 @@ jobs:
       contents: read
       id-token: write # npm trusted publishing (OIDC) and provenance
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+      # No checkout, no npm ci, no build: this job publishes the exact tarball `verify` packed and tested, with
+      # --ignore-scripts, so no package code or dev dependency runs while the OIDC token is available.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           package-manager-cache: false # no shared cache in publishing workflows (cache poisoning)
-      # prepack (npm run build:assets) generates completions/ and man/ from the build.
-      - run: npm ci --ignore-scripts && npm run build
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-package
+          path: pack
       - name: Publish to npm (trusted publishing, provenance)
         env:
           V: ${{ needs.verify.outputs.version }}
@@ -88,7 +103,9 @@ jobs:
           npm --version
           # Prereleases go to the `next` dist-tag so `npm i -g @vobiz/cli` keeps installing the latest stable.
           if [ "$PRERELEASE" = true ]; then DIST_TAG=next; else DIST_TAG=latest; fi
-          npm publish --provenance --access public --tag "$DIST_TAG"
+          TGZ="pack/vobiz-cli-$V.tgz"
+          test -f "$TGZ" && [ "$(ls pack | wc -l)" -eq 1 ] || { echo "expected exactly $TGZ"; ls pack; exit 1; }
+          npm publish "$TGZ" --ignore-scripts --provenance --access public --tag "$DIST_TAG"
           for i in $(seq 1 30); do
             npm view "@vobiz/cli@$V" version >/dev/null 2>&1 && break
             [ "$i" = 30 ] && { echo "@vobiz/cli@$V did not appear on the registry"; exit 1; }
@@ -146,11 +163,26 @@ jobs:
       id-token: write # actions/attest-build-provenance
       attestations: write # actions/attest-build-provenance
     steps:
+      # Each leg's artifact goes to its own directory (no merge-multiple), and each must hold exactly its own
+      # archive, so one leg (or an extra artifact) can never replace another platform's binary.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: binary-*
-          path: release
-          merge-multiple: true
+          path: artifacts
+      - name: Check and collect the archives
+        env:
+          V: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eu
+          TARGETS="darwin-arm64 darwin-x64 linux-x64 linux-arm64 win-x64"
+          [ "$(ls artifacts | sort | tr '\n' ' ')" = "binary-darwin-arm64 binary-darwin-x64 binary-linux-arm64 binary-linux-x64 binary-win-x64 " ] \
+            || { echo "unexpected artifacts:"; ls artifacts; exit 1; }
+          mkdir -p release
+          for t in $TARGETS; do
+            case "$t" in win-*) f="vobiz-$V-$t.zip" ;; *) f="vobiz-$V-$t.tar.gz" ;; esac
+            [ "$(ls "artifacts/binary-$t")" = "$f" ] || { echo "binary-$t must contain exactly $f:"; ls -la "artifacts/binary-$t"; exit 1; }
+            mv "artifacts/binary-$t/$f" release/
+          done
       - name: Checksums
         run: |
           cd release
@@ -279,12 +311,18 @@ jobs:
           git add Formula/vobiz.rb
           git commit -m "vobiz $V"
           git push --force origin "$BRANCH"
-          gh pr create --repo vobiz-ai/homebrew-tap --head "$BRANCH" --title "vobiz $V" \
-            --body "Updates the Vobiz CLI formula to $V from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/v$V." \
-            || echo "A pull request for $BRANCH already exists."
+          if ! gh pr create --repo vobiz-ai/homebrew-tap --head "$BRANCH" --title "vobiz $V" \
+            --body "Updates the Vobiz CLI formula to $V from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/v$V."; then
+            # Succeed only when the PR really exists already; any other failure fails the job.
+            [ "$(gh pr list --repo vobiz-ai/homebrew-tap --head "$BRANCH" --state open --json number --jq length)" -ge 1 ] \
+              || { echo "::error::could not open the Homebrew tap pull request for $BRANCH"; exit 1; }
+            echo "A pull request for $BRANCH already exists."
+          fi
 
   scoop:
     # Stable releases only. Commits packaging/scoop/vobiz.json to main, or opens a PR when the ruleset blocks the push.
+    # The manifest is generated by the TAGGED commit's script (never main's), the checkout keeps no credentials, and
+    # the token is handed only to the push and PR commands.
     needs: [verify, github-release]
     if: needs.verify.outputs.prerelease == 'false'
     runs-on: ubuntu-latest
@@ -294,28 +332,41 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
-          persist-credentials: true # this job pushes the manifest commit
+          persist-credentials: false # the tag being released
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: sha256sums
           path: ${{ runner.temp }}/release
-      - name: Fill in the manifest
+      - name: Fill in the manifest (script from the tag)
         env:
           V: ${{ needs.verify.outputs.version }}
         run: node scripts/update-homebrew-formula.mjs --only scoop --version "$V" --sums "$RUNNER_TEMP/release/SHA256SUMS"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: main
+          persist-credentials: false
       - name: Commit to main (or open a PR)
         env:
           V: ${{ needs.verify.outputs.version }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          cp packaging/scoop/vobiz.json main/packaging/scoop/vobiz.json
+          cd main
           git diff --quiet -- packaging/scoop/vobiz.json && { echo "Manifest already at $V"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add packaging/scoop/vobiz.json
           git commit -m "chore(scoop): vobiz $V"
-          if git push origin HEAD:main; then exit 0; fi
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$AUTH"
+          if git -c "http.https://github.com/.extraheader=$AUTH" push origin HEAD:main; then exit 0; fi
           BRANCH="scoop/vobiz-$V"
-          git push --force origin "HEAD:refs/heads/$BRANCH"
-          gh pr create --base main --head "$BRANCH" --title "chore(scoop): vobiz $V" \
-            --body "Updates the Scoop manifest to the $V release assets." || echo "A pull request for $BRANCH already exists."
+          git -c "http.https://github.com/.extraheader=$AUTH" push --force origin "HEAD:refs/heads/$BRANCH"
+          if ! gh pr create --base main --head "$BRANCH" --title "chore(scoop): vobiz $V" \
+            --body "Updates the Scoop manifest to the $V release assets."; then
+            # GITHUB_TOKEN may not be allowed to open PRs (repository setting); fail loudly unless the PR already exists.
+            [ "$(gh pr list --head "$BRANCH" --state open --json number --jq length)" -ge 1 ] \
+              || { echo "::error::could not push to main or open a PR for $BRANCH; update packaging/scoop/vobiz.json by hand"; exit 1; }
+            echo "A pull request for $BRANCH already exists."
+          fi

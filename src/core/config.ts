@@ -3,10 +3,11 @@
  * credentials.json holds one entry per profile and is written with mode 0600; config.json holds non-secret settings.
  * Nothing here is ever logged.
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import { permissionProblem, writeFileAtomic } from "./atomic.js";
 import { baseUrlProblem } from "./credentials.js";
 
 export const VOICE_BASE_URL = "https://api.vobiz.ai";
@@ -62,16 +63,9 @@ function readJson<T>(file: string, schema: z.ZodType<T>, empty: T): T {
   return parsed.data;
 }
 
+/** Exclusive random temp file + rename; the config dir is kept 0700 (see atomic.ts). */
 function writeJsonAtomic(file: string, data: unknown, mode: number): void {
-  mkdirSync(join(file, ".."), { recursive: true, mode: 0o700 });
-  const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n", { mode });
-  try {
-    chmodSync(tmp, mode);
-  } catch {
-    /* Windows */
-  }
-  renameSync(tmp, file);
+  writeFileAtomic(file, JSON.stringify(data, null, 2) + "\n", { mode, privateDir: true });
 }
 
 export class ConfigStore {
@@ -81,6 +75,11 @@ export class ConfigStore {
   }
   get settingsPath() {
     return join(this.dir, "config.json");
+  }
+
+  /** A warning when credentials.json is readable by group or others (POSIX only), like ssh does for keys. */
+  credentialsPermissionProblem(): string | undefined {
+    return permissionProblem(this.credentialsPath);
   }
 
   profiles(): Record<string, Profile> {

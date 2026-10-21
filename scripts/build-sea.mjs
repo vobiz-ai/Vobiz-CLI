@@ -11,8 +11,10 @@
 // Steps (https://nodejs.org/docs/latest-v24.x/api/single-executable-applications.html):
 //   1. Stage dist/ and replace the package.json require in dist/core/version.js with an inline literal: inside a SEA,
 //      `require` reaches only built-in modules and there is no package.json beside the binary.
-//   2. Bundle to one CommonJS file with esbuild (Node 22/24 SEAs run a CommonJS main script). esbuild runs through
-//      `npx -y esbuild@<pinned>` so it is never a dependency of the package.
+//   2. Bundle to one CommonJS file with esbuild (Node 22/24 SEAs run a CommonJS main script). esbuild and postject are
+//      exact-version devDependencies, so package-lock.json pins them and every transitive package (postject's
+//      commander) by sha512 and `npm ci --ignore-scripts` verifies them; they are run from node_modules, never fetched
+//      with npx at build time. They are not runtime dependencies of the published package.
 //   3. `node --experimental-sea-config` writes the preparation blob. package.json and spec/*.yaml (and skills/** when
 //      present) are embedded as SEA assets, readable with require("node:sea").getAsset(key).
 //   4. Copy this node binary, strip its signature (macOS: codesign, Windows: signtool when available), inject the blob
@@ -21,11 +23,13 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
-  chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
+  chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
+// Must equal the exact devDependency versions in package.json (checked below), so Dependabot bumps both together.
 const ESBUILD_VERSION = "0.28.2";
 const POSTJECT_VERSION = "1.0.0-alpha.6";
 const SEA_FUSE = "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2";
@@ -53,6 +57,10 @@ if (!existsSync(entry)) fail("dist/index.js is missing: run `npm run build` firs
 
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const version = pkg.version;
+
+// The SEA toolchain comes from the lockfile-verified node_modules (npm ci), at exactly the pinned versions.
+const esbuildBin = toolBin("esbuild", ESBUILD_VERSION, "esbuild");
+const postjectBin = toolBin("postject", POSTJECT_VERSION, "postject");
 const name = `vobiz-${version}-${osName}-${arch}`;
 const binary = join(outDir, name + (isWin ? ".exe" : ""));
 const stage = join(outDir, ".sea-build");
@@ -77,7 +85,7 @@ if (existsSync(versionFile)) {
 // 2. Bundle to a single CommonJS script.
 const bundle = join(stage, "vobiz.cjs");
 log(`bundling with esbuild ${ESBUILD_VERSION}`);
-npx(`esbuild@${ESBUILD_VERSION}`, [
+tool(esbuildBin, [
   join(stage, "dist", "index.js"),
   "--bundle",
   "--platform=node",
@@ -94,6 +102,7 @@ npx(`esbuild@${ESBUILD_VERSION}`, [
 // 3. SEA configuration and preparation blob.
 const assets = { "package.json": join(root, "package.json") };
 for (const f of listFiles(join(root, "spec"))) if (f.endsWith(".yaml")) assets[`spec/${relative(join(root, "spec"), f).split("\\").join("/")}`] = f;
+// listFiles refuses symlinks, so a link committed under skills/ or spec/ can never embed a file from the build machine.
 for (const f of listFiles(join(root, "skills"))) assets[`skills/${relative(join(root, "skills"), f).split("\\").join("/")}`] = f;
 // node:sea has no "list assets" API, so src/core/bundled.ts reads this manifest to know which skills/* keys exist.
 const skillsManifest = join(stage, "skills.manifest.json");
@@ -120,7 +129,7 @@ if (isMac) {
   else log("signtool not found: the copied node.exe signature is left in place (postject still works; the binary is unsigned)");
 }
 log(`injecting with postject ${POSTJECT_VERSION}`);
-npx(`postject@${POSTJECT_VERSION}`, [
+tool(postjectBin, [
   binary, "NODE_SEA_BLOB", blob, "--sentinel-fuse", SEA_FUSE, ...(isMac ? ["--macho-segment-name", "NODE_SEA"] : []),
 ]);
 if (isMac) run("codesign", ["--sign", "-", binary]);
@@ -158,7 +167,9 @@ function listFiles(dir) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).flatMap((f) => {
     const p = join(dir, f);
-    return statSync(p).isDirectory() ? listFiles(p) : [p];
+    const st = lstatSync(p);
+    if (st.isSymbolicLink() || !(st.isDirectory() || st.isFile())) fail(`${relative(root, p)} is a symlink or special file; only regular files are embedded`);
+    return st.isDirectory() ? listFiles(p) : [p];
   });
 }
 function sha256(file) {
@@ -167,9 +178,25 @@ function sha256(file) {
 function run(cmd, argv) {
   execFileSync(cmd, argv, { stdio: "inherit", cwd: root, shell: isWin && !cmd.includes("\\") && cmd !== process.execPath });
 }
-function npx(spec, argv) {
-  const quoted = isWin ? argv.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)) : argv;
-  execFileSync(isWin ? "npx.cmd" : "npx", ["-y", spec, ...quoted], { stdio: "inherit", cwd: root, shell: isWin });
+/** The JS entry of a devDependency's CLI, after checking the installed version is exactly the pinned one. */
+function toolBin(pkgName, expected, binName) {
+  const req = createRequire(join(root, "package.json"));
+  let manifestPath;
+  try {
+    manifestPath = req.resolve(`${pkgName}/package.json`);
+  } catch {
+    fail(`${pkgName} is not installed: run \`npm ci --ignore-scripts\` (it is a pinned devDependency)`);
+  }
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  if (manifest.version !== expected) fail(`${pkgName} ${manifest.version} is installed, expected exactly ${expected} (package.json and package-lock.json)`);
+  if (pkg.devDependencies?.[pkgName] !== expected) fail(`package.json devDependencies.${pkgName} must be exactly "${expected}"`);
+  const bin = typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.[binName];
+  if (!bin) fail(`${pkgName} has no "${binName}" bin`);
+  return join(dirname(manifestPath), bin);
+}
+/** Runs a pinned tool's JS entry with this node (no shell, so no quoting issues on Windows). */
+function tool(bin, argv) {
+  execFileSync(process.execPath, [bin, ...argv], { stdio: "inherit", cwd: root });
 }
 function hasCommand(cmd) {
   try {

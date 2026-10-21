@@ -105,10 +105,12 @@ V=0.1.0
 curl -fsSLO https://github.com/vobiz-ai/Vobiz-CLI/releases/download/v$V/vobiz-$V-linux-x64.tar.gz
 curl -fsSLO https://github.com/vobiz-ai/Vobiz-CLI/releases/download/v$V/SHA256SUMS
 sha256sum --check --ignore-missing SHA256SUMS          # macOS: shasum -a 256 --check --ignore-missing SHA256SUMS
-gh attestation verify vobiz-$V-linux-x64.tar.gz --repo vobiz-ai/Vobiz-CLI
+gh attestation verify vobiz-$V-linux-x64.tar.gz --repo vobiz-ai/Vobiz-CLI \
+  --signer-workflow vobiz-ai/Vobiz-CLI/.github/workflows/release.yml \
+  --source-ref refs/tags/v$V --deny-self-hosted-runners
 ```
 
-The attestation proves the archive was built by this repository's release workflow from the tagged commit.
+With `--signer-workflow` and `--source-ref`, the attestation proves the archive was built by this repository's release workflow from the `v$V` tag on a GitHub-hosted runner (`--repo` alone accepts any workflow on any branch). The install scripts run the same check automatically when `gh` is installed and signed in; set `VOBIZ_REQUIRE_ATTESTATION=1` to make it mandatory.
 
 The macOS binaries are signed ad hoc, not notarized. Archives fetched with `curl`, the install script or Homebrew run directly. If you download one with a browser and macOS blocks it, remove the quarantine flag: `xattr -d com.apple.quarantine ./vobiz`.
 

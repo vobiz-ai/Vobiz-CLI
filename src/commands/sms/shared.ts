@@ -15,7 +15,7 @@ import type { Ctx } from "../../core/context.js";
 import { VobizError, extractBackendMessage, kindForStatus, usage } from "../../core/errors.js";
 import type { Operation } from "../../core/ops.js";
 import { toE164 } from "../../core/phone.js";
-import { paginate, type PaginateOptions } from "../../core/pagination.js";
+import { extractItems, paginate, type PaginateOptions } from "../../core/pagination.js";
 import type { PrintOptions } from "../../core/output.js";
 import { redact } from "../../core/redact.js";
 import { USER_AGENT } from "../../core/version.js";
@@ -191,7 +191,11 @@ export async function listCommand(
   const limit = flags.all ? undefined : flags.limit ?? defaultLimit;
   const pageOpts: PaginateOptions = { all: flags.all, limit, pageSize: flags.all ? maxPage : Math.min(limit ?? maxPage, maxPage), itemsKey };
   const res = await paginate<Rec>(ctx.client, operation, args, pageOpts);
-  printList(ctx, res.last, res.items, itemsKey, print);
+  // Without an explicit itemsKey, merge every page under the key the items were found in (else --all --json
+  // would print only the last page).
+  const last = res.last;
+  const detected = itemsKey ?? (isRec(last) ? Object.keys(last).find((k) => Array.isArray(last[k]) && last[k] === extractItems(last)) : undefined);
+  printList(ctx, last, res.items, detected, print);
   if (res.hasMore && !flags.all && (ctx.out.mode === "table" || ctx.out.mode === "plain"))
     ctx.out.status(`Showing ${res.items.length}${res.total !== undefined ? ` of ${res.total}` : ""}. Use --limit <n> or --all for more.`);
 }

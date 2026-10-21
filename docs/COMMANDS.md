@@ -1526,7 +1526,7 @@ vobiz mcp install <client> [options]
 | `--project` | use the project config in the current directory (claude-code, cursor, vscode, gemini) |
 | `--dir <path>` | project directory for --project (default: the current directory) |
 | `--name <name>` | server name in the client config |
-| `--with-credentials` | with --local: copy the current profile's Auth ID and Auth Token into the file (the file will then contain your token) |
+| `--with-credentials` | with --local: copy the current profile's Auth ID and Auth Token into the file (refused for a --project file git would commit) |
 
 ### vobiz numbers
 

@@ -134,7 +134,7 @@ export function register(program: Command, ctx: Ctx): void {
       .command("install")
       .description("Add the Vobiz MCP server to an AI client's config file (merged; other servers are kept)"),
   )
-    .option("--with-credentials", "with --local: copy the current profile's Auth ID and Auth Token into the file (the file will then contain your token)")
+    .option("--with-credentials", "with --local: copy the current profile's Auth ID and Auth Token into the file (refused for a --project file git would commit)")
     .addHelpText(
       "after",
       `
@@ -150,7 +150,8 @@ Files written (user scope unless --project):
 
 The hosted connector signs in with OAuth, so no secret is written. --local reads VOBIZ_AUTH_ID/VOBIZ_AUTH_TOKEN
 from your environment where the client supports it (Claude Desktop and Zed get placeholders to replace, or use
---with-credentials). An existing file is backed up to <file>.bak before it changes.
+--with-credentials). An existing file is backed up to <file>.bak before it changes (a token the new file drops is
+replaced by YOUR_AUTH_TOKEN in the backup).
 
 Examples:
   vobiz mcp install cursor

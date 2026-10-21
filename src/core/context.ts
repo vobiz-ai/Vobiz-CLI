@@ -126,6 +126,10 @@ export class Ctx {
     if (!this._creds) {
       this._creds = resolveCredentials(this.flags, this.store, this.env);
       rememberSecret(this._creds.authToken);
+      if (this._creds.source === "profile") {
+        const problem = this.store.credentialsPermissionProblem();
+        if (problem) this.log("warn", problem);
+      }
     }
     return this._creds;
   }

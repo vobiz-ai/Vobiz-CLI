@@ -40,6 +40,8 @@ export async function loadCommandTree() {
   // Importing the CLI must never touch the network or the user's config.
   process.env.VOBIZ_NO_UPDATE_CHECK = "1";
   process.env.NO_COLOR = "1";
+  // Generated docs, completions and the man page always describe the public CLI, even from an internal build.
+  process.env.VOBIZ_INTERNAL = "0";
   const mod = await import(pathToFileURL(modulePath).href);
   if (typeof mod.buildProgram === "function") {
     const program = await mod.buildProgram();

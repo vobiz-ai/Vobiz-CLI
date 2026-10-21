@@ -7,6 +7,7 @@
  * publicly: `--xml-only` prints the document so you can host it, and `--serve --public-url` serves it from a local
  * HTTP server that you expose with a tunnel (cloudflared, ngrok…) for the length of the call.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { Option, type Command } from "commander";
@@ -58,6 +59,42 @@ export function playXml(url: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  <Play>${escapeXml(url)}</Play>\n</Response>\n`;
 }
 
+// ── Fan-out guard ──
+
+/** One `--yes` should not approve hundreds of billed calls: this many destinations at most unless --max-fanout raises it. */
+export const DEFAULT_MAX_FANOUT = 50;
+/** The API's own limit for `<`-joined destinations. */
+export const API_MAX_FANOUT = 1000;
+
+/**
+ * De-duplicates destinations (keeping the first occurrence) and refuses more than `max` unless the caller raised it
+ * with `--max-fanout`, so the approved count is explicit.
+ */
+export function capFanout(destinations: string[], max: number = DEFAULT_MAX_FANOUT, what = "--to"): string[] {
+  const unique = [...new Set(destinations)];
+  if (unique.length > API_MAX_FANOUT) throw usage(`${what} has ${unique.length} destinations; the API accepts at most ${API_MAX_FANOUT} per request.`);
+  if (unique.length > max)
+    throw usage(
+      `${what} has ${unique.length} distinct destinations, more than ${max}. Each one is a separate billed call: pass --max-fanout ${unique.length} to confirm the count.`,
+    );
+  return unique;
+}
+
+/** Text shown in a confirmation in full up to `max` characters, with a note when cut. */
+export function fullText(text: string, max: number): { value: string; max: number } {
+  const chars = [...text];
+  return chars.length > max
+    ? { value: `${chars.slice(0, max).join("")}… (${chars.length} characters; the first ${max} are shown)`, max: max + 60 }
+    : { value: text, max: max + 1 };
+}
+
+/** `1.2 KB, sha256 1a2b3c4d5e6f` for a file whose content is not shown in full. */
+export function fileFingerprint(content: string): string {
+  const bytes = Buffer.byteLength(content);
+  const size = bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+  return `${size}, sha256 ${createHash("sha256").update(content).digest("hex").slice(0, 12)}`;
+}
+
 interface CreateOpts {
   to?: string;
   from?: string;
@@ -75,6 +112,7 @@ interface CreateOpts {
   allowInsecureUrl?: boolean;
   interval?: number;
   maxWait?: number;
+  maxFanout?: number;
 }
 
 /** Builds the XML document for --say/--play/--xml-file, or undefined when --answer-url is used. */
@@ -119,7 +157,8 @@ function registerCreate(calls: Command, ctx: Ctx) {
   const cmd = calls
     .command("create")
     .description("Place an outbound call (billed; asks for confirmation)")
-    .option("--to <dest>", "destination: E.164 number or SIP URI; join several with < to fan out (max 1000)")
+    .option("--to <dest>", `destination: E.164 number or SIP URI; join several with < to fan out (deduplicated; at most ${DEFAULT_MAX_FANOUT} unless --max-fanout)`)
+    .option("--max-fanout <n>", `allow this many fan-out destinations (default ${DEFAULT_MAX_FANOUT}, API maximum ${API_MAX_FANOUT}); each is a separate billed call`, intArg(1, API_MAX_FANOUT))
     .option("--from <number>", "caller ID: a Vobiz number on this account, E.164")
     .option("--answer-url <url>", "https URL that returns VobizXML when the call is answered")
     .addOption(new Option("--answer-method <method>", "HTTP method Vobiz uses for the answer URL").choices(["GET", "POST"]).default("POST"))
@@ -168,7 +207,7 @@ Examples:
       if (!o.serve && (o.publicUrl || o.port !== undefined)) throw usage("--public-url and --port apply only to --serve.");
       if (!o.to || !o.from) throw usage("--to and --from are required.");
 
-      const destinations = normalizeDestinations(o.to);
+      const destinations = capFanout(normalizeDestinations(o.to), o.maxFanout);
       const from = toE164(o.from);
       const answerUrl = checkUrl((o.serve ? o.publicUrl : o.answerUrl)!, o.serve ? "--public-url" : "--answer-url", { allowInsecure: o.allowInsecureUrl });
       const body = { from, to: destinations.join("<"), answer_url: answerUrl, answer_method: o.answerMethod };
@@ -178,10 +217,14 @@ Examples:
         action: destinations.length > 1 ? `Place ${destinations.length} calls (billed)` : `Place a call to ${destinations[0]} (billed)`,
         details: {
           to: destinations.length > 3 ? `${destinations.slice(0, 3).join(", ")} and ${destinations.length - 3} more` : destinations.join(", "),
+          ...(destinations.length > 1
+            ? { calls: `${destinations.length} separate calls, each billed per minute at your voice rate for its destination (no estimate is available before dialling)` }
+            : {}),
           "caller ID": from,
           "answer URL host": hostOf(answerUrl) + (o.serve ? ` (tunnel to local port ${o.port ?? 8787})` : ""),
-          ...(o.say !== undefined ? { says: o.say.length > 60 ? `${o.say.slice(0, 57)}…` : o.say } : {}),
+          ...(o.say !== undefined ? { says: fullText(o.say, 1000) } : {}),
           ...(o.play !== undefined ? { plays: o.play } : {}),
+          ...(o.xmlFile !== undefined && xml ? { "answer XML": `${o.xmlFile} (${fileFingerprint(xml)})` } : {}),
         },
       });
 

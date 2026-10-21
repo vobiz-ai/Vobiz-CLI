@@ -403,7 +403,7 @@ describe("local servers bind to 127.0.0.1 by default", () => {
 
   it("calls create --serve binds the answer server to 127.0.0.1", () => {
     const src = readFileSync(join(import.meta.dirname, "..", "src", "commands", "calls.ts"), "utf8");
-    expect(src).toMatch(/server\.listen\(port, "127\.0\.0\.1"/);
+    expect(src).toMatch(/\{ port, host: "127\.0\.0\.1"/);
     expect(src).not.toMatch(/listen\([^)]*0\.0\.0\.0/);
   });
 });

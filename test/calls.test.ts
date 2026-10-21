@@ -71,6 +71,8 @@ describe("vobiz calls create", () => {
       ["calls", "create", "--from", FROM, "--answer-url", "https://e.com/a"],
       [...base, "--say", "hello"],
       [...base, "--say", "hello", "--serve"],
+      ["calls", "create", "--to", "+919876543210<+919876543211", "--from", FROM, "--say", "hello", "--serve", "--public-url", "https://t.example.com/a"],
+      [...base, "--answer-url", "https://e.com/a", "--no-token"],
       [...base, "--answer-url", "https://e.com/a", "--voice", "MAN"],
       [...base, "--answer-url", "https://e.com/a", "--answer-method", "PUT"],
       ["calls", "create", "--answer-url", "https://e.com/a", "--xml-only"],
@@ -106,12 +108,20 @@ describe("vobiz calls create", () => {
 
   it("--serve hosts the XML locally for the call and waits for it to end", async () => {
     let served = "";
+    let answerPath = "";
+    let bare = 0;
+    let wrongMethod = 0;
     let liveHits = 0;
     const t = makeCtx({
       fetch: fakeFetch({
-        [`POST ${A}/Call/`]: async () => {
+        [`POST ${A}/Call/`]: async (req) => {
           const port = /127\.0\.0\.1:(\d+)/.exec(t.stderr.text)?.[1];
-          served = await (await globalThis.fetch(`http://127.0.0.1:${port}/answer`, { method: "POST" })).text();
+          const answer = new URL(String((req.body as Record<string, unknown>).answer_url));
+          answerPath = answer.pathname;
+          const local = `http://127.0.0.1:${port}`;
+          bare = (await globalThis.fetch(`${local}/answer`, { method: "POST" })).status;
+          wrongMethod = (await globalThis.fetch(`${local}${answer.pathname}`, { method: "PUT" })).status;
+          served = await (await globalThis.fetch(`${local}${answer.pathname}`, { method: "POST" })).text();
           return made;
         },
         [`GET ${A}/Call/${UUID}`]: () => (++liveHits < 2 ? { call_uuid: UUID, call_status: "in-progress" } : reply(404, { error: "not found" })),
@@ -125,6 +135,11 @@ describe("vobiz calls create", () => {
     );
     expect(code, t.stderr.text).toBe(0);
     expect(served).toBe(sayXml("Hello from Vobiz"));
+    // the answer URL gets a random path token; the bare path and other methods are refused
+    expect(answerPath).toMatch(/^\/answer\/[A-Za-z0-9_-]{22}$/);
+    expect(bare).toBe(404);
+    expect(wrongMethod).toBe(405);
+    expect(t.stderr.text).not.toContain(answerPath.split("/")[2]);
     expect(t.stderr.text).toContain("answer URL host: tunnel.example.com");
     expect(t.stderr.text).toContain("in-progress");
     expect(JSON.parse(t.stdout.text)).toMatchObject({ request_uuid: UUID, status: "ended", cdr: { duration: 7 } });

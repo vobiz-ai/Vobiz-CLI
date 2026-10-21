@@ -57,7 +57,7 @@ describe("default openUrl (openUrlGuarded)", () => {
     for (const [env, tty] of [[{}, false], [{ CI: "1" }, true], [{ VOBIZ_NO_BROWSER: "1" }, true]] as const) {
       const r = await run(env, tty);
       expect(r.spawned).toEqual([]);
-      expect(r.err).toBe(`Open: ${url}\n`);
+      expect(r.err).toBe(`Not opening a browser here; open ${url} yourself.\n`);
     }
   });
 
@@ -70,6 +70,6 @@ describe("default openUrl (openUrlGuarded)", () => {
   it("is the Ctx default", () => {
     const stderr = capture();
     const ctx = new Ctx({ env: {}, stdout: capture(false), stderr, store: new ConfigStore(mkdtempSync(join(tmpdir(), "vobiz-open-"))) });
-    return ctx.openUrl(url).then(() => expect(stderr.text).toBe(`Open: ${url}\n`));
+    return ctx.openUrl(url).then(() => expect(stderr.text).toBe(`Not opening a browser here; open ${url} yourself.\n`));
   });
 });

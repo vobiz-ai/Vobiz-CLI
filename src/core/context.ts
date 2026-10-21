@@ -192,7 +192,7 @@ export function browserAllowed(env: NodeJS.ProcessEnv = process.env, isTTY: bool
 
 /**
  * The default `openUrl`: spawns the platform opener only for an interactive session. With VOBIZ_NO_BROWSER or CI
- * set, under a test runner, or when stdout is not a terminal (pipes, agents), it prints "Open: <url>" to stderr instead.
+ * set, under a test runner, or when stdout is not a terminal (pipes, agents), it prints "Not opening a browser here; open <url> yourself." to stderr instead.
  */
 export async function openUrlGuarded(
   url: string,
@@ -200,8 +200,7 @@ export async function openUrlGuarded(
   spawnFn: SpawnFn = spawn,
 ): Promise<void> {
   if (!browserAllowed(o.env, Boolean(o.stdout.isTTY))) {
-    o.stderr.write(`Open: ${url}
-`);
+    o.stderr.write(`Not opening a browser here; open ${url} yourself.\n`);
     return;
   }
   await openInBrowser(url, spawnFn);

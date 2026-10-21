@@ -223,7 +223,7 @@ export async function runList(ctx: Ctx, op: Operation, args: CallArgs, opts: Opt
   const r = await paginate(ctx.client, op, args, { limit, all, itemsKey: print.itemsKey });
   const mode = ctx.out.mode;
   if ((mode === "json" || mode === "yaml") && !ctx.flags.fields && !ctx.flags.quiet) {
-    ctx.out.print(listBody(r.last, r.items, print.itemsKey));
+    ctx.out.print(listBody(r.last, r.items, print.itemsKey, r.pages));
     return;
   }
   ctx.out.print(r.items, print);

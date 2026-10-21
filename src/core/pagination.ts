@@ -81,9 +81,11 @@ export function itemsPath(body: unknown, itemsKey?: string): string | undefined 
  * The body to print for --output json/yaml: the last response with `items` (every page collected, cut to --limit)
  * in place of its list, so the shape is the same for one page or many. A bare-array body becomes the items.
  */
-export function listBody(body: unknown, items: unknown[], itemsKey?: string): unknown {
+export function listBody(body: unknown, items: unknown[], itemsKey?: string, pages = 1): unknown {
   const path = itemsPath(body, itemsKey);
   if (!isRec(body) || !path) return items;
+  // One page: hand back exactly what the API sent (an empty list may legitimately be null there).
+  if (pages <= 1) return body;
   const parts = path.split(".");
   const copy: Rec = { ...body };
   let cur = copy;

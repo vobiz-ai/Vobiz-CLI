@@ -361,7 +361,9 @@ describe("ids and paths cannot escape", () => {
     expect((await runCli(["--base-url", "http://api.example.com", "numbers", "list"], { fetch: api.fetch })).code).toBe(2);
     expect((await runCli(["--sms-base-url", "http://api.example.com", "sms", "messages", "list"], { fetch: api.fetch })).code).toBe(2);
     expect(api.calls).toHaveLength(0);
-    const ok = await runCli(["--base-url", "http://localhost:9999", "numbers", "list", "--dry-run", "--json"], { fetch: api.fetch });
+    const refused = await runCli(["--base-url", "http://localhost:9999", "numbers", "list", "--dry-run", "--json"], { fetch: api.fetch });
+    expect(refused.code).toBe(2); // localhost http needs the explicit opt-in
+    const ok = await runCli(["--base-url", "http://localhost:9999", "numbers", "list", "--dry-run", "--json"], { fetch: api.fetch, env: { VOBIZ_ALLOW_INSECURE_BASE_URL: "1" } });
     expect(ok.code).toBe(0);
   });
 });

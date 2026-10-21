@@ -54,6 +54,16 @@ Commands:
                                  settings
   update [options]               Check for a newer CLI version and show how to
                                  upgrade
+  xml                            Build, validate and locally serve VobizXML
+                                 call-control documents
+  webhooks                       Verify Vobiz webhook signatures and receive
+                                 webhooks locally
+  mcp                            Connect Claude, Cursor, Codex, VS Code and
+                                 other AI clients to the Vobiz MCP server
+  skills                         Install the Vobiz Agent Skills into a project
+                                 for Claude Code, Codex and other agents
+  docs                           Search the Vobiz documentation and open pages
+                                 in your browser
   api [options] [method] [path]  Send a raw request to the Vobiz API, or list
                                  and describe every operation in the spec
   completion <shell>             Print a shell completion script (bash, zsh,

@@ -89,8 +89,10 @@ export function register(program: Command, ctx: Ctx): void {
   const xml = program.command("xml").description("Build, validate and locally serve VobizXML call-control documents");
 
   const steps = new Steps();
-  xml
-    .command("build")
+  const build = xml.command("build");
+  // Plain option descriptions: commander would print the --hangup preset as `(preset: "")`.
+  build.configureHelp({ ...build.configureHelp(), optionDescription: (o) => o.description });
+  build
     .description("Compose a VobizXML <Response> from flags, in the order you give them, and print it")
     .option("--say <text>", "speak text with text-to-speech (<Speak>)", (v) => steps.add({ type: "speak", text: v }))
     .option("--play <url>", "play an https .mp3 or .wav file (<Play>)", (v) => steps.add({ type: "play", url: v }))

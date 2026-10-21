@@ -252,22 +252,49 @@ export async function streamOperation(ctx: Ctx, operation: Operation, query: Rec
   return streamUrl(ctx, url, headers, `${operation.method} ${operation.path}`, target);
 }
 
-/** GETs `url` and streams the body to `target`. Only the headers wait for the --timeout. */
+const MAX_REDIRECTS = 5;
+const AUTH_HEADERS = new Set(["x-auth-id", "x-auth-token", "authorization"]);
+
+/**
+ * GETs `url` and streams the body to `target`. Only the headers wait for the --timeout. Redirects are followed
+ * here (at most 5), never by fetch: a redirect must stay on https, and the auth headers are dropped as soon as
+ * the origin differs from the original URL's (fetch would forward custom headers to any host).
+ */
 export async function streamUrl(ctx: Ctx, url: URL, headers: Record<string, string>, label: string, target: StreamTarget): Promise<number> {
   const controller = new AbortController();
   const timeoutMs = ctx.flags.timeout * 1000;
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const started = Date.now();
   let res: Response;
+  let current = url;
+  let sent = headers;
   try {
-    res = await ctx.fetch(url, { method: "GET", headers, signal: controller.signal, redirect: "follow" });
-  } catch {
+    for (let hop = 0; ; hop++) {
+      try {
+        res = await ctx.fetch(current, { method: "GET", headers: sent, signal: controller.signal, redirect: "manual" });
+      } catch {
+        throw controller.signal.aborted
+          ? new VobizError("timeout", `${current.host} did not respond within ${Math.round(timeoutMs / 1000)}s.`)
+          : new VobizError("network_error", `Could not reach ${current.host}.`);
+      }
+      const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+      if (!location) break;
+      await res.body?.cancel().catch(() => undefined);
+      if (hop >= MAX_REDIRECTS) throw new VobizError("unexpected_response", `${label}: more than ${MAX_REDIRECTS} redirects.`);
+      let next: URL;
+      try {
+        next = new URL(location, current);
+      } catch {
+        throw new VobizError("unexpected_response", `${label}: the server redirected to an invalid URL.`);
+      }
+      if (next.protocol !== "https:") throw new VobizError("unexpected_response", `${label}: refusing to follow a redirect to ${next.protocol} (expected https).`);
+      if (next.origin !== url.origin) sent = Object.fromEntries(Object.entries(sent).filter(([k]) => !AUTH_HEADERS.has(k.toLowerCase())));
+      ctx.log("verbose", `${label} -> ${res.status} redirect to ${next.host}`);
+      current = next;
+    }
+  } finally {
     clearTimeout(timer);
-    throw controller.signal.aborted
-      ? new VobizError("timeout", `${url.host} did not respond within ${Math.round(timeoutMs / 1000)}s.`)
-      : new VobizError("network_error", `Could not reach ${url.host}.`);
   }
-  clearTimeout(timer);
   ctx.log("verbose", `${label} -> ${res.status} (${Date.now() - started}ms)`);
   if (res.status < 200 || res.status >= 300) {
     const text = await res.text().catch(() => "");

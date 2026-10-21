@@ -1,0 +1,67 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`help > root --help is stable 1`] = `
+"Usage: vobiz [options] [command]
+
+Vobiz CLI: voice calls, conferences, SMS/MMS/RCS, phone numbers, SIP trunks,
+VobizXML and the Vobiz agent tools.
+
+Options:
+  -V, --version                  print the CLI version
+  --profile <name>               saved login to use (env: VOBIZ_PROFILE)
+  --auth-id <id>                 one-off Auth ID (env: VOBIZ_AUTH_ID)
+  --auth-token <token>           one-off Auth Token; lands in shell history
+                                 (env: VOBIZ_AUTH_TOKEN)
+  -o, --output <format>          output format (env: VOBIZ_OUTPUT; default:
+                                 table on a terminal, json when piped) (choices:
+                                 "table", "json", "yaml", "tsv", "plain")
+  --json                         shorthand for --output json
+  --fields <paths>               comma-separated fields to show (dot paths, e.g.
+                                 id,meta.total)
+  -q, --quiet                    print only ids, one per line
+  -y, --yes                      skip confirmation prompts; required for writes
+                                 when stdin is not a terminal (env: VOBIZ_YES)
+  --dry-run                      show the request (secrets redacted) and exit
+                                 without sending
+  --wait                         for calls and messages: wait until a final
+                                 status
+  --base-url <url>               voice API base URL (env: VOBIZ_BASE_URL)
+  --sms-base-url <url>           Messaging API base URL (env:
+                                 VOBIZ_SMS_BASE_URL)
+  --timeout <seconds>            per-request timeout in seconds (env:
+                                 VOBIZ_TIMEOUT; default: 30)
+  --no-color                     disable colors (env: NO_COLOR)
+  --verbose                      log requests (method, route, status, duration)
+                                 to stderr
+  --debug                        also log request and response bodies, secrets
+                                 redacted (env: VOBIZ_LOG=debug)
+  --no-update-check              skip the daily version check (env:
+                                 VOBIZ_NO_UPDATE_CHECK, CI)
+  -h, --help                     display help for command
+
+Commands:
+  login [options]                Save and verify a Vobiz Auth ID and Auth Token
+                                 as a profile
+  logout [options]               Remove saved credentials (the selected profile,
+                                 or --all)
+  whoami [options]               Show the account, Auth ID and credential source
+                                 in use (offline; --check verifies with the API)
+  profiles                       List, switch, rename and remove saved logins
+  config                         Read and change CLI settings (output, color,
+                                 updateCheck, telemetry, defaultProfile)
+  doctor [options]               Check Node.js, config permissions,
+                                 connectivity, credentials, clock skew and proxy
+                                 settings
+  update [options]               Check for a newer CLI version and show how to
+                                 upgrade
+  api [options] [method] [path]  Send a raw request to the Vobiz API, or list
+                                 and describe every operation in the spec
+  completion <shell>             Print a shell completion script (bash, zsh,
+                                 fish or powershell)
+  help [words...]                Show help for a command, or a topic:
+                                 exit-codes, env, output
+
+Run \`vobiz help exit-codes\`, \`vobiz help env\` or \`vobiz help output\` for scripting details.
+Docs: https://www.vobiz.ai/docs
+"
+`;

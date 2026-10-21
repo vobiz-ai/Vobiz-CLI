@@ -21,6 +21,7 @@
     "lint": "npm run gen && tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
     "test": "vitest run",
     "test:all": "npm run build && vitest run",
+    "test:live": "npm run build && node --env-file=.env scripts/live-smoke.mjs",
     "check": "npm run lint && npm run test:all",
     "start": "node dist/index.js",
     "dev": "npm run build && node dist/index.js",

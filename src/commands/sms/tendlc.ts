@@ -3,13 +3,12 @@
  * anything else (nested objects, rarely used fields) goes in `--body` as JSON and flags override it.
  * Brand and campaign updates are full replacements on the API side, so the confirmation says so.
  */
-import { chmodSync, existsSync, writeFileSync } from "node:fs";
-import { basename } from "node:path";
 import { Option, type Command } from "commander";
 import type { BytesResponse } from "../../core/client.js";
 import { requireConfirmation } from "../../core/confirm.js";
 import type { Ctx } from "../../core/context.js";
 import { usage } from "../../core/errors.js";
+import { assertWritableTarget, writeFileAtomicExclusive } from "../../core/fsafe.js";
 import { op } from "../../core/ops.js";
 import {
   addFields,
@@ -442,18 +441,47 @@ function registerDocuments(tendlc: Command, ctx: Ctx): void {
     .option("--out <file>", "where to save it (default: the original filename; - for stdout)")
     .option("--force", "overwrite an existing file")
     .action(async (id: string, o: { out?: string; force?: boolean }) => {
-      if (o.out && o.out !== "-" && existsSync(o.out) && !o.force) throw usage(`${o.out} exists. Pass --force to overwrite it.`);
+      if (o.out && o.out !== "-") assertWritableTarget(o.out, !!o.force);
       const res = await ctx.client.call<BytesResponse>(D.get, { path: { id }, responseType: "bytes" });
       if (o.out === "-") {
         (ctx.stdout as { write(b: Uint8Array | string): unknown }).write(res.bytes);
         return;
       }
-      const file = o.out ?? (res.filename ? basename(res.filename) : id);
-      if (!o.out && existsSync(file) && !o.force) throw usage(`${file} exists. Pass --out <file> or --force.`);
-      writeFileSync(file, res.bytes, { mode: 0o600 }); // registration documents can hold business identity data
-      chmodSync(file, 0o600); // also when --force replaced an existing file
+      const file = o.out ?? documentFileName(res.filename, id, res.contentType);
+      if (!o.out) assertWritableTarget(file, !!o.force, "Pass --out <file> or --force.");
+      // A fresh 0600 file (registration documents can hold business identity data), never through a symlink.
+      writeFileAtomicExclusive(file, res.bytes, { mode: 0o600, overwrite: !!o.force });
       ctx.out.success(`Saved ${file} (${humanSize(res.bytes.length)}).`, { file, bytes: res.bytes.length, contentType: res.contentType ?? null });
     });
+}
+
+const EXT_FOR_TYPE: Record<string, string> = {
+  "application/pdf": "pdf",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "text/plain": "txt",
+};
+
+/**
+ * A safe local name for a downloaded document. The server's Content-Disposition name is used only when, after
+ * defensive percent-decoding and dropping any directory part, it is a plain name: no leading dot, no control
+ * characters, letters, digits and `._ -` only, at most 100 characters. Otherwise `document-<id>.<ext>`.
+ */
+export function documentFileName(serverName: string | undefined, id: string, contentType?: string): string {
+  if (serverName) {
+    let name = serverName;
+    try {
+      name = decodeURIComponent(serverName);
+    } catch {
+      /* keep the raw text; the checks below decide */
+    }
+    name = name.split(/[\\/]/).pop() ?? "";
+    if (/^[A-Za-z0-9][A-Za-z0-9._ -]{0,99}$/.test(name) && !/^\.|\.\.|[. ]$/.test(name)) return name;
+  }
+  const ext = EXT_FOR_TYPE[(contentType ?? "").split(";")[0].trim().toLowerCase()];
+  return `document-${id.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80)}${ext ? `.${ext}` : ""}`;
 }
 
 export function registerTenDlc(sms: Command, ctx: Ctx): void {

@@ -242,7 +242,7 @@ export class VobizClient {
     if (res.status >= 200 && res.status < 300 && args.responseType === "bytes") {
       const disp = res.headers.get("content-disposition") ?? "";
       const filename = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disp)?.[1];
-      return { bytes, contentType, filename: filename ? decodeURIComponent(filename) : undefined } as T;
+      return { bytes, contentType, filename: filename ? decodeFilename(filename) : undefined } as T;
     }
     const text = new TextDecoder().decode(bytes);
     let data: unknown;
@@ -265,5 +265,14 @@ export class VobizClient {
 
     const message = extractBackendMessage(data ?? text) ?? `HTTP ${res.status}`;
     throw new VobizError(kindForStatus(res.status), message, res.status, data === undefined ? undefined : redact(data));
+  }
+}
+
+/** Percent-decodes a Content-Disposition file name; a malformed escape keeps the raw text instead of throwing. */
+function decodeFilename(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
   }
 }

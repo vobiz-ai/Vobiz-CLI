@@ -71,6 +71,12 @@ stdout carries data only; progress, prompts, warnings and errors go to stderr, s
   --quiet, -q              print only the id of each row, one per line (for xargs)
   --dry-run                print the request that would be sent (token and secrets redacted) and exit 0
 
+Text meant for people (table, plain, tsv, --quiet, messages) has terminal escape sequences and control
+characters removed, so API data cannot clear the screen or rewrite the clipboard; json and yaml are verbatim.
+In tsv, a cell starting with = + - or @ (other than a plain number) gets a leading ' so a spreadsheet does not
+run it as a formula. CSV files from the API (cdr export, sms broadcasts export) are saved byte for byte; open
+them with formulas disabled, or import them as text.
+
 Secret fields (auth_token, auth_secret, password, secret, token, client_secret, private_key) are always shown
 as [redacted]. Only --debug --show-secrets prints them.
 

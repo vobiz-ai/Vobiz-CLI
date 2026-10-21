@@ -4,18 +4,17 @@
  * checks, list printing that keeps the raw response shape for JSON, call status polling, and a streaming GET
  * for CSV exports and recording downloads (the core client buffers bodies and always asks for JSON).
  */
-import { createWriteStream } from "node:fs";
-import { rename, rm } from "node:fs/promises";
 import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { InvalidArgumentError, type Command } from "commander";
 import { DryRunSignal } from "../core/client.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError, extractBackendMessage, kindForStatus, usage } from "../core/errors.js";
+import { writeStreamAtomicExclusive } from "../core/fsafe.js";
 import { op, type Operation } from "../core/ops.js";
 import type { PageResult } from "../core/pagination.js";
 import { toE164 } from "../core/phone.js";
+import { cleanMessage } from "../core/sanitize.js";
 import { USER_AGENT } from "../core/version.js";
 
 export type Rec = Record<string, unknown>;
@@ -65,6 +64,27 @@ export function checkUrl(raw: string, flag: string, opts: { allowInsecure?: bool
     );
   }
   throw usage(`${flag} must be a ${secure.slice(0, -1)}:// URL (got ${u.protocol.slice(0, -1)}://).`);
+}
+
+/**
+ * True for a hostname that names this machine or a private network: localhost names, loopback, unspecified,
+ * link-local (including cloud metadata at 169.254.169.254), RFC 1918, CGNAT, and IPv6 ULA/link-local/mapped forms.
+ * Literal addresses and well-known names only; names are not resolved.
+ */
+export function isInternalHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal") || h.endsWith(".local") || h === "metadata.google.internal") return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h.replace(/^::ffff:/, ""));
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  }
+  if (h.includes(":")) {
+    if (h === "::" || h === "::1") return true;
+    if (/^f[cd][0-9a-f]{2}:/.test(h) || /^fe[89ab][0-9a-f]:/.test(h)) return true;
+    if (/^::ffff:[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(h)) return true; // IPv4-mapped in hex form: treat as internal
+  }
+  return false;
 }
 
 export function hostOf(url: string): string {
@@ -230,14 +250,49 @@ export async function watchCall(ctx: Ctx, uuid: string, o: WatchOptions): Promis
 // ── Streaming GET (CSV export, recording download) ──
 
 export interface StreamTarget {
-  /** File to write; stdout when undefined. Written to `<file>.part` and renamed when complete. */
+  /** File to write; stdout when undefined. Written to a random exclusive `<file>.<hex>.part` and moved into place when complete. */
   out?: string;
+  /** Replace an existing regular file at `out` (symlinks are always refused). */
+  force?: boolean;
+  /** Stop with an error past this many bytes (default MAX_DOWNLOAD_BYTES). */
+  maxBytes?: number;
 }
 
+/** Largest body a download or export may stream (2 GiB): a hostile or broken server cannot fill the disk. */
+export const MAX_DOWNLOAD_BYTES = 2 * 1024 ** 3;
+
 /**
- * Streams an operation's response (CDR CSV export) to a file or stdout. Uses the client for the URL and dry-run
- * output, then fetches itself so the body is not buffered and `Accept` is the CSV type the endpoint expects.
+ * Re-yields `src`, failing when no chunk arrives for `idleMs` or the total passes `maxBytes`. `onChunk` sees
+ * every chunk (for counting).
  */
+export function guardStream(label: string, idleMs: number, maxBytes: number, onChunk: (n: number) => void) {
+  return async function* (src: AsyncIterable<Uint8Array>): AsyncGenerator<Uint8Array> {
+    const it = src[Symbol.asyncIterator]();
+    let total = 0;
+    try {
+      for (;;) {
+        let timer: NodeJS.Timeout | undefined;
+        const idle = new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new VobizError("timeout", `${label}: no data for ${Math.round(idleMs / 1000)}s; the download stalled.`)), idleMs);
+        });
+        let r: IteratorResult<Uint8Array>;
+        try {
+          r = await Promise.race([it.next(), idle]);
+        } finally {
+          clearTimeout(timer);
+        }
+        if (r.done) return;
+        total += r.value.length;
+        if (total > maxBytes) throw new VobizError("unexpected_response", `${label}: the response is larger than ${maxBytes} bytes; stopped.`);
+        onChunk(r.value.length);
+        yield r.value;
+      }
+    } finally {
+      await it.return?.().catch(() => undefined);
+    }
+  };
+}
+
 export async function streamOperation(ctx: Ctx, operation: Operation, query: Rec, accept: string, target: StreamTarget): Promise<number> {
   const client = ctx.client;
   const path = client.fillPath(operation.path);
@@ -306,33 +361,29 @@ export async function streamUrl(ctx: Ctx, url: URL, headers: Record<string, stri
     }
     throw new VobizError(kindForStatus(res.status), extractBackendMessage(data) ?? `HTTP ${res.status}`, res.status);
   }
-  if (!res.body) {
-    if (target.out) await pipeline(Readable.from([]), createWriteStream(target.out, { mode: 0o600 }));
-    return 0;
-  }
-  const body = Readable.fromWeb(res.body as unknown as WebReadableStream<Uint8Array>);
+  const body: AsyncIterable<Uint8Array> = res.body ? Readable.fromWeb(res.body as unknown as WebReadableStream<Uint8Array>) : Readable.from([]);
   let bytes = 0;
+  const guard = guardStream(label, timeoutMs, target.maxBytes ?? MAX_DOWNLOAD_BYTES, (n) => {
+    bytes += n;
+  });
   if (!target.out) {
+    // A terminal gets the text with escape sequences removed; a pipe or file gets the bytes verbatim.
+    const tty = !!ctx.stdout.isTTY;
     const decoder = new TextDecoder();
-    for await (const chunk of body) {
-      bytes += (chunk as Uint8Array).length;
-      ctx.stdout.write(decoder.decode(chunk as Uint8Array, { stream: true }));
-    }
-    ctx.stdout.write(decoder.decode());
+    const write = async (text: string) => {
+      if (!text) return;
+      const ok = ctx.stdout.write(tty ? cleanMessage(text) : text);
+      const s = ctx.stdout as { once?: (ev: string, fn: () => void) => unknown };
+      if (ok === false && typeof s.once === "function") await new Promise<void>((resolve) => s.once!("drain", resolve));
+    };
+    for await (const chunk of guard(body)) await write(decoder.decode(chunk, { stream: true }));
+    await write(decoder.decode());
     return bytes;
   }
-  const part = `${target.out}.part`;
-  const count = async function* (src: AsyncIterable<Uint8Array>) {
-    for await (const chunk of src) {
-      bytes += chunk.length;
-      yield chunk;
-    }
-  };
   try {
-    await pipeline(body, count, createWriteStream(part, { mode: 0o600 }));
-    await rename(part, target.out);
+    await writeStreamAtomicExclusive(target.out, body, { overwrite: !!target.force, transforms: [guard] });
   } catch (err) {
-    await rm(part, { force: true });
+    if (err instanceof VobizError) throw err;
     throw new VobizError("network_error", `The download was interrupted: ${(err as Error).message}`);
   }
   return bytes;

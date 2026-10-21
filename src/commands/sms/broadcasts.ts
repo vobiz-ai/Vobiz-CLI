@@ -3,11 +3,13 @@
  * plain list of numbers), preview, then launch. Launch sends real, billed messages to every pending recipient,
  * so it shows the recipient count and estimated segments first.
  */
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { Option, type Command } from "commander";
 import { requireConfirmation } from "../../core/confirm.js";
 import type { Ctx } from "../../core/context.js";
 import { usage } from "../../core/errors.js";
+import { assertWritableTarget, writeFileAtomicExclusive } from "../../core/fsafe.js";
+import { cleanMessage } from "../../core/sanitize.js";
 import { op } from "../../core/ops.js";
 import { toE164 } from "../../core/phone.js";
 import {
@@ -220,13 +222,18 @@ export function registerBroadcasts(sms: Command, ctx: Ctx): void {
     .option("--out <file>", "write to this file instead of stdout")
     .option("--force", "overwrite --out if it exists")
     .action(async (id: string, o: { out?: string; force?: boolean }) => {
-      if (o.out && existsSync(o.out) && !o.force) throw usage(`${o.out} exists. Pass --force to overwrite it.`);
+      if (o.out) assertWritableTarget(o.out, !!o.force);
       const csv = await ctx.client.call<string>(EXPORT, { path: { id }, responseType: "text" });
       if (o.out) {
-        writeFileSync(o.out, csv, { mode: 0o600 }); // recipients' numbers and message results
-        chmodSync(o.out, 0o600); // also when --force replaced an existing file
+        // A fresh 0600 file (recipients' numbers and message results), moved into place; never through a symlink.
+        // The CSV is written verbatim: see `vobiz help output` on spreadsheet formulas.
+        writeFileAtomicExclusive(o.out, csv, { mode: 0o600, overwrite: !!o.force });
         ctx.out.status(`Wrote ${o.out}.`);
-      } else ctx.stdout.write(csv.endsWith("\n") || !csv ? csv : csv + "\n");
+      } else {
+        // A terminal gets the text without escape sequences; a pipe gets the server's CSV verbatim.
+        const text = ctx.stdout.isTTY ? cleanMessage(csv) : csv;
+        ctx.stdout.write(text.endsWith("\n") || !text ? text : text + "\n");
+      }
     });
 
   b.command("launch")

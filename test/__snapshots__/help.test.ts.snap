@@ -63,6 +63,8 @@ Commands:
                                  VobizXML from for numbers and endpoints
   endpoints                      SIP endpoints: registered soft-phone, WebRTC
                                  and desk-phone clients
+  sub-accounts                   Sub-accounts (SA_…) under your main account,
+                                 and their KYC
   api [options] [method] [path]  Send a raw request to the Vobiz API, or list
                                  and describe every operation in the spec
   completion <shell>             Print a shell completion script (bash, zsh,

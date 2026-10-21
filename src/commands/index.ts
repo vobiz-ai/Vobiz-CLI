@@ -18,6 +18,7 @@ import { register as numbers } from "./numbers.js";
 import { register as trunks } from "./trunks.js";
 import { register as apps } from "./apps.js";
 import { register as endpoints } from "./endpoints.js";
+import { register as subAccounts } from "./sub-accounts.js";
 
 // ── W4 messaging: sms ──
 
@@ -41,6 +42,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   trunks,
   apps,
   endpoints,
+  subAccounts,
 
   // W4 messaging
 

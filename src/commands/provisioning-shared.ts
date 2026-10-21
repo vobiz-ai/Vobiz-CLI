@@ -287,6 +287,10 @@ export interface CrudSpec {
   listFilters?: boolean;
   /** Label for the secret revealed once after create. */
   secretLabel?: string;
+  /** Where the new id is in the create response (default: idKey). */
+  createdIdPath?: string;
+  /** Applied to a create response before it is printed (e.g. to drop session tokens). */
+  sanitizeCreated?: (data: Record<string, unknown>) => unknown;
 }
 
 /** list / get / create / update / delete for one resource. */
@@ -318,8 +322,9 @@ export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
     Object.assign(details, urlHosts(body));
     const data = await confirmedCall<Record<string, unknown>>(ctx, { action: `Create a ${s.noun}`, details: { account: ctx.client.authId, ...details } }, s.create, { body });
     if (s.secretPaths) revealOnce(ctx, data, s.secretPaths, s.secretLabel ?? "Password");
-    ctx.out.status(`Created ${s.noun}${data && data[s.idKey] ? ` ${String(data[s.idKey])}` : ""}.`);
-    ctx.out.print(data ?? {});
+    const newId = data ? getPath(data, s.createdIdPath ?? s.idKey) : undefined;
+    ctx.out.status(`Created ${s.noun}${newId ? ` ${String(newId)}` : ""}.`);
+    ctx.out.print(data && s.sanitizeCreated ? s.sanitizeCreated(data) : (data ?? {}));
   });
 
   const update = group.command("update").argument(`<${s.idArg}>`, `${s.noun} ID`).description(`Update a ${s.noun}`);

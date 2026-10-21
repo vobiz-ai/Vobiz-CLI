@@ -119,8 +119,7 @@ export function register(program: Command, ctx: Ctx): void {
       if (!method || !path) throw new VobizError("invalid_input", "Usage: vobiz api <METHOD> <path> [--query k=v] [--body json|@file] [--sms], or vobiz api --list.");
       const m = method.toUpperCase() as HttpMethod;
       if (!METHODS.includes(m)) throw new VobizError("invalid_input", `Unsupported method "${method}". Use ${METHODS.join(", ")}.`);
-      const hasBody = m === "POST" || m === "PUT" || m === "PATCH";
-      if (opts.body !== undefined && !hasBody) throw new VobizError("invalid_input", `--body is only sent with POST, PUT or PATCH.`);
+      if (opts.body !== undefined && m === "GET") throw new VobizError("invalid_input", `--body is sent with POST, PUT, PATCH or DELETE, not GET.`);
       const body = opts.body !== undefined ? await readBody(ctx, opts.body) : undefined;
       const query = parseQueryPairs(opts.query ?? []);
       const api = opts.sms ? "sms" : "voice";

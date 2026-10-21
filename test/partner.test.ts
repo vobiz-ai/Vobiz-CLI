@@ -91,6 +91,12 @@ describe("partner", () => {
     expect((await runCli(["partner", "kyc-sessions", "revoke", "kycs_1"], { fetch: api.fetch })).code).toBe(6);
     expect((await runCli(["partner", "kyc-sessions", "revoke", "kycs_1", "--yes"], { fetch: api.fetch })).code).toBe(0);
     expect(api.last()).toMatchObject({ method: "DELETE", path: `${P}/kyc-sessions/kycs_1` });
+    expect(api.last().body).toBeUndefined();
+    const why = await runCli(["partner", "kyc-sessions", "revoke", "kycs_1", "--reason", "sent to the wrong email", "--yes"], { fetch: api.fetch });
+    expect(why.code).toBe(0);
+    expect(why.err).toContain("reason: sent to the wrong email");
+    expect(api.last()).toMatchObject({ method: "DELETE", body: { reason: "sent to the wrong email" } });
+    expect(api.last().headers["content-type"]).toBe("application/json");
     expect((await runCli(["partner", "kyc-sessions", "resend", "kycs_1", "--yes"], { fetch: api.fetch })).code).toBe(0);
     expect(api.last()).toMatchObject({ method: "POST", path: `${P}/kyc-sessions/kycs_1/resend` });
   });

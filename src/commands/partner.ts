@@ -179,11 +179,13 @@ function registerKycSessions(partner: Command, ctx: Ctx): void {
     .command("revoke")
     .argument("<session-id>", "KYC session ID")
     .description("Revoke a KYC session so its link stops working")
-    // The spec allows an optional {reason} body on this DELETE, but the core client sends bodies only with
-    // POST/PUT/PATCH, so there is no --reason flag yet.
-    .action(async (id: string) => {
-      const data = await confirmedCall(ctx, { action: `Revoke KYC session ${id}`, details: { effect: "the customer can no longer use the link" } }, REVOKE_SESSION, {
+    .option("--reason <text>", "why the session is revoked (sent as the optional DELETE body)")
+    .action(async (id: string, o: { reason?: string }) => {
+      const details: Record<string, string> = { effect: "the customer can no longer use the link" };
+      if (o.reason) details.reason = o.reason;
+      const data = await confirmedCall(ctx, { action: `Revoke KYC session ${id}`, details }, REVOKE_SESSION, {
         path: { session_id: id },
+        ...(o.reason ? { body: { reason: o.reason } } : {}),
       });
       ctx.out.success(`Revoked KYC session ${id}.`, data ?? { session_id: id, revoked: true });
     });

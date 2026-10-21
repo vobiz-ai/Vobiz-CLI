@@ -15,7 +15,6 @@ import {
   addFields,
   bodyWithFlags,
   collect,
-  deleteWithBody,
   fieldValues,
   fileForm,
   humanSize,
@@ -416,7 +415,7 @@ function registerCampaigns(tendlc: Command, ctx: Ctx): void {
       const body = numbersBody(o);
       const count = ((body.numbers as string[]) ?? []).length + ((body.numberKeys as string[]) ?? []).length;
       await requireConfirmation(ctx, { action: `Detach ${count} number${count === 1 ? "" : "s"} from campaign ${id}`, details: { effect: "their messages are no longer covered by this campaign" } });
-      printResult(ctx, `Detached ${count} number${count === 1 ? "" : "s"} from ${id}.`, await deleteWithBody(ctx, C.removeNumbers, { id }, body));
+      printResult(ctx, `Detached ${count} number${count === 1 ? "" : "s"} from ${id}.`, await ctx.client.call(C.removeNumbers, { path: { id }, body, sideEffect: true }));
     },
   );
 }

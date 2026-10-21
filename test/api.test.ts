@@ -85,6 +85,13 @@ describe("vobiz api <METHOD> <path>", () => {
     expect(r.out + r.err).not.toContain(TEST_AUTH_TOKEN);
   });
 
+  it("DELETE accepts --body and sends it as JSON", async () => {
+    const api = fakeFetch({ "DELETE /api/v1/partner/kyc-sessions/k1": { message: "revoked" } });
+    const r = await runCli(["api", "DELETE", "/api/v1/partner/kyc-sessions/k1", "--body", '{"reason":"dup"}', "-y"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(api.last()).toMatchObject({ method: "DELETE", body: { reason: "dup" } });
+  });
+
   it("validates method, body and query syntax", async () => {
     expect((await runCli(["api", "TRACE", "/x"])).code).toBe(2);
     expect((await runCli(["api", "GET", "/x", "--body", "{}"])).code).toBe(2);

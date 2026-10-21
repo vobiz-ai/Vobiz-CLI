@@ -14,6 +14,15 @@ const routes = {
   [`POST ${A}/numbers/+918065550199/assign`]: { message: "assigned" },
 };
 const writes = (calls: { method: string }[]) => calls.filter((c) => c.method !== "GET");
+const APP = "12345678901234567";
+const appRoutes = {
+  ...routes,
+  [`GET ${A}/Application/${APP}/`]: { app_id: APP, app_name: "Agent", answer_url: "https://agent.example.com/answer" },
+  [`POST ${A}/Application/`]: { api_id: "x", app_id: APP, message: "created" },
+  [`POST ${A}/numbers/${NUM}/application`]: { message: "linked" },
+  [`POST ${A}/numbers/+918065550199/application`]: { message: "linked" },
+  [`DELETE ${A}/numbers/${NUM}/assign`]: reply(204),
+};
 
 describe("vobiz setup voice-agent", () => {
   it("routes an existing number to a trunk after one confirmation and prints a test plan", async () => {
@@ -77,14 +86,23 @@ describe("vobiz setup voice-agent", () => {
     expect(writes(api.calls)).toHaveLength(0);
   });
 
-  it("stops before any request when an application link is asked for (spec gap), or flags are missing", async () => {
+  it("refuses conflicting or incomplete flags before any request", async () => {
     const api = fakeFetch(routes);
-    for (const flag of [["--answer-url", "https://example.com/answer"], ["--stream-url", "wss://agent.example.com/media"], ["--app", "app-1"]]) {
-      const r = await runCli(["setup", "voice-agent", "--number", NUM, ...flag, "--yes"], { fetch: api.fetch });
-      expect(r.code, flag[0]).toBe(2);
-      expect(r.err).toContain("link-number-to-application");
-      expect(r.err).toContain("--trunk");
+    for (const flags of [
+      ["--trunk", TRUNK, "--app", "app-1"],
+      ["--trunk", TRUNK, "--answer-url", "https://example.com/answer"],
+      ["--app", "app-1", "--answer-url", "https://example.com/answer"],
+      ["--answer-url", "http://example.com/answer"],
+      ["--stream-url", "https://agent.example.com/media", "--answer-url", "https://example.com/answer"],
+      ["--app", "app-1", "--app-name", "x"],
+    ]) {
+      const r = await runCli(["setup", "voice-agent", "--number", NUM, ...flags, "--yes"], { fetch: api.fetch });
+      expect(r.code, flags.join(" ")).toBe(2);
     }
+    const s = await runCli(["setup", "voice-agent", "--number", NUM, "--stream-url", "wss://agent.example.com/media", "--yes"], { fetch: api.fetch });
+    expect(s.code).toBe(2);
+    expect(s.err).toContain("--stream-url needs --answer-url");
+    expect(s.err).toContain('<Stream bidirectional="true" keepCallAlive="true">wss://agent.example.com/media</Stream>');
     expect(api.calls).toHaveLength(0);
     let r = await runCli(["setup", "voice-agent", "--trunk", TRUNK], { fetch: api.fetch });
     expect(r.code).toBe(2);
@@ -92,6 +110,7 @@ describe("vobiz setup voice-agent", () => {
     r = await runCli(["setup", "voice-agent", "--number", NUM], { fetch: api.fetch });
     expect(r.code).toBe(2);
     expect(r.err).toContain("--trunk");
+    expect(r.err).toContain("--answer-url");
   });
 
   it("asks for the number and trunk on a terminal", async () => {
@@ -167,6 +186,81 @@ describe("vobiz setup sms", () => {
     expect(r.err).toContain("not a messaging number");
     const refused = await runCli(["setup", "sms", "--buy", "+14155550123", "--country", "US", "--no-webhook"], { fetch: api.fetch });
     expect(refused.code).toBe(6);
+    expect(writes(api.calls)).toHaveLength(0);
+  });
+});
+
+describe("vobiz setup voice-agent with an application", () => {
+  it("--app links the number to an existing application", async () => {
+    const api = fakeFetch(appRoutes);
+    const r = await runCli(["setup", "voice-agent", "--number", NUM, "--app", APP, "--yes", "--json"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(api.calls.find((c) => c.path === `${A}/Application/${APP}/`)?.method).toBe("GET");
+    expect(writes(api.calls).map((c: any) => [c.method, c.path, c.body])).toEqual([["POST", `${A}/numbers/%2B918065550100/application`, { application_id: APP }]]);
+    expect(r.err).toContain(`application: Agent (${APP})`);
+    expect(r.err).toContain("answer URL host: agent.example.com");
+    expect(r.json()).toMatchObject({ number: NUM, application_id: APP, application_created: false, trunk_id: null, routed: true, changed: true });
+  });
+
+  it("--app on a number that is on a trunk removes it from the trunk first", async () => {
+    const api = fakeFetch({ ...appRoutes, [`GET ${A}/numbers`]: { items: [{ e164: NUM, trunk_group_id: TRUNK }] } });
+    const r = await runCli(["setup", "voice-agent", "--number", NUM, "--app", APP, "--yes"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(writes(api.calls).map((c: any) => `${c.method} ${c.path}`)).toEqual([`DELETE ${A}/numbers/%2B918065550100/assign`, `POST ${A}/numbers/%2B918065550100/application`]);
+    expect(r.err).toContain(`currently routed to: trunk ${TRUNK} (removed)`);
+  });
+
+  it("does nothing when the number is already linked to that application", async () => {
+    const api = fakeFetch({ ...appRoutes, [`GET ${A}/numbers`]: { items: [{ e164: NUM, application_id: APP, trunk_group_id: null }] } });
+    const r = await runCli(["setup", "voice-agent", "--number", NUM, "--app", APP, "--json"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(r.json()).toMatchObject({ changed: false });
+    expect(writes(api.calls)).toHaveLength(0);
+  });
+
+  it("--answer-url creates an application and links the number to its new app_id", async () => {
+    const api = fakeFetch(appRoutes);
+    const r = await runCli(
+      ["setup", "voice-agent", "--number", NUM, "--answer-url", "https://agent.example.com/answer", "--stream-url", "wss://agent.example.com/media", "--yes", "--json"],
+      { fetch: api.fetch },
+    );
+    expect(r.code, r.err).toBe(0);
+    expect(writes(api.calls).map((c: any) => [c.method, c.path, c.body])).toEqual([
+      ["POST", `${A}/Application/`, { app_name: `Voice agent ${NUM}`, answer_url: "https://agent.example.com/answer", answer_method: "POST" }],
+      ["POST", `${A}/numbers/%2B918065550100/application`, { application_id: APP }],
+    ]);
+    expect(r.err).toContain("stream host: agent.example.com");
+    expect(r.json()).toMatchObject({ application_id: APP, application_created: true, answer_url_host: "agent.example.com", changed: true });
+    expect(r.json().test_plan.join("\n")).toContain("vobiz streams test wss://agent.example.com/media");
+    expect(r.json().notes[0]).toContain("<Stream");
+  });
+
+  it("--dry-run with --buy --answer-url shows buy, create and link (with a placeholder app_id) and sends nothing", async () => {
+    const api = fakeFetch(appRoutes);
+    const r = await runCli(
+      ["setup", "voice-agent", "--buy", "+918065550199", "--answer-url", "https://agent.example.com/answer", "--app-name", "Bot", "--answer-method", "GET", "--dry-run", "--json"],
+      { fetch: api.fetch },
+    );
+    expect(r.code, r.err).toBe(0);
+    expect(writes(api.calls)).toHaveLength(0);
+    const plan = r.json();
+    expect(plan.steps.map((s: any) => s.operation)).toEqual(["purchase-from-inventory", "create-application", "link-number-to-application"]);
+    expect(plan.steps[1].body).toEqual({ app_name: "Bot", answer_url: "https://agent.example.com/answer", answer_method: "GET" });
+    expect(plan.steps[2].body).toEqual({ application_id: "<app_id from step 2>" });
+  });
+
+  it("a failed link after the application was created says how to finish", async () => {
+    const api = fakeFetch({ ...appRoutes, [`POST ${A}/numbers/${NUM}/application`]: reply(409, { error: "number is on a trunk" }) });
+    const r = await runCli(["setup", "voice-agent", "--number", NUM, "--answer-url", "https://agent.example.com/answer", "--yes"], { fetch: api.fetch });
+    expect(r.code).not.toBe(0);
+    expect(r.err).toContain(`Done: Create application "Voice agent ${NUM}". Failed: Link ${NUM} to the new application`);
+    expect(r.err).toContain(`vobiz numbers update ${NUM} --app <app_id>`);
+  });
+
+  it("refuses without --yes off a terminal", async () => {
+    const api = fakeFetch(appRoutes);
+    const r = await runCli(["setup", "voice-agent", "--number", NUM, "--answer-url", "https://agent.example.com/answer"], { fetch: api.fetch });
+    expect(r.code).toBe(6);
     expect(writes(api.calls)).toHaveLength(0);
   });
 });

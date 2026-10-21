@@ -3,22 +3,22 @@
  * every choice first (interactively on a terminal, or entirely from flags for scripts and agents), shows ONE
  * confirmation summary covering every write, runs the writes in order, and prints a test plan.
  *
- * voice-agent  a number (one you have, or one to buy) routed to a SIP trunk, which is how AI voice platforms
- *              (LiveKit, Pipecat, Vapi, Retell…) take calls. Linking a number to an Application (answer URL or
- *              <Stream> URL) needs an endpoint the API spec does not define yet (docs/SPEC-GAPS.md), so
- *              --answer-url/--stream-url/--app stop with an explanation instead of half-configuring anything.
+ * voice-agent  a number (one you have, or one to buy) routed either to a SIP trunk, which is how AI voice platforms
+ *              (LiveKit, Pipecat, Vapi, Retell…) take calls, or to an Application: an existing one (--app) or a new
+ *              one created with --answer-url (whose VobizXML may <Stream> to --stream-url). A number is on a trunk
+ *              or an application, not both, so linking an application first removes the number from its trunk.
  * sms          a messaging number (one you have, or one to buy) plus a webhook for inbound messages and delivery
  *              reports (an existing one with the same URL is reused).
  *
  * --dry-run prints every request the setup would send; the reads it needs to build them still run.
  */
-import type { Command } from "commander";
+import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
 import { op } from "../core/ops.js";
 import { extractItems } from "../core/pagination.js";
 import { toE164 } from "../core/phone.js";
-import { findInventoryNumber, findOwnNumber, type NumberRecord } from "./numbers.js";
+import { findInventoryNumber, findOwnNumber, routingSteps, type NumberRecord } from "./numbers.js";
 import { runPlan, type Step } from "./provisioning-shared.js";
 import { findSmsOffer } from "./sms/numbers.js";
 import { compact, httpsUrl, urlHost } from "./sms/shared.js";
@@ -30,6 +30,8 @@ const PURCHASE = op("purchase-from-inventory");
 const ASSIGN_TRUNK = op("assign-number-to-trunk");
 const LIST_TRUNKS = op("list-trunks");
 const GET_TRUNK = op("retrieve-trunk");
+const GET_APP = op("retrieve-application");
+const CREATE_APP = op("create-application");
 const SMS_NUMBERS = op("sms:list-numbers");
 const SMS_SEARCH = op("search-available-numbers");
 const SMS_PURCHASE = op("purchase-number");
@@ -79,13 +81,46 @@ interface VoiceOpts {
   answerUrl?: string;
   streamUrl?: string;
   app?: string;
+  appName?: string;
+  answerMethod?: string;
 }
 
-export const APP_LINK_GAP =
-  "Linking a number to an Application (answer URL or <Stream> URL) is not in the Vobiz API spec yet " +
-  "(docs/SPEC-GAPS.md: link-number-to-application), so the CLI cannot do it safely. Either route the number to a " +
-  "SIP trunk with --trunk (how LiveKit, Pipecat, Vapi and similar platforms take calls), or create the application " +
-  "with `vobiz apps create --app-name … --answer-url … --answer-method POST` and link the number to it in the Vobiz Console.";
+/** The application side of `setup voice-agent`: an existing app, or one to create. */
+interface AppChoice {
+  existing?: Rec;
+  create?: Rec;
+}
+
+/** The answer URL must return VobizXML; for a stream, that XML is a <Stream> pointing at the stream server. */
+const streamXml = (wss: string) =>
+  `<Response>\n  <Stream bidirectional="true" keepCallAlive="true">${wss}</Stream>\n</Response>`;
+
+/** Flag conflicts, checked before any request. */
+function checkAppFlags(o: VoiceOpts): void {
+  const modes = [o.trunk && "--trunk", o.app && "--app", o.answerUrl && "--answer-url"].filter(Boolean);
+  if (modes.length > 1) throw usage(`A number is linked to a SIP trunk or an application, not both: pass one of ${modes.join(", ")}.`);
+  if (o.streamUrl) {
+    if (!/^wss:\/\//i.test(o.streamUrl)) throw usage(`--stream-url must be a wss:// URL (got "${o.streamUrl}").`);
+    if (!o.answerUrl)
+      throw usage(
+        "--stream-url needs --answer-url: Vobiz fetches VobizXML from the answer URL, so host this document there (for example with " +
+          "`vobiz xml serve stream.xml` behind a tunnel) and pass its https URL:\n" + streamXml(o.streamUrl),
+      );
+  }
+  if (o.answerUrl) httpsUrl("--answer-url")(o.answerUrl);
+  if ((o.appName || o.answerMethod) && !o.answerUrl) throw usage("--app-name and --answer-method go with --answer-url (they describe the application to create).");
+}
+
+async function pickApp(ctx: Ctx, o: VoiceOpts, e164: string): Promise<AppChoice | undefined> {
+  if (o.app) {
+    const a = await ctx.client.call<Rec>(GET_APP, { path: { app_id: o.app }, dryRun: false });
+    return { existing: isRec(a) ? { app_id: o.app, ...a } : { app_id: o.app } };
+  }
+  if (o.answerUrl) {
+    return { create: { app_name: o.appName ?? `Voice agent ${e164}`, answer_url: o.answerUrl, answer_method: o.answerMethod ?? "POST" } };
+  }
+  return undefined;
+}
 
 async function pickVoiceNumber(ctx: Ctx, o: VoiceOpts): Promise<{ e164: string; own?: NumberRecord; offer?: NumberRecord }> {
   if (o.number && o.buy) throw usage("Pass either --number (a number you have) or --buy (a number to buy), not both.");
@@ -122,7 +157,8 @@ async function pickTrunk(ctx: Ctx, o: VoiceOpts): Promise<Rec> {
     const t = await ctx.client.call<Rec>(GET_TRUNK, { path: { trunk_id: o.trunk }, dryRun: false });
     return isRec(t?.data) ? (t.data as Rec) : { trunk_id: o.trunk, ...(isRec(t) ? t : {}) };
   }
-  if (!interactive(ctx)) throw usage("Pass --trunk <trunk-id> (see `vobiz trunks list`): the number's inbound calls are routed to that SIP trunk.");
+  if (!interactive(ctx))
+    throw usage("Pass --trunk <trunk-id> (see `vobiz trunks list`) to route the number's inbound calls to a SIP trunk, or --app <app-id> / --answer-url <https-url> to link it to an application.");
   const body = await ctx.client.call(LIST_TRUNKS);
   const trunks = (extractItems(body) ?? []).filter(isRec);
   if (!trunks.length) throw new VobizError("not_found", "There are no SIP trunks on this account. Create one with `vobiz trunks create --name …` (or in your voice-agent platform's Vobiz guide) and run setup again.");
@@ -130,35 +166,112 @@ async function pickTrunk(ctx: Ctx, o: VoiceOpts): Promise<Rec> {
   return typeof pick === "string" ? pickTrunk(ctx, { trunk: pick }) : pick;
 }
 
+/** --app / --answer-url: buy (optional), create the application (optional), then link the number to it. */
+async function setupApplication(ctx: Ctx, o: VoiceOpts, e164: string, app: AppChoice, own: NumberRecord | undefined, offer: NumberRecord | undefined): Promise<void> {
+  const appId = app.existing ? String(app.existing.app_id) : undefined;
+  const answerUrl = String((app.existing ?? app.create)?.answer_url ?? "");
+  const appLabel = app.existing ? `${app.existing.app_name ? `${String(app.existing.app_name)} ` : ""}(${appId})` : `new application "${String(app.create?.app_name)}"`;
+  const plan = [
+    `Call ${e164} from your phone; Vobiz fetches VobizXML from ${answerUrl ? urlHost(answerUrl) : "the application's answer URL"} and your agent should answer.`,
+    ...(o.streamUrl ? [`Check the stream server before calling: \`vobiz streams test ${o.streamUrl}\`.`] : []),
+    "See the call record: `vobiz cdr recent --limit 1`.",
+    "If it did not connect: `vobiz diagnose call <call-uuid>`.",
+    `Watch the number's answer rate over time: \`vobiz numbers health ${e164}\`.`,
+  ];
+  const notes: string[] = [];
+  if (o.streamUrl) notes.push(`${urlHost(answerUrl)} must return VobizXML that streams to ${urlHost(o.streamUrl)}, e.g. ${streamXml(o.streamUrl).replace(/\n\s*/g, "")}`);
+  const result: Rec = { number: e164, application_id: appId ?? null, application_created: !!app.create, answer_url_host: answerUrl ? urlHost(answerUrl) : null, trunk_id: null, bought: !!offer, routed: true };
+
+  if (appId && own && String(own.application_id ?? "") === appId && !own.trunk_group_id && !offer) {
+    ctx.out.status(`${e164} is already linked to application ${appLabel}. Nothing to change.`);
+    printOutcome(ctx, { ...result, changed: false }, plan, notes);
+    return;
+  }
+
+  const details: Record<string, string> = { number: e164, account: ctx.client.authId, application: appLabel };
+  if (answerUrl) details["answer URL host"] = urlHost(answerUrl);
+  if (o.streamUrl) details["stream host"] = urlHost(o.streamUrl);
+  if (own?.trunk_group_id) details["currently routed to"] = `trunk ${String(own.trunk_group_id)} (removed)`;
+  if (own?.application_id) details["current application"] = `${String(own.application_id)} (replaced)`;
+  const steps: Step[] = [];
+  let cost: string | undefined;
+  if (offer) {
+    details.location = [offer.region, offer.country].filter(Boolean).join(", ") || "unknown";
+    if (ctx.client.authId.startsWith("SA_")) details.billed_to = "the parent main account";
+    cost = `${money(offer.currency, offer.setup_fee)} setup now, then ${money(offer.currency, offer.monthly_fee)}/month`;
+    steps.push({ label: `Buy ${e164}`, operation: PURCHASE, args: { body: { e164, ...(o.currency ? { currency: o.currency.toUpperCase() } : {}) } }, retry: `vobiz numbers buy ${e164}` });
+  }
+  let createIndex = -1;
+  if (app.create) {
+    const c = app.create;
+    createIndex = steps.length;
+    steps.push({
+      label: `Create application "${String(c.app_name)}"`,
+      operation: CREATE_APP,
+      args: { body: c },
+      retry: `vobiz apps create --app-name '${String(c.app_name)}' --answer-url ${String(c.answer_url)} --answer-method ${String(c.answer_method)}`,
+    });
+  }
+  const placeholder = appId ?? `<app_id from step ${createIndex + 1}>`;
+  const newAppId = (results: unknown[]): string => {
+    const r = results[createIndex];
+    const id = isRec(r) ? (r.app_id ?? (isRec(r.data) ? r.data.app_id : undefined)) : undefined;
+    if (!id) throw new VobizError("unexpected_response", "Vobiz created the application but returned no app_id; find it with `vobiz apps list` and run `vobiz numbers update` with --app.");
+    return String(id);
+  };
+  for (const step of routingSteps(e164, offer ? {} : (own ?? {}), { app: placeholder })) {
+    if (step.operation.id === "link-number-to-application" && createIndex >= 0) {
+      step.resolve = (results) => ({ ...step.args, body: { application_id: newAppId(results) } });
+      step.label = `Link ${e164} to the new application`;
+      step.retry = `vobiz numbers update ${e164} --app <app_id>`;
+    }
+    steps.push(step);
+  }
+
+  const done = await runPlan(ctx, { action: `Set up ${e164} for your voice agent (${steps.length} step${steps.length > 1 ? "s" : ""}: ${steps.map((s) => s.label).join(", then ")})`, details, cost }, steps);
+  if (!done) return;
+  if (createIndex >= 0) result.application_id = newAppId(done);
+  ctx.out.status(`${offer ? `Bought ${e164} and linked it` : `Linked ${e164}`} to application ${String(result.application_id)}.`);
+  printOutcome(ctx, { ...result, changed: true }, plan, notes);
+}
+
 function registerVoiceAgent(setup: Command, ctx: Ctx) {
   setup
     .command("voice-agent")
-    .description("Route a phone number (yours, or one to buy) to the SIP trunk of your AI voice agent, then print a test plan")
+    .description("Route a phone number (yours, or one to buy) to your AI voice agent's SIP trunk or application, then print a test plan")
     .option("--number <e164>", "a number already on your account, e.g. +918065550100")
     .option("--buy <e164>", "buy this inventory number first (see `vobiz numbers search`); shows the price before asking")
     .option("--country <code>", "interactive: search the inventory in this country (e.g. IN) instead of asking")
     .option("--contains <digits>", "interactive: only offer inventory numbers containing these digits")
     .option("--currency <code>", "with --buy: currency to bill in")
     .option("--trunk <trunk-id>", "SIP trunk that receives the number's calls (see `vobiz trunks list`)")
-    .option("--answer-url <url>", "link the number to an application with this answer URL (not available yet; see below)")
-    .option("--stream-url <wss-url>", "link the number to a <Stream> application (not available yet; see below)")
-    .option("--app <app-id>", "link the number to this application (not available yet; see below)")
+    .option("--app <app-id>", "link the number to this existing application (see `vobiz apps list`)")
+    .option("--answer-url <url>", "create an application with this https answer URL and link the number to it")
+    .option("--app-name <name>", "with --answer-url: name of the new application (default: Voice agent <number>)")
+    .addOption(new Option("--answer-method <method>", "with --answer-url: HTTP method Vobiz uses for the answer URL (default: POST)").choices(["GET", "POST"]))
+    .option("--stream-url <wss-url>", "with --answer-url: the stream server the answer URL's <Stream> points at (added to the test plan)")
     .addHelpText(
       "after",
       `
-Every write (the purchase, the routing) is listed in one confirmation before anything is sent.
+Every write (the purchase, the new application, the routing) is listed in one confirmation before anything is sent.
+A number is linked to a SIP trunk or an application, not both: linking an application removes it from its trunk.
 
 Examples:
   vobiz setup voice-agent
   vobiz setup voice-agent --number +918065550100 --trunk e3e55a78-1234-5678-90ab-cdef12345678 --yes
   vobiz setup voice-agent --buy +918065550199 --trunk <trunk-id> --dry-run
+  vobiz setup voice-agent --number +918065550100 --app 12345678901234567
+  vobiz setup voice-agent --number +918065550100 --answer-url https://agent.example.com/answer --stream-url wss://agent.example.com/media
 
-Application links (--answer-url, --stream-url, --app) need an API endpoint that is not in the spec yet; until it
-is, route the number to a trunk or link it in the Vobiz Console. Test a <Stream> server with \`vobiz streams test\`.`,
+With --stream-url, the answer URL must return VobizXML such as
+  <Response><Stream bidirectional="true" keepCallAlive="true">wss://agent.example.com/media</Stream></Response>
+Test the stream server with \`vobiz streams test <wss-url>\`.`,
     )
     .action(async (o: VoiceOpts) => {
-      if (o.answerUrl || o.streamUrl || o.app) throw new VobizError("unsupported", APP_LINK_GAP);
+      checkAppFlags(o);
       const { e164, own, offer } = await pickVoiceNumber(ctx, o);
+      const app = await pickApp(ctx, o, e164);
+      if (app) return setupApplication(ctx, o, e164, app, own, offer);
       const trunk = await pickTrunk(ctx, o);
       const trunkId = String(trunk.trunk_id ?? o.trunk ?? "");
       const trunkLabel = `${trunk.name ? `${String(trunk.name)} ` : ""}(${trunkId})`;

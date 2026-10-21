@@ -211,6 +211,45 @@ export async function confirmedCall<T = unknown>(ctx: Ctx, summary: ConfirmSumma
   return ctx.client.call<T>(op, { ...args, sideEffect: true });
 }
 
+/** One write in a multi-step plan (`runPlan`). */
+export interface Step {
+  label: string;
+  operation: Operation;
+  /** Request arguments; with `resolve`, these are what --dry-run shows (placeholders for values not known yet). */
+  args: CallArgs;
+  /** Builds the real arguments from the results of the earlier steps (e.g. a new application's app_id). */
+  resolve?: (results: unknown[]) => CallArgs;
+  /** Command that redoes this step by hand if it fails after an earlier step succeeded. */
+  retry: string;
+}
+
+/** One confirmation for every step, then the steps in order. Returns undefined for --dry-run (plan printed). */
+export async function runPlan(ctx: Ctx, summary: ConfirmSummary, steps: Step[]): Promise<unknown[] | undefined> {
+  await requireConfirmation(ctx, summary);
+  if (ctx.flags.dryRun) {
+    const client = ctx.client;
+    ctx.out.print({
+      dry_run: true,
+      steps: steps.map((s) => ({ step: s.label, ...client.prepare(s.operation.api, s.operation.method, client.fillPath(s.operation.path, s.args.path), s.args, s.operation.id) })),
+    });
+    return undefined;
+  }
+  const results: unknown[] = [];
+  for (const [i, s] of steps.entries()) {
+    try {
+      ctx.out.status(`${i + 1}/${steps.length} ${s.label}…`);
+      const args = s.resolve ? s.resolve(results) : s.args;
+      results.push(await ctx.client.call(s.operation, { ...args, sideEffect: true }));
+    } catch (err) {
+      if (i > 0) {
+        ctx.out.warn(`Done: ${steps.slice(0, i).map((x) => x.label).join("; ")}. Failed: ${s.label}. Finish by hand with \`${s.retry}\`${steps.length > i + 1 ? " and the remaining steps" : ""}.`);
+      }
+      throw err;
+    }
+  }
+  return results;
+}
+
 const LOOKS_REDACTED = /^(<?redacted>?|\[redacted\]|\*+|x+)$/i;
 
 /**

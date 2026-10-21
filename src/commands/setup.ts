@@ -13,14 +13,13 @@
  * --dry-run prints every request the setup would send; the reads it needs to build them still run.
  */
 import type { Command } from "commander";
-import type { CallArgs } from "../core/client.js";
-import { requireConfirmation, type ConfirmSummary } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
-import { op, type Operation } from "../core/ops.js";
+import { op } from "../core/ops.js";
 import { extractItems } from "../core/pagination.js";
 import { toE164 } from "../core/phone.js";
 import { findInventoryNumber, findOwnNumber, type NumberRecord } from "./numbers.js";
+import { runPlan, type Step } from "./provisioning-shared.js";
 import { findSmsOffer } from "./sms/numbers.js";
 import { compact, httpsUrl, urlHost } from "./sms/shared.js";
 import { collect, isRec, type Rec } from "./voice-shared.js";
@@ -37,40 +36,6 @@ const SMS_PURCHASE = op("purchase-number");
 const WEBHOOKS = op("list-webhooks");
 const GET_WEBHOOK = op("get-webhook");
 const CREATE_WEBHOOK = op("create-webhook");
-
-interface Step {
-  label: string;
-  operation: Operation;
-  args: CallArgs;
-  /** Command that redoes this step by hand if it fails after an earlier step succeeded. */
-  retry: string;
-}
-
-/** One confirmation for every step, then the steps in order. Returns undefined for --dry-run (plan printed). */
-async function runPlan(ctx: Ctx, summary: ConfirmSummary, steps: Step[]): Promise<unknown[] | undefined> {
-  await requireConfirmation(ctx, summary);
-  if (ctx.flags.dryRun) {
-    const client = ctx.client;
-    ctx.out.print({
-      dry_run: true,
-      steps: steps.map((s) => ({ step: s.label, ...client.prepare(s.operation.api, s.operation.method, client.fillPath(s.operation.path, s.args.path), s.args, s.operation.id) })),
-    });
-    return undefined;
-  }
-  const results: unknown[] = [];
-  for (const [i, s] of steps.entries()) {
-    try {
-      ctx.out.status(`${i + 1}/${steps.length} ${s.label}…`);
-      results.push(await ctx.client.call(s.operation, { ...s.args, sideEffect: true }));
-    } catch (err) {
-      if (i > 0) {
-        ctx.out.warn(`Done: ${steps.slice(0, i).map((x) => x.label).join("; ")}. Failed: ${s.label}. Finish by hand with \`${s.retry}\`${steps.length > i + 1 ? " and the remaining steps" : ""}.`);
-      }
-      throw err;
-    }
-  }
-  return results;
-}
 
 /** Shows numbered choices on stderr and asks for one; accepts the number or the value itself. */
 async function choose<T>(ctx: Ctx, title: string, items: T[], label: (t: T) => string, value: (t: T) => string): Promise<T | string> {

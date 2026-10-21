@@ -19,6 +19,8 @@ export interface GlobalFlags {
   output?: OutputMode;
   json?: boolean;
   fields?: string[];
+  /** --query path applied to printed data after --fields (see parseQuery in output.ts). */
+  query?: string;
   quiet?: boolean;
   yes?: boolean;
   dryRun?: boolean;
@@ -91,7 +93,7 @@ export class Ctx {
     this.fetch = o.fetch ?? globalThis.fetch;
     this.prompts = o.prompts ?? inquirerPrompts();
     this.now = o.now ?? (() => new Date());
-    this.openUrl = o.openUrl ?? openInBrowser;
+    this.openUrl = o.openUrl ?? ((url: string) => openUrlGuarded(url, { env: this.env, stdout: this.stdout, stderr: this.stderr }));
     this.flags = { ...defaultFlags(), ...o.flags };
     const ctx = this;
     this.out = new Printer({
@@ -178,21 +180,36 @@ function inquirerPrompts(): Prompts {
   };
 }
 
-/** True when launching a browser would surprise someone: tests, CI, pipes, or an explicit opt-out. */
+type SpawnFn = typeof spawn;
+
+/** True when launching a browser would not surprise someone: an interactive terminal, not CI, not a test runner, no opt-out. */
 export function browserAllowed(env: NodeJS.ProcessEnv = process.env, isTTY: boolean = Boolean(process.stdout.isTTY)): boolean {
   return isTTY && !env.CI && !env.VOBIZ_NO_BROWSER && env.NODE_ENV !== "test" && !env.VITEST;
 }
 
-async function openInBrowser(url: string): Promise<void> {
-  if (!browserAllowed()) {
-    process.stderr.write(`Open this URL in your browser: ${url}\n`);
+/**
+ * The default `openUrl`: spawns the platform opener only for an interactive session. With VOBIZ_NO_BROWSER or CI
+ * set, under a test runner, or when stdout is not a terminal (pipes, agents), it prints "Open: <url>" to stderr instead.
+ */
+export async function openUrlGuarded(
+  url: string,
+  o: { env: NodeJS.ProcessEnv; stdout: Stream; stderr: Stream },
+  spawnFn: SpawnFn = spawn,
+): Promise<void> {
+  if (!browserAllowed(o.env, Boolean(o.stdout.isTTY))) {
+    o.stderr.write(`Open: ${url}
+`);
     return;
   }
+  await openInBrowser(url, spawnFn);
+}
+
+async function openInBrowser(url: string, spawnFn: SpawnFn = spawn): Promise<void> {
   const [cmd, args] =
     process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
   await new Promise<void>((resolve) => {
     try {
-      const child = spawn(cmd, args as string[], { stdio: "ignore", detached: true });
+      const child = spawnFn(cmd, args as string[], { stdio: "ignore", detached: true });
       child.on("error", () => resolve());
       child.unref();
       resolve();

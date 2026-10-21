@@ -34,12 +34,13 @@ With --output json, errors are printed to stderr as one JSON line:
 
   VOBIZ_AUTH_ID, VOBIZ_AUTH_TOKEN   credentials (CI); take precedence over saved profiles, not over flags
   VOBIZ_PROFILE                     saved profile to use (like --profile)
-  VOBIZ_OUTPUT                      table | json | yaml | tsv | plain (like --output)
+  VOBIZ_OUTPUT                      table | json | yaml | tsv | plain | jsonl (like --output)
   VOBIZ_YES                         1 or true: skip confirmation prompts (like --yes)
   VOBIZ_BASE_URL                    voice API base URL (default https://api.vobiz.ai)
   VOBIZ_SMS_BASE_URL                Messaging API base URL (default https://api.vobiz.ai/api/v1/sms)
   VOBIZ_TIMEOUT                     per-request timeout in seconds (default 30)
   VOBIZ_LOG=debug                   like --debug (request and response bodies, secrets redacted)
+  VOBIZ_NO_BROWSER                  never open a browser (feedback, docs open, login --browser); print the URL
   VOBIZ_CONFIG_DIR                  config directory (default $XDG_CONFIG_HOME/vobiz or ~/.config/vobiz)
   VOBIZ_NO_UPDATE_CHECK, CI         disable the daily version check
   NO_COLOR, FORCE_COLOR             standard color control
@@ -50,7 +51,7 @@ Credential order: --auth-id/--auth-token flags, then VOBIZ_AUTH_ID/VOBIZ_AUTH_TO
 `,
   },
   output: {
-    summary: "output formats, --fields and --quiet",
+    summary: "output formats, --fields, --query and --quiet",
     text: `Output
 
 stdout carries data only; progress, prompts, warnings and errors go to stderr, so pipes stay clean.
@@ -60,8 +61,11 @@ stdout carries data only; progress, prompts, warnings and errors go to stderr, s
   --output yaml    YAML
   --output tsv     a header row, then tab-separated rows; nested values as compact JSON
   --output plain   rows without header or truncation; "key: value" lines for a single record
+  --output jsonl   one compact JSON value per line: every row of a list, or the single record
 
   --fields id,meta.total   keep only these dot paths (columns in table/tsv, nested keys in json/yaml)
+  --query items[*].e164    then print only this path: dot keys plus [n], [-1] (last) and [*] (every element);
+                           it reads the data as that mode prints it (see the shape with --json)
   --quiet, -q              print only the id of each row, one per line (for xargs)
   --dry-run                print the request that would be sent (token and secrets redacted) and exit 0
 
@@ -69,7 +73,7 @@ Secret fields (auth_token, auth_secret, password, secret, token, client_secret, 
 as [redacted]. Only --debug --show-secrets prints them.
 
 A change command (create, update, delete, buy, send) prints a sentence to stderr in table/plain mode and the
-API response to stdout in json/yaml/tsv mode.
+API response to stdout in json/jsonl/yaml/tsv mode.
 `,
   },
 };

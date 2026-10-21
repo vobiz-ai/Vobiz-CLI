@@ -6,9 +6,11 @@
  *   yaml   YAML
  *   tsv    header row then tab-separated rows, nested values as compact JSON
  *   plain  rows without header or truncation; one `key: value` per line for single objects
+ *   jsonl  one compact JSON value per line: each row of a list, or the single record (for streaming into jq, agents)
  *
- * `--fields a,b.c` projects dot paths, `--quiet` prints the primary id of each row, status lines and warnings
- * go to stderr. Every printed value passes through `redact` unless `--debug --show-secrets`.
+ * `--fields a,b.c` projects dot paths, `--query items[*].e164` then selects a path out of what would be printed
+ * (dot paths with `[n]`, `[-1]` and `[*]` for arrays), `--quiet` prints the primary id of each row, status lines and
+ * warnings go to stderr. Every printed value passes through `redact` unless `--debug --show-secrets`.
  */
 import pc from "picocolors";
 import YAML from "yaml";
@@ -16,7 +18,7 @@ import { VobizError, isRetryable, type ErrorKind } from "./errors.js";
 import { redact } from "./redact.js";
 import { renderTable } from "./table.js";
 
-export const OUTPUT_MODES = ["table", "json", "yaml", "tsv", "plain"] as const;
+export const OUTPUT_MODES = ["table", "json", "yaml", "tsv", "plain", "jsonl"] as const;
 export type OutputMode = (typeof OUTPUT_MODES)[number];
 
 export interface Stream {
@@ -27,7 +29,7 @@ export interface Stream {
 
 /** What a Printer needs from the context (kept narrow so it is easy to construct in tests). */
 export interface PrinterHost {
-  flags: { output?: OutputMode; json?: boolean; fields?: string[]; quiet?: boolean; debug?: boolean; showSecrets?: boolean; color?: boolean };
+  flags: { output?: OutputMode; json?: boolean; fields?: string[]; query?: string; quiet?: boolean; debug?: boolean; showSecrets?: boolean; color?: boolean };
   env: NodeJS.ProcessEnv;
   stdout: Stream;
   stderr: Stream;
@@ -88,6 +90,79 @@ export function project(obj: unknown, paths: string[]): unknown {
   return out;
 }
 
+type QueryStep = { kind: "key"; key: string } | { kind: "index"; index: number } | { kind: "all" };
+
+/**
+ * Parses a `--query` path: dot-separated keys, each optionally followed by `[n]` (negative counts from the end) or
+ * `[*]` (every element). A path may start with a bracket (`[0].id`, `[*].e164`). Throws on anything else.
+ */
+export function parseQuery(path: string): QueryStep[] {
+  const steps: QueryStep[] = [];
+  const src = path.trim();
+  if (!src) throw new VobizError("invalid_input", "--query needs a path, e.g. data[0].uuid or items[*].e164.");
+  let i = 0;
+  let expectKey = !src.startsWith("[");
+  while (i < src.length) {
+    const ch = src[i];
+    if (ch === "[") {
+      const end = src.indexOf("]", i);
+      const inner = end < 0 ? "" : src.slice(i + 1, end);
+      if (inner === "*") steps.push({ kind: "all" });
+      else if (/^-?\d+$/.test(inner)) steps.push({ kind: "index", index: Number(inner) });
+      else throw new VobizError("invalid_input", `--query: expected [n] or [*] at position ${i + 1} of "${path}".`);
+      i = end + 1;
+      expectKey = false;
+      continue;
+    }
+    if (ch === ".") {
+      if (expectKey) throw new VobizError("invalid_input", `--query: unexpected "." at position ${i + 1} of "${path}".`);
+      expectKey = true;
+      i++;
+      continue;
+    }
+    if (!expectKey) throw new VobizError("invalid_input", `--query: expected ".", "[n]" or "[*]" at position ${i + 1} of "${path}".`);
+    let j = i;
+    while (j < src.length && src[j] !== "." && src[j] !== "[" && src[j] !== "]") j++;
+    if (j === i) throw new VobizError("invalid_input", `--query: unexpected "${src[i]}" at position ${i + 1} of "${path}".`);
+    steps.push({ kind: "key", key: src.slice(i, j) });
+    i = j;
+    expectKey = false;
+  }
+  if (expectKey) throw new VobizError("invalid_input", `--query: "${path}" ends with ".".`);
+  return steps;
+}
+
+function runQuery(value: unknown, steps: QueryStep[], at: number): unknown {
+  if (at === steps.length) return value;
+  const step = steps[at];
+  if (step.kind === "all") {
+    const items = Array.isArray(value) ? value : value && typeof value === "object" ? Object.values(value) : undefined;
+    if (!items) return undefined;
+    const nested = steps.slice(at + 1).some((s) => s.kind === "all");
+    const out: unknown[] = [];
+    for (const item of items) {
+      const r = runQuery(item, steps, at + 1);
+      if (r === undefined) continue;
+      if (nested && Array.isArray(r)) out.push(...r);
+      else out.push(r);
+    }
+    return out;
+  }
+  if (step.kind === "index") {
+    if (!Array.isArray(value)) return undefined;
+    const i = step.index < 0 ? value.length + step.index : step.index;
+    return runQuery(value[i], steps, at + 1);
+  }
+  if (value === null || value === undefined || typeof value !== "object") return undefined;
+  if (Array.isArray(value)) return /^\d+$/.test(step.key) ? runQuery(value[Number(step.key)], steps, at + 1) : undefined;
+  return runQuery((value as Record<string, unknown>)[step.key], steps, at + 1);
+}
+
+/** Evaluates a `--query` path (see parseQuery). Missing paths give undefined; `[*]` drops elements without a match. */
+export function queryPath(value: unknown, path: string | QueryStep[]): unknown {
+  return runQuery(value, typeof path === "string" ? parseQuery(path) : path, 0);
+}
+
 /** Flattens nested objects to dot keys; arrays of scalars join with ", ", other arrays become compact JSON. */
 export function flatten(obj: unknown, prefix = "", out: Record<string, unknown> = {}): Record<string, unknown> {
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
@@ -128,7 +203,8 @@ export class Printer {
   /** True when the user explicitly asked for JSON (errors then print as JSON too). */
   get explicitJson(): boolean {
     const f = this.host.flags;
-    return !!f.json || f.output === "json" || (!f.output && this.host.env.VOBIZ_OUTPUT === "json");
+    const env = this.host.env.VOBIZ_OUTPUT;
+    return !!f.json || f.output === "json" || f.output === "jsonl" || (!f.output && (env === "json" || env === "jsonl"));
   }
 
   /** Colors for one stream: off with --no-color or NO_COLOR, forced by FORCE_COLOR, otherwise only on a TTY. */
@@ -153,7 +229,7 @@ export class Printer {
     const out = this.host.stdout;
     const fields = this.host.flags.fields?.length ? this.host.flags.fields : undefined;
     let value = this.safe(data);
-    const isList = Array.isArray(value);
+    let isList = Array.isArray(value);
 
     if (this.host.flags.quiet) {
       const rows = isList ? (value as unknown[]) : [value];
@@ -165,7 +241,15 @@ export class Printer {
     }
 
     if (fields) value = isList ? (value as unknown[]).map((r) => project(r, fields)) : project(value, fields);
+    if (this.host.flags.query) {
+      value = queryPath(value, this.host.flags.query);
+      isList = Array.isArray(value);
+    }
     const mode = this.mode;
+    if (mode === "jsonl") {
+      for (const row of isList ? (value as unknown[]) : [value]) out.write(JSON.stringify(row ?? null) + "\n");
+      return;
+    }
     if (mode === "json") {
       out.write(JSON.stringify(value ?? null, null, 2) + "\n");
       return;
@@ -246,7 +330,7 @@ export class Printer {
    */
   success(message: string, data?: unknown): void {
     const mode = this.mode;
-    if (data !== undefined && (mode === "json" || mode === "yaml" || mode === "tsv" || this.host.flags.quiet)) this.print(data);
+    if (data !== undefined && (mode === "json" || mode === "jsonl" || mode === "yaml" || mode === "tsv" || this.host.flags.quiet)) this.print(data);
     else this.status(`${this.colors.green("✓")} ${message}`);
   }
 

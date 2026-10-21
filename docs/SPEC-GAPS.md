@@ -3,7 +3,7 @@
 Operations the CLI does not expose yet, or API behaviour the vendored spec does not describe. Add an entry instead of
 guessing. Format: `operationId` (api) — why — what is needed.
 
-- `link-number-to-application` / `unlink-number-from-application` (voice) — `POST` and `DELETE /api/v1/Account/{auth_id}/numbers/{e164}/application` with body `{application_id}` are used in production by the Vobiz MCP server (`update_phone_number`) but are missing from `openapi.yaml`, so the CLI has no `numbers update --app` yet. Needed: add both operations (and the number tags update the same tool performs) to the docs repo's `openapi.yaml`, then `npm run spec:sync` and implement `numbers update`.
+- `link-number-to-application` / `unlink-number-from-application` (voice) — `POST` and `DELETE /api/v1/Account/{auth_id}/numbers/{e164}/application` with body `{application_id}` are used in production by the Vobiz MCP server (`update_phone_number`) but are missing from `openapi.yaml`, so the CLI has no `numbers update --app` yet. Needed: add both operations (and the number tags update the same tool performs) to the docs repo's `openapi.yaml`, then `npm run spec:sync` and implement `numbers update`. There is no `update-number` operation either (checked with `op()`), so `numbers update` is not implemented, and `vobiz setup voice-agent --answer-url/--stream-url/--app` stops with this explanation (it routes numbers to a trunk with `assign-number-to-trunk` instead).
 
 ### Voice (W2: account, calls, conferences, recordings, cdr)
 
@@ -20,6 +20,13 @@ guessing. Format: `operationId` (api) — why — what is needed.
 - `list-customer-cdrs` (voice) — has `per_page` but no `page`/`offset`, so only the first page is reachable and `--all` cannot page. Needed: the paging parameter the endpoint accepts.
 - `list-trunks`, `list-credentials`, `list-ip-acls`, `list-origination-uris`, `list-subaccounts` (voice) — responses carry `meta.limit/offset/total` but no `limit`/`offset` query params are declared, so the CLI fetches one page. Needed: the paging params, if the endpoints accept them.
 - `create-credential`, `create-endpoint` (voice) — the spec examples return `password: "<redacted>"`; whether the API ever echoes the password in clear is undocumented. The CLI shows a returned password once on stderr only when it is not already redacted. Needed: document the create response.
+
+### Agent ops (W9: diagnose, streams, setup)
+
+- `list-recordings` (voice) — declares only `limit`/`offset`, no `call_uuid` filter, so `vobiz diagnose call` scans the newest recordings (`--scan`, default 200) and matches `call_uuid` itself. Needed: a `call_uuid` query param (the bulk export body already has one).
+- `list-streams` (voice) — on a finished call the endpoint answered an error instead of the stopped streams the docs describe ("active + stopped"), so `diagnose call` lists streams only for live/queued calls and reports `streaming_cost` from the call record otherwise. Needed: confirm whether stopped streams stay listable after hangup, and a response schema.
+- Stream WebSocket `clearedAudio` (docs) — `xml/stream/stream-events` shows `{event, streamId}`, while the `vobiz-audio-streams` skill lists `{event, streamId, sequenceNumber}`. `vobiz streams test` sends the page's shape. Needed: one documented shape (and whether `playedStream`, documented as `{event, name}`, also carries `sequenceNumber`).
+- Stream WebSocket end of stream (docs, not a gap) — Vobiz sends no inbound `stop` event; the socket close is the end-of-stream signal, so `streams test` closes the socket after the last `media` frame instead of sending a `stop`.
 
 ## Messaging API (`vobiz sms`, W4)
 

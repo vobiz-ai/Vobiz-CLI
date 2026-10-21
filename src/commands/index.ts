@@ -37,6 +37,12 @@ import { register as mcp } from "./mcp.js";
 import { register as skills } from "./skills.js";
 import { register as docs } from "./docs.js";
 
+// ── W9 agent ops: diagnose, streams, setup, feedback ──
+import { register as diagnose } from "./diagnose.js";
+import { register as feedback } from "./feedback.js";
+import { register as streams } from "./streams.js";
+import { register as setup } from "./setup.js";
+
 // ── W1 core (kept last in help): api, completion, help topics ──
 import { register as api } from "./api.js";
 import { register as completion } from "./completion.js";
@@ -97,6 +103,12 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   mcp,
   skills,
   docs,
+
+  // W9 agent ops
+  setup,
+  diagnose,
+  streams,
+  feedback,
 
   api,
   completion,

@@ -27,7 +27,7 @@ const UNASSIGN_SUB = op("unassign-did-from-subaccount");
 const NUMBER_COLUMNS = ["e164", "country", "region", "status", "monthly_fee", "currency", "trunk_group_id", "application_id"];
 const INVENTORY_COLUMNS = ["e164", "country", "region", "setup_fee", "monthly_fee", "currency"];
 
-interface NumberRecord {
+export interface NumberRecord {
   e164?: string;
   country?: string;
   region?: string;
@@ -42,16 +42,19 @@ const items = (body: unknown): NumberRecord[] => {
   return Array.isArray(v) ? (v as NumberRecord[]) : [];
 };
 
-/** One number on the account. There is no single-number endpoint: this is list-numbers filtered to an exact match. */
-async function findOwnNumber(ctx: Ctx, e164: string): Promise<NumberRecord> {
-  const body = await ctx.client.call(LIST, { query: { search: e164, per_page: 100 } });
+/**
+ * One number on the account. There is no single-number endpoint: this is list-numbers filtered to an exact match.
+ * `dryRun: false` runs the lookup even under --dry-run (for a write that depends on it).
+ */
+export async function findOwnNumber(ctx: Ctx, e164: string, o: { dryRun?: boolean } = {}): Promise<NumberRecord> {
+  const body = await ctx.client.call(LIST, { query: { search: e164, per_page: 100 }, dryRun: o.dryRun });
   const hit = items(body).find((n) => n.e164 === e164);
   if (!hit) throw new VobizError("not_found", `${e164} is not a number on this account. Run \`vobiz numbers list\`.`);
   return hit;
 }
 
 /** One number in the purchasable inventory (a read the purchase depends on, so it runs even with --dry-run). */
-async function findInventoryNumber(ctx: Ctx, e164: string): Promise<NumberRecord> {
+export async function findInventoryNumber(ctx: Ctx, e164: string): Promise<NumberRecord> {
   const body = await ctx.client.call(INVENTORY, { query: { search: digitsOnly(e164), per_page: 100 }, dryRun: false });
   const hit = items(body).find((n) => n.e164 === e164);
   if (!hit) throw new VobizError("not_found", `${e164} is not available in the inventory. Run \`vobiz numbers search\` to find one.`);

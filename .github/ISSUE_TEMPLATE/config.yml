@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vobiz CLI documentation
+    url: https://www.vobiz.ai/docs/resources/cli
+    about: Install, login, every command and the agent workflow
+  - name: Vobiz support
+    url: mailto:support@vobiz.ai
+    about: Account, billing and number questions
+  - name: Report a security vulnerability
+    url: https://github.com/vobiz-ai/Vobiz-CLI/blob/main/SECURITY.md
+    about: Please report vulnerabilities privately

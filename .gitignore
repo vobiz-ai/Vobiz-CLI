@@ -16,3 +16,7 @@ coverage/
 .idea/
 bin/
 node_modules
+
+# Generated at build time (npm run build:assets); shipped in npm, Homebrew and release archives.
+completions/
+man/

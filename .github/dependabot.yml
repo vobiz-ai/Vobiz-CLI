@@ -1,0 +1,26 @@
+# Weekly dependency update PRs (GitHub Dependabot). Updates are grouped to keep the PR count low.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      production: { dependency-type: production }
+      development: { dependency-type: development }
+    ignore:
+      # Stay on the Node.js LTS line for type definitions.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
+  # Bumps the node:24-alpine@sha256 digest pinned in the Dockerfile (both stages).
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: weekly }
+    ignore:
+      # The image tracks the current Node.js LTS (24); move to the next LTS deliberately, not on release day.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]

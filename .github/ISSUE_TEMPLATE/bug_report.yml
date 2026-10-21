@@ -1,0 +1,35 @@
+name: Bug report
+description: Something in the Vobiz CLI does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Never paste your Auth Token or other secrets. Replace phone numbers with placeholders. `--debug` output is redacted, but check it before you paste it.
+  - type: input
+    id: version
+    attributes: { label: Version, description: "Output of `vobiz --version`", placeholder: "0.1.0" }
+    validations: { required: true }
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you installed it
+      options: [npm / npx, Homebrew, Install script (install.sh / install.ps1), GitHub Releases binary, Docker, Scoop, From source]
+    validations: { required: true }
+  - type: input
+    id: os
+    attributes: { label: Operating system and shell, placeholder: "macOS 15 / zsh, Ubuntu 24.04 / bash, Windows 11 / PowerShell 7" }
+    validations: { required: true }
+  - type: input
+    id: command
+    attributes: { label: Command, description: "The command you ran, with secrets and numbers replaced.", placeholder: "vobiz calls list --output json" }
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: "Include the error line (`vobiz: <kind>: <message>`) and the exit code." }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: What you expected }
+  - type: textarea
+    id: doctor
+    attributes: { label: "`vobiz doctor` output", description: "Optional. It contains no secrets.", render: text }

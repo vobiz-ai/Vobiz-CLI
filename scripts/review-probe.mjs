@@ -64,12 +64,14 @@ for (const extra of [[], ["--dry-run", "--yes"]]) {
   }
 }
 // Pass 3: every write that reaches the network must exit 7 when the transport fails.
+let checkedWrites = 0;
 for (const n of L) {
   const log = { calls: [], out: "", err: "" };
   const argv = [...argsFor(n), "--yes"];
   let code;
   try { code = await Promise.race([run(argv, mk(log, true)), new Promise((r) => setTimeout(() => r("HANG"), 1500))]); } catch (e) { code = "THROW " + e.message; }
   const writes = log.calls.filter((c) => !c.startsWith("GET ") && !READ_POST.test(c));
+  if (writes.length) checkedWrites++;
   if (writes.length && code !== 7) console.log("transport-fail", "|", argv.join(" "), "| code", code, "| writes", writes);
 }
 // Credentials copied into an MCP client config must never reach stdout/stderr (dry-run or not).
@@ -79,4 +81,5 @@ for (const extra of [["--dry-run"], []]) {
   const code = await run(argv, mk(log));
   if ((log.out + log.err).includes("YOUR_AUTH_TOKEN_SECRET")) console.log("TOKEN LEAK |", argv.join(" "), "| code", code);
 }
+console.log(`transport-fail pass: ${checkedWrites} write commands checked`);
 console.log("done");

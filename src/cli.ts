@@ -6,7 +6,7 @@
  * drive it with a fake fetch and captured streams (see test/helpers.ts `runCli`).
  */
 import { Command, CommanderError, Option } from "commander";
-import { COMMAND_GROUPS } from "./commands/index.js";
+import { COMMAND_GROUPS, prepareInternal } from "./commands/index.js";
 import { DryRunSignal } from "./core/client.js";
 import type { Ctx, GlobalFlags } from "./core/context.js";
 import { EXIT, VobizError } from "./core/errors.js";
@@ -183,6 +183,7 @@ const isPromptExit = (err: unknown) => err instanceof Error && (err.name === "Ex
 export async function run(argv: string[], ctx: Ctx): Promise<number> {
   let program: Command;
   try {
+    await prepareInternal();
     program = buildProgram(ctx);
   } catch (err) {
     ctx.out.printError(err);

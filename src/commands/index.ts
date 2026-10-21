@@ -3,7 +3,6 @@
  * To add a group: one import line and one array entry in YOUR slot below (the slots are separated so parallel
  * branches merge without conflicts).
  */
-import { createRequire } from "node:module";
 import type { RegisterFn } from "../cli.js";
 import { INTERNAL_BUILD } from "../generated/build-flags.js";
 
@@ -54,23 +53,30 @@ import { register as helpTopics } from "./help-topics.js";
 // registered only if `internalEnabled(env)`: VOBIZ_INTERNAL=1 at run time, or a `npm run build:internal` build
 // (unless VOBIZ_INTERNAL=0, which the docs/completions/man generators set so they always describe the public CLI).
 const INTERNAL_MODULE = "../internal/commands/index.js"; // a variable, so tsc does not require the file to exist
-// Loaded synchronously with require(): a top-level await would break the CommonJS bundle the single-executable
-// build produces. Node 22.12+ can require() an ES module that has no top-level await, which is all the internal
-// index needs to honour (engines in package.json says so).
-const requireHere = createRequire(import.meta.url);
-function loadInternalGroups(): RegisterFn[] {
+let internalGroups: RegisterFn[] | undefined;
+
+/**
+ * Loads the optional internal module once. Called by `run()` before the program is built. The dynamic import lives
+ * inside a function (not at top level) so the CommonJS bundle of the single-executable build still compiles; there
+ * the import fails and the group is simply absent, exactly like the public npm package.
+ */
+export async function prepareInternal(): Promise<void> {
+  if (internalGroups) return;
   try {
-    const m = requireHere(INTERNAL_MODULE) as { INTERNAL_GROUPS?: RegisterFn[] };
-    return m.INTERNAL_GROUPS ?? [];
+    const m = (await import(INTERNAL_MODULE)) as { INTERNAL_GROUPS?: RegisterFn[] };
+    internalGroups = m.INTERNAL_GROUPS ?? [];
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
     // Only "the internal module itself is missing" means "public tree"; anything else is a real bug.
     const missing = /'([^']+)'/.exec(String(e?.message))?.[1] ?? "";
-    if ((e?.code === "ERR_MODULE_NOT_FOUND" || e?.code === "MODULE_NOT_FOUND") && /internal[\\/]commands[\\/]index(\.[jt]s)?$/.test(missing)) return [];
+    const notFound = e?.code === "ERR_MODULE_NOT_FOUND" || e?.code === "MODULE_NOT_FOUND";
+    if (notFound && /internal[\\/]commands[\\/]index(\.[jt]s)?$/.test(missing)) {
+      internalGroups = [];
+      return;
+    }
     throw err;
   }
 }
-const internalGroups: RegisterFn[] = loadInternalGroups();
 
 export function internalEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.VOBIZ_INTERNAL === "1") return true;
@@ -78,7 +84,7 @@ export function internalEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 const internal: RegisterFn = (program, ctx) => {
-  if (!internalGroups.length || !internalEnabled(ctx?.env ?? process.env)) return;
+  if (!internalGroups?.length || !internalEnabled(ctx?.env ?? process.env)) return;
   for (const register of internalGroups) register(program, ctx);
 };
 

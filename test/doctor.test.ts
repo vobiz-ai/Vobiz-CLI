@@ -5,9 +5,9 @@ import { TEST_AUTH_ID, TEST_AUTH_TOKEN, fakeFetch, reply, runCli } from "./helpe
 
 describe("doctor", () => {
   it("checks the Node.js version", () => {
-    expect(nodeCheck("22.9.0").status).toBe("ok");
+    expect(nodeCheck("22.12.0").status).toBe("ok");
     expect(nodeCheck("24.1.0").status).toBe("ok");
-    expect(nodeCheck("22.8.1").status).toBe("fail");
+    expect(nodeCheck("22.11.1").status).toBe("fail");
     expect(nodeCheck("20.18.0").status).toBe("fail");
   });
 

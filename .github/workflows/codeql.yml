@@ -11,6 +11,8 @@ permissions: {}
 
 jobs:
   analyze:
+    # Code scanning needs GitHub Code Security, which the private mirror does not have; only the public repo runs it.
+    if: github.repository == 'vobiz-ai/Vobiz-CLI'
     runs-on: ubuntu-latest
     permissions:
       contents: read

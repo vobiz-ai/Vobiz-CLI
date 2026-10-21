@@ -42,3 +42,4 @@ All 78 sms operations have a command. Gaps and behaviour the spec does not fully
 - `remove-campaign-numbers` (sms) — a DELETE with a JSON body. The core client sends bodies only with POST/PUT/PATCH,
   so the sms module sends this one request itself (`deleteWithBody` in `src/commands/sms/shared.ts`). Some proxies
   drop DELETE bodies; a POST alias (e.g. `/numbers/remove`) would be safer.
+- `update-application` (voice) — the request body declares only `app_name` and `default_number_app`, while the live API accepts `answer_url`, `answer_method`, `hangup_url` and `hangup_method` (they appear in `retrieve-application` responses and the console edits them). `create-application` declares `answer_url`/`answer_method` but not the hangup pair. Until the docs repo's `openapi.yaml` adds them, `vobiz apps update` only exposes the two declared flags and callers must pass `--body '{"answer_url": …}'`. Found during the 2026-10-21 live test.

@@ -169,6 +169,9 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
   - [`vobiz recordings export`](#vobiz-recordings-export)
   - [`vobiz recordings get`](#vobiz-recordings-get)
   - [`vobiz recordings list`](#vobiz-recordings-list)
+- [`vobiz setup`](#vobiz-setup)
+  - [`vobiz setup sms`](#vobiz-setup-sms)
+  - [`vobiz setup voice-agent`](#vobiz-setup-voice-agent)
 - [`vobiz skills`](#vobiz-skills)
   - [`vobiz skills install`](#vobiz-skills-install)
   - [`vobiz skills list`](#vobiz-skills-list)
@@ -267,6 +270,9 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
     - [`vobiz sms webhooks get`](#vobiz-sms-webhooks-get)
     - [`vobiz sms webhooks list`](#vobiz-sms-webhooks-list)
     - [`vobiz sms webhooks update`](#vobiz-sms-webhooks-update)
+- [`vobiz streams`](#vobiz-streams)
+  - [`vobiz streams forward`](#vobiz-streams-forward)
+  - [`vobiz streams test`](#vobiz-streams-test)
 - [`vobiz sub-accounts`](#vobiz-sub-accounts)
   - [`vobiz sub-accounts create`](#vobiz-sub-accounts-create)
   - [`vobiz sub-accounts delete`](#vobiz-sub-accounts-delete)
@@ -2071,6 +2077,56 @@ Aliases: `ls`
 | `--limit <n>` | maximum number of rows to fetch (default: 20) |
 | `--all` | fetch every page |
 
+### vobiz setup
+
+Guided setups: a number for your AI voice agent, or a number and webhook for SMS
+
+```
+vobiz setup <command> [options]
+```
+
+Subcommands: [`sms`](#vobiz-setup-sms), [`voice-agent`](#vobiz-setup-voice-agent)
+
+### vobiz setup sms
+
+Get a messaging number (yours, or one to buy) and a webhook for replies and delivery reports, then print a test plan
+
+```
+vobiz setup sms [options]
+```
+
+| Option | Description |
+|---|---|
+| `--number <e164>` | a messaging number already on your account |
+| `--buy <e164>` | buy this number first (from `vobiz sms numbers search`); needs --country |
+| `--country <code>` | ISO country code of the number to buy, e.g. US |
+| `--number-key <key>` | with --buy: numberKey from search (looked up when omitted) |
+| `--webhook-url <url>` | https URL for message.received, message.delivered and message.failed (reused if it exists) |
+| `--webhook <id>` | use this existing messaging webhook instead |
+| `--secret <secret>` | with --webhook-url: signing secret for X-Webhook-Signature |
+| `--event <name>` | with --webhook-url: event to deliver (repeatable; default: the three message events) |
+| `--no-webhook` | skip the webhook (you will poll message status instead) |
+
+### vobiz setup voice-agent
+
+Route a phone number (yours, or one to buy) to the SIP trunk of your AI voice agent, then print a test plan
+
+```
+vobiz setup voice-agent [options]
+```
+
+| Option | Description |
+|---|---|
+| `--number <e164>` | a number already on your account, e.g. +918065550100 |
+| `--buy <e164>` | buy this inventory number first (see `vobiz numbers search`); shows the price before asking |
+| `--country <code>` | interactive: search the inventory in this country (e.g. IN) instead of asking |
+| `--contains <digits>` | interactive: only offer inventory numbers containing these digits |
+| `--currency <code>` | with --buy: currency to bill in |
+| `--trunk <trunk-id>` | SIP trunk that receives the number's calls (see `vobiz trunks list`) |
+| `--answer-url <url>` | link the number to an application with this answer URL (not available yet; see below) |
+| `--stream-url <wss-url>` | link the number to a <Stream> application (not available yet; see below) |
+| `--app <app-id>` | link the number to this application (not available yet; see below) |
+
 ### vobiz skills
 
 Install the Vobiz Agent Skills into a project for Claude Code, Codex and other agents
@@ -3550,6 +3606,53 @@ vobiz sms webhooks update <id> [options]
 | `--event <name>` | replace the event list (repeatable) |
 | `--active` | resume deliveries |
 | `--no-active` | pause deliveries and keep the subscription |
+
+### vobiz streams
+
+Test and debug the WebSocket server behind <Stream> audio streams, without placing a call
+
+```
+vobiz streams <command> [options]
+```
+
+Subcommands: [`forward`](#vobiz-streams-forward), [`test`](#vobiz-streams-test)
+
+### vobiz streams forward
+
+Run a local WebSocket proxy that relays a Vobiz stream to your server and logs every frame
+
+```
+vobiz streams forward [options]
+```
+
+| Option | Description |
+|---|---|
+| `--to <ws-url>` | your stream server, e.g. ws://localhost:8080/media |
+| `--port <port>` | local port to listen on (0 picks a free one; default: 8765) |
+| `--host <host>` | interface to listen on |
+| `--every-media` | log each media frame instead of one summary line per second |
+
+### vobiz streams test
+
+Act as Vobiz against your stream server: send start and media frames, check what it sends back
+
+```
+vobiz streams test <wss-url> [options]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `wss-url` | yes | your stream server's URL (wss://; ws:// on localhost with --allow-insecure-url) |
+
+| Option | Description |
+|---|---|
+| `--codec <codec>` | inbound audio encoding (one of: `mulaw`, `l16`) |
+| `--sample-rate <hz>` | inbound sample rate (μ-law: 8000; L16: 8000 or 16000) (one of: `8000`, `16000`) |
+| `--seconds <n>` | how much audio to send, in 20 ms frames of silence (default: 3) |
+| `--linger <n>` | seconds to keep listening after the last media frame (default: 1) |
+| `--stream-id <id>` | streamId to put in the start frame (default: a random UUID) |
+| `--call-id <id>` | callId to put in the start frame (default: a random UUID) |
+| `--allow-insecure-url` | allow ws:// on localhost |
 
 ### vobiz sub-accounts
 

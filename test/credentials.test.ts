@@ -51,11 +51,11 @@ describe("resolveCredentials", () => {
 
   it("applies base URL overrides from flags, env, then the profile", () => {
     const s = store();
-    s.setProfile("default", { ...profile("MA_P"), voiceBaseUrl: "https://profile.example.com" });
-    expect(resolveCredentials({}, s, {}).voiceBaseUrl).toBe("https://profile.example.com");
-    expect(resolveCredentials({}, s, { VOBIZ_BASE_URL: "https://env.example.com" }).voiceBaseUrl).toBe("https://env.example.com");
-    expect(resolveCredentials({ baseUrl: "https://flag.example.com" }, s, { VOBIZ_BASE_URL: "https://env.example.com" }).voiceBaseUrl).toBe(
-      "https://flag.example.com",
+    s.setProfile("default", { ...profile("MA_P"), voiceBaseUrl: "https://profile.vobiz.ai" });
+    expect(resolveCredentials({}, s, {}).voiceBaseUrl).toBe("https://profile.vobiz.ai");
+    expect(resolveCredentials({}, s, { VOBIZ_BASE_URL: "https://env.vobiz.ai" }).voiceBaseUrl).toBe("https://env.vobiz.ai");
+    expect(resolveCredentials({ baseUrl: "https://flag.vobiz.ai" }, s, { VOBIZ_BASE_URL: "https://env.vobiz.ai" }).voiceBaseUrl).toBe(
+      "https://flag.vobiz.ai",
     );
   });
 

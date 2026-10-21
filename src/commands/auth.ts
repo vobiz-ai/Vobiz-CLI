@@ -80,7 +80,7 @@ function registerLogin(program: Command, ctx: Ctx) {
     .option("--default", "make this profile the default")
     .addHelpText(
       "after",
-      "\nExamples:\n  vobiz login\n  vobiz login --profile staging --base-url https://staging.example.com\n  printf '%s:%s' \"$VOBIZ_AUTH_ID\" \"$VOBIZ_AUTH_TOKEN\" | vobiz login --with-token",
+      "\nExamples:\n  vobiz login\n  vobiz login --profile staging\n  printf '%s:%s' \"$VOBIZ_AUTH_ID\" \"$VOBIZ_AUTH_TOKEN\" | vobiz login --with-token",
     )
     .action(async (opts: { withToken?: boolean; browser?: boolean; default?: boolean }) => {
       const name = profileName(ctx.flags, ctx.store, ctx.env);
@@ -88,7 +88,7 @@ function registerLogin(program: Command, ctx: Ctx) {
       const existing = ctx.store.getProfile(name);
       const creds: ResolvedCredentials = {
         ...pair,
-        ...resolveBaseUrls(ctx.flags, ctx.env, existing),
+        ...resolveBaseUrls(ctx.flags, ctx.env, existing, (m) => ctx.log("warn", m)),
         source: "flags",
         profile: name,
       };

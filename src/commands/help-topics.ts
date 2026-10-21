@@ -42,6 +42,7 @@ With --output json, errors are printed to stderr as one JSON line:
   VOBIZ_BASE_URL                    voice API base URL (default https://api.vobiz.ai)
   VOBIZ_SMS_BASE_URL                Messaging API base URL (default https://api.vobiz.ai/api/v1/sms)
   VOBIZ_ALLOW_INSECURE_BASE_URL=1   allow http base URLs on localhost only (base URLs must otherwise be https)
+  VOBIZ_ALLOW_ANY_BASE_URL=1        allow base URLs outside *.vobiz.ai; your token goes there (warns on every run)
   VOBIZ_TIMEOUT                     per-request timeout in seconds (default 30)
   VOBIZ_LOG=debug                   like --debug (request and response bodies, secrets redacted)
   VOBIZ_NO_BROWSER                  never open a browser (feedback, docs open, login --browser); print the URL

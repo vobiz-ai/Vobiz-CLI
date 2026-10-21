@@ -197,7 +197,7 @@ When stdin is not a terminal, a write fails with exit code `6` unless you pass `
 | `--yes`, `-y` | `VOBIZ_YES` | Skip confirmation prompts |
 | `--dry-run` | | Show the request without sending it |
 | `--timeout <sec>` | `VOBIZ_TIMEOUT` | Per-request timeout (default 30) |
-| `--base-url`, `--sms-base-url` | `VOBIZ_BASE_URL`, `VOBIZ_SMS_BASE_URL` | Gateway overrides |
+| `--base-url`, `--sms-base-url` | `VOBIZ_BASE_URL`, `VOBIZ_SMS_BASE_URL` | Gateway overrides; only `https://*.vobiz.ai` (or localhost) unless `VOBIZ_ALLOW_ANY_BASE_URL=1`, which warns on every run |
 | `--no-color` | `NO_COLOR`, `FORCE_COLOR` | Color handling |
 | `--verbose`, `--debug` | `VOBIZ_LOG=debug` | Request logging to stderr (redacted) |
 | `--no-update-check` | `VOBIZ_NO_UPDATE_CHECK`, `CI` | Skip the daily version check |

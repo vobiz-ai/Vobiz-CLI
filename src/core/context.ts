@@ -122,7 +122,7 @@ export class Ctx {
 
   /** Resolved credentials (flags > env > profile). Throws missing_credentials on first use when there are none. */
   get creds(): ResolvedCredentials {
-    return (this._creds ??= resolveCredentials(this.flags, this.store, this.env));
+    return (this._creds ??= resolveCredentials(this.flags, this.store, this.env, (m) => this.log("warn", m)));
   }
 
   /** Client bound to `creds`, the global timeout and --dry-run. */

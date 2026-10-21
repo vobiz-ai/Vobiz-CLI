@@ -268,7 +268,7 @@ export function mergeJson(existing: string | undefined, frag: Record<string, unk
     }
     const servers = (doc[key] && typeof doc[key] === "object" && !Array.isArray(doc[key]) ? doc[key] : {}) as Record<string, unknown>;
     for (const [name, entry] of Object.entries(value as Record<string, unknown>)) {
-      if (name in servers) {
+      if (Object.hasOwn(servers, name)) {
         if (JSON.stringify(servers[name]) === JSON.stringify(entry)) continue;
         replaced = true;
       }
@@ -304,16 +304,59 @@ export function tomlTable(container: string, name: string, entry: Record<string,
   return [...lines, ...subs].join("\n") + "\n";
 }
 
+/**
+ * Splits a TOML table header (`mcp_servers."vobiz".env`) into its keys, unquoting basic ("…") and literal ('…')
+ * keys, so a quoted header names the same table as a bare one. Returns undefined for a header it cannot read.
+ */
+export function tomlKeyPath(header: string): string[] | undefined {
+  const keys: string[] = [];
+  let i = 0;
+  const src = header.trim();
+  const ws = () => {
+    while (src[i] === " " || src[i] === "\t") i++;
+  };
+  for (;;) {
+    ws();
+    if (src[i] === '"') {
+      let j = i + 1;
+      while (j < src.length && src[j] !== '"') j += src[j] === "\\" ? 2 : 1;
+      if (j >= src.length) return undefined;
+      try {
+        keys.push(JSON.parse(src.slice(i, j + 1)) as string);
+      } catch {
+        return undefined;
+      }
+      i = j + 1;
+    } else if (src[i] === "'") {
+      const j = src.indexOf("'", i + 1);
+      if (j < 0) return undefined;
+      keys.push(src.slice(i + 1, j));
+      i = j + 1;
+    } else {
+      const m = /^[A-Za-z0-9_-]+/.exec(src.slice(i));
+      if (!m) return undefined;
+      keys.push(m[0]);
+      i += m[0].length;
+    }
+    ws();
+    if (i >= src.length) return keys;
+    if (src[i] !== ".") return undefined;
+    i++;
+  }
+}
+
 /** Replaces (or appends) the `[container.name]` table and its sub-tables in a TOML file, leaving the rest as is. */
 export function mergeToml(existing: string | undefined, container: string, name: string, entry: Record<string, unknown>): MergeResult {
   const table = tomlTable(container, name, entry);
   const text = existing ?? "";
-  const head = `${container}.${tomlKey(name)}`;
+  if (/"""|'''/.test(text))
+    throw new VobizError("invalid_input", "The Codex config uses multi-line strings, which this merge cannot edit safely, so it was not changed. Add the snippet below by hand.");
   const isOurs = (line: string) => {
-    const m = /^\s*\[([^\]]+)\]\s*(#.*)?$/.exec(line);
+    const m = /^\s*\[([^\[\]]+)\]\s*(#.*)?$/.exec(line);
     if (!m) return undefined;
-    const key = m[1].replace(/\s+/g, "");
-    return key === head || key.startsWith(head + ".");
+    const keys = tomlKeyPath(m[1]);
+    if (!keys) throw new VobizError("invalid_input", `Cannot read the TOML table header "${line.trim()}", so the Codex config was not changed. Add the snippet below by hand.`);
+    return keys.length >= 2 && keys[0] === container && keys[1] === name;
   };
   const lines = text.split("\n");
   const kept: string[] = [];

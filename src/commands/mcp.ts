@@ -3,7 +3,7 @@
  * CLI, Zed) to the Vobiz MCP server by writing or printing the client's config entry. The default is the hosted
  * connector (OAuth, no secret in any file); --local runs `npx -y @vobiz/mcp` with credentials from the environment.
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { Option, type Command } from "commander";
 import {
@@ -24,6 +24,8 @@ import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
 import { REDACTED } from "../core/redact.js";
+import { assertInsideDir, assertNotSymlink, backupFile, sameContent, writeFileAtomicExclusive } from "../core/fsafe.js";
+import { isUnsafeKey } from "../core/keys.js";
 
 interface ModeOpts {
   hosted?: boolean;
@@ -36,7 +38,7 @@ interface ModeOpts {
 const modeOf = (o: ModeOpts): Mode => (o.local ? "local" : "hosted");
 
 function validName(name: string): string {
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(name)) throw new VobizError("invalid_input", "--name may contain only letters, digits, - and _.");
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(name) || isUnsafeKey(name)) throw new VobizError("invalid_input", "--name may contain only letters, digits, - and _.");
   return name;
 }
 
@@ -68,12 +70,10 @@ function writeConfig(file: string, text: string, hasSecret: boolean): string | u
   let mode = hasSecret ? 0o600 : 0o644;
   if (existsSync(file)) {
     backup = `${file}.bak`;
-    copyFileSync(file, backup);
+    backupFile(file, backup);
     mode = hasSecret ? 0o600 : statSync(file).mode & 0o777;
   }
-  const tmp = `${file}.vobiz-${process.pid}.tmp`;
-  writeFileSync(tmp, text, { mode });
-  renameSync(tmp, file);
+  writeFileAtomicExclusive(file, text, { mode, overwrite: true });
   return backup;
 }
 
@@ -134,6 +134,9 @@ Examples:
       }
       const creds: Credentials | undefined = opts.withCredentials ? { authId: ctx.creds.authId, authToken: ctx.creds.authToken } : undefined;
 
+      assertNotSymlink(file, "the client config");
+      assertNotSymlink(`${file}.bak`, "the backup");
+      if (opts.project) assertInsideDir(file, resolve(opts.dir ?? process.cwd()));
       const existing = existsSync(file) ? readFileSync(file, "utf8") : undefined;
       let merged: MergeResult;
       try {
@@ -164,6 +167,8 @@ Examples:
         ctx.stdout.write(snippet(spec, mode, name, creds ? { ...creds, authToken: REDACTED } : undefined));
         return;
       }
+      // The file may have changed while the prompt waited (Claude Code rewrites ~/.claude.json constantly).
+      if (!sameContent(file, existing)) throw new VobizError("invalid_input", `${file} changed while waiting for confirmation, so it was not written. Run the command again.`);
       const backup = writeConfig(file, merged.text, !!creds);
       ctx.out.success(`${merged.status === "replaced" ? "Updated" : "Added"} the Vobiz MCP server in ${file}${backup ? ` (backup: ${backup})` : ""}.`, {
         client: spec.id,

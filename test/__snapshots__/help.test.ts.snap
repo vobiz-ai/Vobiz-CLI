@@ -54,16 +54,19 @@ Commands:
                                  settings
   update [options]               Check for a newer CLI version and show how to
                                  upgrade
-  account                        Account details, balance, concurrency,
-                                 transactions and capacity
-  calls                          Place, list, watch, hang up and control voice
-                                 calls
-  conferences                    List, inspect, end, moderate and record
-                                 conference rooms
-  recordings                     List, download, delete and bulk-export call
-                                 recordings
-  cdr                            Call detail records: list, search, recent, get
-                                 and CSV export
+  numbers                        Voice phone numbers: list, search the
+                                 inventory, buy, release, route to a trunk or
+                                 sub-account
+  trunks                         SIP trunks, their credentials, IP
+                                 access-control lists and origination URIs
+  apps                           Applications: the answer URL Vobiz fetches
+                                 VobizXML from for numbers and endpoints
+  endpoints                      SIP endpoints: registered soft-phone, WebRTC
+                                 and desk-phone clients
+  sub-accounts                   Sub-accounts (SA_…) under your main account,
+                                 and their KYC
+  partner                        Partner API (resellers): profile, dashboard,
+                                 customer accounts and KYC sessions
   api [options] [method] [path]  Send a raw request to the Vobiz API, or list
                                  and describe every operation in the spec
   completion <shell>             Print a shell completion script (bash, zsh,

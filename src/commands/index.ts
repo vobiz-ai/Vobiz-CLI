@@ -19,6 +19,12 @@ import { register as recordings } from "./recordings.js";
 import { register as cdr } from "./cdr.js";
 
 // ── W3 provisioning: numbers, trunks, apps, endpoints, sub-accounts, partner ──
+import { register as numbers } from "./numbers.js";
+import { register as trunks } from "./trunks.js";
+import { register as apps } from "./apps.js";
+import { register as endpoints } from "./endpoints.js";
+import { register as subAccounts } from "./sub-accounts.js";
+import { register as partner } from "./partner.js";
 
 // ── W4 messaging: sms ──
 
@@ -43,6 +49,12 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   cdr,
 
   // W3 provisioning
+  numbers,
+  trunks,
+  apps,
+  endpoints,
+  subAccounts,
+  partner,
 
   // W4 messaging
 

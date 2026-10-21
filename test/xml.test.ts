@@ -199,3 +199,25 @@ describe("xml serve", () => {
     }
   });
 });
+
+describe("xml hardening (S3 #9, #18)", async () => {
+  const { parseXml, escapeXml } = await import("../src/agent/xml.js");
+  it("xml build rejects C0 control characters in text and attributes", async () => {
+    expect(() => escapeXml("hi\x01")).toThrow(/U\+0001/);
+    expect(() => escapeXml("a\x1b[31m")).toThrow(/U\+001B/);
+    expect(escapeXml("tab\tand\nnewline")).toBe("tab\tand\nnewline");
+    const r = await runCli(["xml", "build", "--say", "hi\x1b[31m"]);
+    expect(r.code).toBe(2);
+    expect(r.out).toBe("");
+  });
+  it("parses large documents in linear time with correct line numbers", () => {
+    const n = 80_000;
+    const doc = `<Response>\n${'<Wait length="1"/>\n'.repeat(n)}</Response>\n`;
+    const t = Date.now();
+    const root = parseXml(doc);
+    expect(Date.now() - t).toBeLessThan(5000);
+    expect(root.children).toHaveLength(n);
+    expect(root.children[n - 1].line).toBe(n + 1);
+    expect(() => parseXml("<Response>\n\n<Wait>\n")).toThrow(/line \d+/);
+  });
+});

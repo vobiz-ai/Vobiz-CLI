@@ -10,6 +10,7 @@
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { Option, type Command } from "commander";
+import { escapeXml as escapeXmlText } from "../agent/xml.js";
 import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
@@ -45,9 +46,8 @@ const waitOptions = (cmd: Command) =>
 
 // ── VobizXML for --say / --play ──
 
-export function escapeXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-}
+/** Same escaping (and control-character refusal) as `vobiz xml build`. */
+export const escapeXml = (s: string): string => escapeXmlText(s);
 
 export function sayXml(text: string, voice?: string, language?: string): string {
   const attrs = `${voice ? ` voice="${escapeXml(voice)}"` : ""}${language ? ` language="${escapeXml(language)}"` : ""}`;

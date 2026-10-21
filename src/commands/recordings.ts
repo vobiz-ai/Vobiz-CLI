@@ -2,17 +2,17 @@
  * `vobiz recordings`: list, inspect, delete and download call and conference recordings, and queue a bulk export
  * that Vobiz emails as a download link.
  */
-import { existsSync } from "node:fs";
 import { Option, type Command } from "commander";
 import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
+import { assertWritableTarget } from "../core/fsafe.js";
 import { op } from "../core/ops.js";
 import { paginate } from "../core/pagination.js";
 import { toE164 } from "../core/phone.js";
 import { parseRange } from "../core/time.js";
 import { USER_AGENT } from "../core/version.js";
-import { addListFlags, collect, hostOf, intArg, isRec, printPage, streamUrl, toYmdHms, type ListFlags, type Rec } from "./voice-shared.js";
+import { addListFlags, collect, hostOf, intArg, isInternalHost, isRec, printPage, streamUrl, toYmdHms, type ListFlags, type Rec } from "./voice-shared.js";
 
 const LIST = op("list-recordings");
 const GET = op("get-recording");
@@ -83,8 +83,9 @@ export function register(program: Command, ctx: Ctx): void {
     .description("Download a recording's audio file")
     .option("--out <file>", "where to write it (default: <id>.<format> in the current directory; - for stdout)")
     .option("--force", "overwrite an existing file")
+    .option("--allow-insecure-url", "allow a recording_url on a loopback, private or link-local host (local testing only)")
     .addHelpText("after", "\nExamples:\n  vobiz recordings download 55667788-1234-5678-90ab-cdef12345678\n  vobiz recordings download <id> --out call.wav --force")
-    .action(async (id: string, o: { out?: string; force?: boolean }) => {
+    .action(async (id: string, o: { out?: string; force?: boolean; allowInsecureUrl?: boolean }) => {
       const body = await ctx.client.call<Rec>(GET, { path: { recording_id: id } });
       const raw = isRec(body) && typeof body.recording_url === "string" ? body.recording_url : "";
       if (!raw) throw new VobizError("unexpected_response", `Recording ${id} has no recording_url yet. Try again once processing finishes.`);
@@ -95,14 +96,17 @@ export function register(program: Command, ctx: Ctx): void {
         throw new VobizError("unexpected_response", `Recording ${id} has an invalid recording_url.`);
       }
       if (url.protocol !== "https:") throw new VobizError("unexpected_response", `Refusing to download over ${url.protocol} (expected https).`);
-      const toStdout = o.out === "-";
-      const out = toStdout ? undefined : (o.out ?? defaultFileName(id, body, url));
-      if (out && existsSync(out) && !o.force) throw usage(`${out} already exists. Pass --force to overwrite it or --out to pick another name.`);
       // Only send credentials back to the API host itself, never to a storage host.
       const apiHost = new URL(ctx.client.baseUrl("voice")).host;
+      // The URL comes from the API answer: never let it point the CLI at this machine or an internal network.
+      if (url.host !== apiHost && isInternalHost(url.hostname) && !o.allowInsecureUrl)
+        throw new VobizError("unexpected_response", `Refusing to download a recording from the internal host ${url.hostname}. Pass --allow-insecure-url for local testing.`);
+      const toStdout = o.out === "-";
+      const out = toStdout ? undefined : (o.out ?? defaultFileName(id, body, url));
+      if (out) assertWritableTarget(out, !!o.force, "Pass --force to overwrite it or --out to pick another name.");
       const headers: Record<string, string> = { "User-Agent": USER_AGENT };
       if (url.host === apiHost) Object.assign(headers, { "X-Auth-ID": ctx.creds.authId, "X-Auth-Token": ctx.creds.authToken });
-      const bytes = await streamUrl(ctx, url, headers, `GET recording from ${url.host}`, { out });
+      const bytes = await streamUrl(ctx, url, headers, `GET recording from ${url.host}`, { out, force: o.force });
       if (out) ctx.out.success(`Saved ${out} (${bytes} bytes from ${hostOf(raw)}).`, { recording_id: id, file: out, bytes });
     });
 

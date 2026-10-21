@@ -5,6 +5,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { VobizError } from "../core/errors.js";
+import { tryParseIntStrict } from "../core/parse.js";
 
 export interface LocalServer {
   server: Server;
@@ -18,8 +19,8 @@ export const MAX_BODY_BYTES = 1_000_000;
 
 export function parsePort(text: string | undefined, fallback: number): number {
   if (text === undefined) return fallback;
-  const n = Number(text);
-  if (!Number.isInteger(n) || n < 0 || n > 65535) throw new VobizError("invalid_input", `--port must be a number from 0 to 65535 (got "${text}").`);
+  const n = tryParseIntStrict(text, { min: 0, max: 65535 });
+  if (n === undefined) throw new VobizError("invalid_input", `--port must be a number from 0 to 65535 (got "${text}").`);
   return n;
 }
 

@@ -15,7 +15,9 @@
 import pc from "picocolors";
 import YAML from "yaml";
 import { VobizError, isRetryable, type ErrorKind } from "./errors.js";
+import { isUnsafeKey } from "./keys.js";
 import { redact, scrubSecrets } from "./redact.js";
+import { cleanCell, cleanMessage, tsvCell } from "./sanitize.js";
 import { renderTable } from "./table.js";
 
 export const OUTPUT_MODES = ["table", "json", "yaml", "tsv", "plain", "jsonl"] as const;
@@ -65,12 +67,23 @@ const HINTS: Partial<Record<ErrorKind, string>> = {
 
 export const hintFor = (kind: ErrorKind): string | undefined => HINTS[kind];
 
-/** Reads a dot path (`a.b.0.c`) out of a value. */
+/** Own property `key` of `obj`, never an inherited one; `__proto__`, `constructor` and `prototype` read as missing. */
+function ownValue(obj: unknown, key: string): unknown {
+  if (obj === null || obj === undefined || typeof obj !== "object" || isUnsafeKey(key)) return undefined;
+  return Object.hasOwn(obj, key) ? (obj as Record<string, unknown>)[key] : undefined;
+}
+
+/** Sets `key` as an own data property, even for "__proto__" (plain assignment would change the prototype). */
+function setOwn(obj: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
+/** Reads a dot path (`a.b.0.c`) out of a value (own properties only). */
 export function getPath(obj: unknown, path: string): unknown {
   let cur: unknown = obj;
   for (const part of path.split(".")) {
     if (cur === null || cur === undefined || typeof cur !== "object") return undefined;
-    cur = (cur as Record<string, unknown>)[part];
+    cur = ownValue(cur, part);
   }
   return cur;
 }
@@ -84,8 +97,11 @@ export function project(obj: unknown, paths: string[]): unknown {
     if (v === undefined) continue;
     const parts = path.split(".");
     let cur = out;
-    for (const p of parts.slice(0, -1)) cur = (cur[p] ??= {}) as Record<string, unknown>;
-    cur[parts[parts.length - 1]] = v;
+    for (const p of parts.slice(0, -1)) {
+      if (!Object.hasOwn(cur, p) || !cur[p] || typeof cur[p] !== "object") setOwn(cur, p, {});
+      cur = cur[p] as Record<string, unknown>;
+    }
+    setOwn(cur, parts[parts.length - 1], v);
   }
   return out;
 }
@@ -155,7 +171,7 @@ function runQuery(value: unknown, steps: QueryStep[], at: number): unknown {
   }
   if (value === null || value === undefined || typeof value !== "object") return undefined;
   if (Array.isArray(value)) return /^\d+$/.test(step.key) ? runQuery(value[Number(step.key)], steps, at + 1) : undefined;
-  return runQuery((value as Record<string, unknown>)[step.key], steps, at + 1);
+  return runQuery(ownValue(value, step.key), steps, at + 1);
 }
 
 /** Evaluates a `--query` path (see parseQuery). Missing paths give undefined; `[*]` drops elements without a match. */
@@ -170,11 +186,11 @@ export function flatten(obj: unknown, prefix = "", out: Record<string, unknown> 
     return out;
   }
   const entries = Object.entries(obj as Record<string, unknown>);
-  if (!entries.length && prefix) out[prefix] = {};
+  if (!entries.length && prefix) setOwn(out, prefix, {});
   for (const [k, v] of entries) {
     const key = prefix ? `${prefix}.${k}` : k;
     if (v && typeof v === "object" && !Array.isArray(v)) flatten(v, key, out);
-    else out[key] = v;
+    else setOwn(out, key, v);
   }
   return out;
 }
@@ -235,7 +251,7 @@ export class Printer {
       const rows = isList ? (value as unknown[]) : [value];
       for (const r of rows) {
         const id = r && typeof r === "object" ? this.primary(r as Record<string, unknown>, opts.idKey) : r;
-        if (id !== undefined && id !== null && id !== "") out.write(cell(id) + "\n");
+        if (id !== undefined && id !== null && id !== "") out.write(cleanCell(cell(id)) + "\n");
       }
       return;
     }
@@ -263,20 +279,20 @@ export class Printer {
       const rows = value as unknown[];
       if (!rows.length) {
         if (mode === "table" || mode === "plain") this.status(opts.empty ?? "No results.");
-        if (mode === "tsv" && (fields ?? opts.columns)) out.write((fields ?? opts.columns)!.join("\t") + "\n");
+        if (mode === "tsv" && (fields ?? opts.columns)) out.write((fields ?? opts.columns)!.map(tsvCell).join("\t") + "\n");
         return;
       }
       if (rows.every((r) => r === null || typeof r !== "object")) {
-        for (const r of rows) out.write(cell(r) + "\n");
+        for (const r of rows) out.write((mode === "tsv" ? tsvCell(cell(r)) : cleanCell(cell(r))) + "\n");
         return;
       }
       const flat = rows.map((r) => flatten(r));
       const columns = fields ?? opts.columns ?? unionKeys(flat);
-      const grid = flat.map((r, i) => columns.map((c) => cell(c in r ? r[c] : getPath(rows[i], c))));
+      const grid = flat.map((r, i) => columns.map((c) => cell(Object.hasOwn(r, c) ? r[c] : getPath(rows[i], c))));
       if (mode === "tsv") {
-        out.write([columns, ...grid].map((r) => r.map(tsvEscape).join("\t")).join("\n") + "\n");
+        out.write([columns, ...grid].map((r) => r.map(tsvCell).join("\t")).join("\n") + "\n");
       } else if (mode === "plain") {
-        out.write(grid.map((r) => r.join("  ").trimEnd()).join("\n") + "\n");
+        out.write(grid.map((r) => r.map(cleanCell).join("  ").trimEnd()).join("\n") + "\n");
       } else {
         const c = this.colorsFor(out);
         out.write(
@@ -287,15 +303,15 @@ export class Printer {
     }
 
     if (value === null || value === undefined || typeof value !== "object") {
-      out.write(cell(value) + "\n");
+      out.write((mode === "tsv" ? tsvCell(cell(value)) : cleanMessage(cell(value))) + "\n");
       return;
     }
     const flat = flatten(value);
     const keys = Object.keys(flat);
     if (mode === "tsv") {
-      out.write(keys.map(tsvEscape).join("\t") + "\n" + keys.map((k) => tsvEscape(cell(flat[k]))).join("\t") + "\n");
+      out.write(keys.map(tsvCell).join("\t") + "\n" + keys.map((k) => tsvCell(cell(flat[k]))).join("\t") + "\n");
     } else if (mode === "plain") {
-      out.write(keys.map((k) => `${k}: ${cell(flat[k])}`).join("\n") + "\n");
+      out.write(keys.map((k) => `${cleanCell(k)}: ${cleanCell(cell(flat[k]))}`).join("\n") + "\n");
     } else {
       const c = this.colorsFor(out);
       out.write(
@@ -317,11 +333,11 @@ export class Printer {
   /** Progress or confirmation line on stderr (never stdout). Suppressed by --quiet. */
   status(message: string): void {
     if (this.host.flags.quiet) return;
-    this.host.stderr.write(message + "\n");
+    this.host.stderr.write(cleanMessage(message) + "\n");
   }
 
   warn(message: string): void {
-    this.host.stderr.write(`${this.colors.yellow("warning:")} ${message}\n`);
+    this.host.stderr.write(`${this.colors.yellow("warning:")} ${cleanMessage(message)}\n`);
   }
 
   /**
@@ -331,7 +347,7 @@ export class Printer {
   success(message: string, data?: unknown): void {
     const mode = this.mode;
     if (data !== undefined && (mode === "json" || mode === "jsonl" || mode === "yaml" || mode === "tsv" || this.host.flags.quiet)) this.print(data);
-    else this.status(`${this.colors.green("✓")} ${message}`);
+    else if (!this.host.flags.quiet) this.host.stderr.write(`${this.colors.green("✓")} ${cleanMessage(message)}\n`);
   }
 
   /** Prints an error to stderr as `vobiz: <kind>: <message>` plus a hint, or as JSON when --output json. */
@@ -344,7 +360,7 @@ export class Printer {
       return;
     }
     const c = this.colors;
-    this.host.stderr.write(`${c.red("vobiz:")} ${e.kind}: ${message}\n`);
+    this.host.stderr.write(`${c.red("vobiz:")} ${e.kind}: ${cleanMessage(message)}\n`);
     const hint = hintFor(e.kind);
     if (hint && !message.includes(hint)) this.host.stderr.write(`${c.dim(hint)}\n`);
   }
@@ -362,4 +378,3 @@ function unionKeys(rows: Record<string, unknown>[]): string[] {
   return [...seen];
 }
 
-const tsvEscape = (s: string) => s.replace(/\\/g, "\\\\").replace(/\t/g, "\\t").replace(/\r?\n/g, "\\n");

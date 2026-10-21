@@ -10,6 +10,7 @@
  *   `outcome_unknown`, because the request may have reached Vobiz.
  * - The token travels only in the `X-Auth-Token` header; logs and dry-run output never contain it.
  */
+import { MAX_RESPONSE_BYTES, readBodyCapped } from "./body.js";
 import type { ResolvedCredentials } from "./credentials.js";
 import { CHECK_STATE_HINT, VobizError, extractBackendMessage, kindForResponse } from "./errors.js";
 import type { Api, HttpMethod, Operation } from "../generated/operations.js";
@@ -229,8 +230,12 @@ export class VobizClient {
 
     let bytes: Uint8Array;
     try {
-      bytes = new Uint8Array(await res.arrayBuffer());
-    } catch {
+      bytes = await readBodyCapped(res, args.responseType === "bytes" ? MAX_BYTES_RESPONSE : MAX_RESPONSE_BYTES);
+    } catch (e) {
+      if (e instanceof VobizError) {
+        clearTimeout(timer);
+        throw e;
+      }
       bytes = new Uint8Array();
       if (controller.signal.aborted && res.ok) {
         clearTimeout(timer);
@@ -245,7 +250,7 @@ export class VobizClient {
     if (res.status >= 200 && res.status < 300 && args.responseType === "bytes") {
       const disp = res.headers.get("content-disposition") ?? "";
       const filename = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disp)?.[1];
-      return { bytes, contentType, filename: filename ? decodeURIComponent(filename) : undefined } as T;
+      return { bytes, contentType, filename: filename ? decodeFilename(filename) : undefined } as T;
     }
     const text = new TextDecoder().decode(bytes);
     let data: unknown;
@@ -274,5 +279,17 @@ export class VobizClient {
         ? `Vobiz answered HTTP ${res.status} (${message}), so it is unknown whether the request took effect. ${CHECK_STATE_HINT}`
         : message;
     throw new VobizError(kind, shown, res.status, data === undefined ? undefined : redact(data));
+  }
+}
+
+/** Cap for `responseType: "bytes"` downloads held in memory (documents, 10 MB upload limit; generous headroom). */
+const MAX_BYTES_RESPONSE = 200 * 1024 * 1024;
+
+/** Percent-decodes a Content-Disposition file name; a malformed escape keeps the raw text instead of throwing. */
+function decodeFilename(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
   }
 }

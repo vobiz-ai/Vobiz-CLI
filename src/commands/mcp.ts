@@ -26,6 +26,8 @@ import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
 import { REDACTED } from "../core/redact.js";
+import { assertInsideDir, assertNotSymlink, sameContent } from "../core/fsafe.js";
+import { isUnsafeKey } from "../core/keys.js";
 
 interface ModeOpts {
   hosted?: boolean;
@@ -38,7 +40,7 @@ interface ModeOpts {
 const modeOf = (o: ModeOpts): Mode => (o.local ? "local" : "hosted");
 
 function validName(name: string): string {
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(name)) throw new VobizError("invalid_input", "--name may contain only letters, digits, - and _.");
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(name) || isUnsafeKey(name)) throw new VobizError("invalid_input", "--name may contain only letters, digits, - and _.");
   return name;
 }
 
@@ -183,6 +185,9 @@ Examples:
         );
       const creds: Credentials | undefined = opts.withCredentials ? { authId: ctx.creds.authId, authToken: ctx.creds.authToken } : undefined;
 
+      assertNotSymlink(file, "the client config");
+      assertNotSymlink(`${file}.bak`, "the backup");
+      if (opts.project) assertInsideDir(file, resolve(opts.dir ?? process.cwd()));
       const existing = existsSync(file) ? readFileSync(file, "utf8") : undefined;
       let merged: MergeResult;
       try {
@@ -213,6 +218,8 @@ Examples:
         ctx.stdout.write(snippet(spec, mode, name, creds ? { ...creds, authToken: REDACTED } : undefined));
         return;
       }
+      // The file may have changed while the prompt waited (Claude Code rewrites ~/.claude.json constantly).
+      if (!sameContent(file, existing)) throw new VobizError("invalid_input", `${file} changed while waiting for confirmation, so it was not written. Run the command again.`);
       const { backup, scrubbed } = writeConfig(file, merged.text, !!creds);
       if (scrubbed) ctx.out.status(`The backup ${backup} has the old Auth Token replaced by YOUR_AUTH_TOKEN, so no stale copy of it is left.`);
       ctx.out.success(`${merged.status === "replaced" ? "Updated" : "Added"} the Vobiz MCP server in ${file}${backup ? ` (backup: ${backup})` : ""}.`, {

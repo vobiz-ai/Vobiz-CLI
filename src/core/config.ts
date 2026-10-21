@@ -9,6 +9,14 @@ import { join } from "node:path";
 import { z } from "zod";
 import { permissionProblem, writeFileAtomic } from "./atomic.js";
 import { baseUrlProblem } from "./credentials.js";
+import { VobizError } from "./errors.js";
+import { isUnsafeKey } from "./keys.js";
+
+/** Throws invalid_input for a profile name that would act on the object prototype instead of a saved entry. */
+export function assertProfileName(name: string): string {
+  if (isUnsafeKey(name)) throw new VobizError("invalid_input", `"${name}" cannot be used as a profile name.`);
+  return name;
+}
 
 export const VOICE_BASE_URL = "https://api.vobiz.ai";
 export const SMS_BASE_URL = "https://api.vobiz.ai/api/v1/sms";
@@ -86,16 +94,20 @@ export class ConfigStore {
     return readJson(this.credentialsPath, credentialsFile, { version: 1 as const, profiles: {} }).profiles;
   }
   getProfile(name: string): Profile | undefined {
-    return this.profiles()[name];
+    assertProfileName(name);
+    const all = this.profiles();
+    return Object.hasOwn(all, name) ? all[name] : undefined;
   }
   setProfile(name: string, p: Profile): void {
+    assertProfileName(name);
     const all = this.profiles();
     all[name] = { ...p, createdAt: p.createdAt ?? new Date().toISOString() };
     writeJsonAtomic(this.credentialsPath, { version: 1, profiles: all }, 0o600);
   }
   removeProfile(name: string): boolean {
+    assertProfileName(name);
     const all = this.profiles();
-    if (!(name in all)) return false;
+    if (!Object.hasOwn(all, name)) return false;
     delete all[name];
     writeJsonAtomic(this.credentialsPath, { version: 1, profiles: all }, 0o600);
     const s = this.settings();

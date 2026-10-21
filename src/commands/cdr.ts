@@ -3,11 +3,11 @@
  * filters and a summary), `recent` needs no date range, `get` reads one record and `export` streams the CSV to a
  * file or stdout.
  */
-import { existsSync } from "node:fs";
 import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { CALLER_KEYS, RESOURCE_NAME_KEYS, untrustedAction } from "../core/untrusted.js";
 import { usage } from "../core/errors.js";
+import { assertWritableTarget } from "../core/fsafe.js";
 import { op } from "../core/ops.js";
 import { paginate } from "../core/pagination.js";
 import { parseRange, toYmd } from "../core/time.js";
@@ -141,8 +141,8 @@ export function register(program: Command, ctx: Ctx): void {
     .option("--force", "overwrite an existing file")
     .addHelpText("after", "\nExamples:\n  vobiz cdr export --from 2026-10-01 --to 2026-10-31 --out october.csv\n  vobiz cdr export --from 7d --direction inbound | head")
     .action(async (o: FilterOpts & { out?: string; force?: boolean }) => {
-      if (o.out && existsSync(o.out) && !o.force) throw usage(`${o.out} already exists. Pass --force to overwrite it.`);
-      const bytes = await streamOperation(ctx, EXPORT, cdrQuery(o, ctx.now()), "text/csv", { out: o.out });
+      if (o.out) assertWritableTarget(o.out, !!o.force);
+      const bytes = await streamOperation(ctx, EXPORT, cdrQuery(o, ctx.now()), "text/csv", { out: o.out, force: o.force });
       if (o.out) ctx.out.success(`Saved ${o.out} (${bytes} bytes).`, { file: o.out, bytes });
     });
 }

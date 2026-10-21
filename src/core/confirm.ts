@@ -10,6 +10,7 @@
  * line breaks and control characters become visible markers and long values are capped, so a value that came
  * from the API (a broadcast or trunk name) cannot forge a "cost:" or "recipients:" line.
  */
+import { cleanMessage } from "./sanitize.js";
 import type { Ctx } from "./context.js";
 import { VobizError } from "./errors.js";
 
@@ -58,7 +59,7 @@ export function formatSummary(s: ConfirmSummary): string {
   const lines = [oneLine(s.action, 500)];
   for (const [k, v] of Object.entries(s.details ?? {})) lines.push(`  ${oneLine(k, 60)}: ${renderDetail(v)}`);
   if (s.cost) lines.push(`  cost: ${oneLine(s.cost)}`);
-  return lines.join("\n");
+  return cleanMessage(lines.join("\n"));
 }
 
 /** `MA_XXXXXXXX (profile "default")`, `(env)` or `(flags)`; undefined when no credentials resolve. */

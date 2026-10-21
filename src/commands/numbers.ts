@@ -9,6 +9,7 @@ import type { Command } from "commander";
 import { Option } from "commander";
 import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
+import { tryParseIntStrict } from "../core/parse.js";
 import { op } from "../core/ops.js";
 import { digitsOnly, toE164 } from "../core/phone.js";
 import { addListOptions, confirmedCall, examples, runList, runPlan, type Step } from "./provisioning-shared.js";
@@ -225,8 +226,8 @@ export function register(program: Command, ctx: Ctx): void {
     .description("Show the health dashboard of a number: status, spam flag, answer rate and call volume")
     .addOption(new Option("--granularity <unit>", "snapshot granularity").choices(["daily", "hourly"]))
     .option("--days <n>", "window size in days (default: 30)", (v: string) => {
-      const n = Number(v);
-      if (!Number.isInteger(n) || n < 1) throw usage(`--days must be a positive integer (got "${v}").`);
+      const n = tryParseIntStrict(v, { min: 1, max: 3660 });
+      if (n === undefined) throw usage(`--days must be a whole number from 1 to 3660 (got "${v}").`);
       return n;
     })
     .action(async (number: string, opts: { granularity?: string; days?: number }) => {

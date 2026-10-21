@@ -10,6 +10,9 @@ import { CLI_VERSION } from "../core/version.js";
 
 export const ISSUES_URL = "https://github.com/vobiz-ai/Vobiz-CLI/issues/new";
 
+/** encodeURIComponent plus the five characters it leaves alone (! ' ( ) *). */
+const encodeQueryValue = (v: string) => encodeURIComponent(v).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+
 /** GitHub's new-issue URL with title and body prefilled (kept well under browser URL limits). */
 export function feedbackUrl(o: { title?: string; message?: string }): string {
   const message = (o.message ?? "").trim().slice(0, 4000);
@@ -23,8 +26,12 @@ export function feedbackUrl(o: { title?: string; message?: string }): string {
     `- ${process.platform} ${process.arch}`,
   ].join("\n");
   const title = (o.title ?? (message ? message.split("\n")[0].slice(0, 80) : "")).trim();
-  const params = new URLSearchParams({ ...(title ? { title } : {}), body, labels: "feedback" });
-  return `${ISSUES_URL}?${params.toString()}`;
+  // encodeURIComponent (not URLSearchParams) so every reserved character, including the spaces and quotes a
+  // message holds, is percent-encoded: the URL is always https://github.com/... with opaque query values.
+  const params = Object.entries({ ...(title ? { title } : {}), body, labels: "feedback" }).map(([k, v]) => `${k}=${encodeQueryValue(v)}`);
+  const url = `${ISSUES_URL}?${params.join("&")}`;
+  if (!url.startsWith("https://github.com/") || /[\s"'<>^|`\\]/.test(url)) throw usage("Could not build a safe feedback URL.");
+  return url;
 }
 
 export function register(program: Command, ctx: Ctx): void {

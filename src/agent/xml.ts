@@ -12,6 +12,7 @@
  * choices are warnings.
  */
 import { z } from "zod";
+import { isUnsafeKey } from "../core/keys.js";
 import { VobizError } from "../core/errors.js";
 
 // ───────────────────────────── builder (port of the MCP server's model) ─────────────────────────────
@@ -93,8 +94,15 @@ export const xmlAction = z.discriminatedUnion("type", [speak, play, wait, gather
 export type XmlAction = z.infer<typeof xmlAction>;
 export const xmlActions = z.array(xmlAction).min(1).max(20);
 
-export const escapeXml = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c] as string);
+/** C0 control characters that XML 1.0 forbids in any text or attribute value (tab, LF and CR are allowed). */
+const XML_FORBIDDEN = /[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]/;
+
+/** Escapes text for an element or attribute; throws invalid_input for characters XML 1.0 cannot hold. */
+export const escapeXml = (s: string) => {
+  const bad = XML_FORBIDDEN.exec(s);
+  if (bad) throw new VobizError("invalid_input", `The text contains the control character U+${bad[0].charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}, which VobizXML (XML 1.0) does not allow. Remove it and try again.`);
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c] as string);
+};
 
 function attrs(pairs: Record<string, string | number | boolean | undefined>): string {
   return Object.entries(pairs)
@@ -262,7 +270,8 @@ export function applyAttr(action: Record<string, unknown> & { type: XmlAction["t
   const key = pair.slice(0, eq).trim();
   const value = pair.slice(eq + 1);
   const table = ATTR_FIELDS[action.type];
-  const entry = table[key] ?? Object.values(table).find(([field]) => field === key);
+  if (isUnsafeKey(key)) throw new VobizError("invalid_input", `--attr cannot use the name "${key}".`);
+  const entry = (Object.hasOwn(table, key) ? table[key] : undefined) ?? Object.values(table).find(([field]) => field === key);
   if (!entry) {
     throw new VobizError("invalid_input", `<${tagFor(action.type)}> has no attribute "${key}" here. Use one of: ${Object.keys(table).join(", ")}.`);
   }
@@ -285,7 +294,19 @@ export interface XmlNode {
 /** Parses an XML document into elements. Throws invalid_input with a line number for malformed XML. */
 export function parseXml(src: string): XmlNode {
   let i = src.charCodeAt(0) === 0xfeff ? 1 : 0;
-  const lineAt = (pos: number) => src.slice(0, pos).split("\n").length;
+  // Newline offsets, computed once: line lookups are a binary search, so parsing stays linear in the input size.
+  const newlines: number[] = [];
+  for (let k = src.indexOf("\n"); k >= 0; k = src.indexOf("\n", k + 1)) newlines.push(k);
+  const lineAt = (pos: number) => {
+    let lo = 0;
+    let hi = newlines.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (newlines[mid] < pos) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo + 1;
+  };
   const fail = (msg: string, pos = i): never => {
     throw new VobizError("invalid_input", `line ${lineAt(pos)}: ${msg}`);
   };

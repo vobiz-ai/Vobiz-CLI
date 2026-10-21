@@ -50,7 +50,7 @@ With --output json, errors are printed to stderr as one JSON line:
   VOBIZ_NO_UPDATE_CHECK, CI         disable the daily version check
   VOBIZ_NO_BROWSER                  never open a browser; print the URL instead (also when CI is set or not a TTY)
   NO_COLOR, FORCE_COLOR             standard color control
-  HTTPS_PROXY, NO_PROXY             used by Node's fetch only when NODE_USE_ENV_PROXY=1
+  HTTPS_PROXY, NO_PROXY             used by Node's fetch only when NODE_USE_ENV_PROXY=1 (Node 22.21+ or 24+)
 
 Credential order: --auth-id/--auth-token flags, then VOBIZ_AUTH_ID/VOBIZ_AUTH_TOKEN, then the profile chosen by
 --profile, VOBIZ_PROFILE, the configured default, or "default".
@@ -74,6 +74,12 @@ stdout carries data only; progress, prompts, warnings and errors go to stderr, s
                            it reads the data as that mode prints it (see the shape with --json)
   --quiet, -q              print only the id of each row, one per line (for xargs)
   --dry-run                print the request that would be sent (token and secrets redacted) and exit 0
+
+Text meant for people (table, plain, tsv, --quiet, messages) has terminal escape sequences and control
+characters removed, so API data cannot clear the screen or rewrite the clipboard; json and yaml are verbatim.
+In tsv, a cell starting with = + - or @ (other than a plain number) gets a leading ' so a spreadsheet does not
+run it as a formula. CSV files from the API (cdr export, sms broadcasts export) are saved byte for byte; open
+them with formulas disabled, or import them as text.
 
 Secret fields (auth_token, auth_secret, password, secret, token, client_secret, private_key) are always shown
 as [redacted]. Only --debug --show-secrets prints them.

@@ -101,3 +101,31 @@ describe("partner", () => {
     expect(api.last()).toMatchObject({ method: "POST", path: `${P}/kyc-sessions/kycs_1/resend` });
   });
 });
+
+describe("--secret-file is created before the request (S3 #12)", async () => {
+  const fs = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const args = ["partner", "accounts", "create", "--name", "Jane", "--email", "jane@example.com", "--phone", "+919876543210", "--country", "IN", "--password", "Passw0rd!x", "--yes"];
+
+  it("a missing folder fails before any request", async () => {
+    const api = fakeFetch({ [`POST ${P}/accounts`]: reply(201, { auth_id: "MA_NEWNEWNE", auth_token: "cust-secret-token" }) });
+    const r = await runCli([...args, "--secret-file", "/nonexistent-dir-vobiz/secret.txt"], { fetch: api.fetch });
+    expect(r.code).toBe(2);
+    expect(api.calls).toHaveLength(0);
+  });
+
+  it("writes the secret into the pre-created 0600 file, and removes it when the request fails", async () => {
+    const dir = fs.mkdtempSync(path.join(tmpdir(), "vobiz-secret-"));
+    const ok = fakeFetch({ [`POST ${P}/accounts`]: reply(201, { auth_id: "MA_NEWNEWNE", auth_token: "cust-secret-token" }) });
+    const file = path.join(dir, "token.txt");
+    const r = await runCli([...args, "--secret-file", file], { fetch: ok.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(fs.readFileSync(file, "utf8")).toBe("cust-secret-token\n");
+    if (process.platform !== "win32") expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    const bad = fakeFetch({ [`POST ${P}/accounts`]: reply(400, { message: "email taken" }) });
+    const failed = path.join(dir, "failed.txt");
+    expect((await runCli([...args, "--secret-file", failed], { fetch: bad.fetch })).code).toBe(2);
+    expect(fs.existsSync(failed)).toBe(false);
+  });
+});

@@ -10,6 +10,7 @@ import { isBodySignature, verifyBody, verifyCallback, verifyRequest, type Callba
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
 import { rememberSecret } from "../core/redact.js";
+import { checkForwardUrl } from "./voice-shared.js";
 
 function secretFrom(ctx: Ctx, flag: string | undefined, required: boolean): string | undefined {
   if (flag) {
@@ -177,6 +178,7 @@ Docs: https://www.vobiz.ai/docs/concepts/validating-callbacks`,
     .option("--forward <url>", "also send each request to this URL (e.g. your app) and relay its response back to Vobiz")
     .option("--secret <secret>", "check each request's signature with this secret (env: VOBIZ_WEBHOOK_SECRET)")
     .option("--public-url <url>", "the https URL Vobiz calls (your tunnel), needed to check voice-callback signatures")
+    .option("--allow-insecure-url", "allow a plain http:// --forward to a host other than localhost (bodies are sent unencrypted)")
     .addHelpText(
       "after",
       `
@@ -187,7 +189,8 @@ Examples:
   vobiz webhooks listen --port 4000
   vobiz webhooks listen --forward http://localhost:8080/vobiz/hangup --public-url https://abc.trycloudflare.com`,
     )
-    .action(async (opts: { port?: string; host: string; forward?: string; secret?: string; publicUrl?: string }) => {
+    .action(async (opts: { port?: string; host: string; forward?: string; secret?: string; publicUrl?: string; allowInsecureUrl?: boolean }) => {
+      if (opts.forward !== undefined) checkForwardUrl(opts.forward, "--forward", { allowInsecure: opts.allowInsecureUrl });
       for (const [flag, value] of [["--forward", opts.forward], ["--public-url", opts.publicUrl]] as const) {
         if (value === undefined) continue;
         try {

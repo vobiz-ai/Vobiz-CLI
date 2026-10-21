@@ -24,6 +24,10 @@ export function compareVersions(a: string, b: string): number {
   return (x.pre ?? "").localeCompare(y.pre ?? "");
 }
 
+/** A registry version string we are willing to print or store: plain semver, optionally with a pre-release tag. */
+export const VERSION_RE = /^\d{1,6}\.\d{1,6}\.\d{1,6}(-[0-9A-Za-z.-]{1,64})?$/;
+export const isPlainVersion = (v: unknown): v is string => typeof v === "string" && VERSION_RE.test(v);
+
 export function updateCheckEnabled(ctx: Ctx): boolean {
   const env = ctx.env;
   if (!ctx.flags.updateCheck || env.CI || env.VOBIZ_NO_UPDATE_CHECK) return false;
@@ -43,7 +47,8 @@ export async function fetchLatestVersion(fetchImpl: typeof fetch, timeoutMs = UP
     const res = await fetchImpl(REGISTRY_URL, { headers: { Accept: "application/json" }, signal: controller.signal });
     if (!res.ok) return undefined;
     const body = (await res.json()) as { latest?: unknown };
-    return typeof body.latest === "string" ? body.latest : undefined;
+    // Anything but a plain version (escape sequences, prose) is ignored: it would be printed to the terminal.
+    return isPlainVersion(body.latest) ? body.latest : undefined;
   } catch {
     return undefined;
   } finally {
@@ -62,7 +67,7 @@ export async function checkForUpdate(ctx: Ctx): Promise<string | undefined> {
     const s = ctx.store.settings();
     const last = s.lastUpdateCheck ? Date.parse(s.lastUpdateCheck) : 0;
     if (Number.isFinite(last) && ctx.now().getTime() - last < DAY_MS) {
-      latest = s.latestKnownVersion;
+      latest = isPlainVersion(s.latestKnownVersion) ? s.latestKnownVersion : undefined;
     } else {
       latest = await fetchLatestVersion(ctx.fetch);
       ctx.store.patchSettings({ lastUpdateCheck: ctx.now().toISOString(), ...(latest ? { latestKnownVersion: latest } : {}) });

@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CLIENT_SPECS, mergeToml, stripJsonc } from "../src/agent/mcp-clients.js";
+import { CLIENT_SPECS, mergeToml, stripJsonc, tomlKeyPath } from "../src/agent/mcp-clients.js";
 import { runCli, TEST_AUTH_ID, TEST_AUTH_TOKEN } from "./helpers.js";
 
 const tempHome = () => mkdtempSync(join(tmpdir(), "vobiz-home-"));
@@ -203,5 +203,103 @@ describe("client config paths", () => {
   ] as const)("%s on %s", (client, platform, expected) => {
     if (process.platform === "win32") return;
     expect(CLIENT_SPECS[client].path({ env, platform, cwd: "/p", project: false, mode: "local" })).toBe(expected);
+  });
+});
+
+describe("mcp install path safety (S3 #1, #11, #14, #15)", () => {
+  const posix = process.platform !== "win32";
+
+  it.runIf(posix)("refuses a symlinked config and never reads or replaces it", async () => {
+    const HOME = tempHome();
+    const proj = mkdtempSync(join(tmpdir(), "vobiz-proj-"));
+    const home = join(HOME, ".claude.json");
+    writeFileSync(home, JSON.stringify({ mcpServers: { gh: { env: { GITHUB_TOKEN: "secret-home-token" } } } }));
+    symlinkSync(home, join(proj, ".mcp.json"));
+    const r = await runCli(["mcp", "install", "claude-code", "--project", "--dir", proj, "--yes"], { env: { HOME } });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("symbolic link");
+    expect(lstatSync(join(proj, ".mcp.json")).isSymbolicLink()).toBe(true);
+    expect(existsSync(join(proj, ".mcp.json.bak"))).toBe(false);
+  });
+
+  it.runIf(posix)("refuses a symlinked .bak, so a planted link cannot overwrite another file", async () => {
+    const HOME = tempHome();
+    const proj = mkdtempSync(join(tmpdir(), "vobiz-proj-"));
+    const victim = join(HOME, "victim.json");
+    writeFileSync(victim, '{"mine":true}');
+    writeFileSync(join(proj, ".mcp.json"), JSON.stringify({ mcpServers: { evil: { command: "sh" } } }));
+    symlinkSync(victim, join(proj, ".mcp.json.bak"));
+    const r = await runCli(["mcp", "install", "claude-code", "--project", "--dir", proj, "--yes"], { env: { HOME } });
+    expect(r.code).toBe(2);
+    expect(readFileSync(victim, "utf8")).toBe('{"mine":true}');
+  });
+
+  it.runIf(posix)("--project refuses a config folder that is a symlink out of the project", async () => {
+    const HOME = tempHome();
+    const proj = mkdtempSync(join(tmpdir(), "vobiz-proj-"));
+    mkdirSync(join(HOME, ".cursor"));
+    symlinkSync(join(HOME, ".cursor"), join(proj, ".cursor"));
+    const r = await runCli(["mcp", "install", "cursor", "--project", "--dir", proj, "--yes"], { env: { HOME } });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("outside the project directory");
+    expect(existsSync(join(HOME, ".cursor", "mcp.json"))).toBe(false);
+  });
+
+  it("aborts when the file changes while the confirmation waits", async () => {
+    const HOME = tempHome();
+    const file = join(HOME, ".claude.json");
+    writeFileSync(file, JSON.stringify({ numStartups: 1 }));
+    const prompts = {
+      async confirm() {
+        writeFileSync(file, JSON.stringify({ numStartups: 2 }));
+        return true;
+      },
+      async input() {
+        return "";
+      },
+      async password() {
+        return "";
+      },
+    };
+    const r = await runCli(["mcp", "install", "claude-code"], { env: { HOME }, stdinTTY: true, stdoutTTY: true, stderrTTY: true, prompts });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("changed while waiting");
+    expect(readJson(file)).toEqual({ numStartups: 2 });
+  });
+
+  it("leaves no temp files behind and writes a regular .bak", async () => {
+    const HOME = tempHome();
+    const file = join(HOME, ".claude.json");
+    writeFileSync(file, "{}");
+    expect((await runCli(["mcp", "install", "claude-code", "--yes"], { env: { HOME } })).code).toBe(0);
+    expect(readdirSync(HOME).filter((f) => f.includes(".tmp") || f.includes(".part"))).toEqual([]);
+    expect(lstatSync(`${file}.bak`).isFile()).toBe(true);
+  });
+
+  it("rejects prototype names for --name", async () => {
+    for (const name of ["__proto__", "constructor", "prototype"]) {
+      const r = await runCli(["mcp", "install", "cursor", "--name", name, "--yes"], { env: { HOME: tempHome() } });
+      expect(r.code).toBe(2);
+    }
+  });
+
+  it("mergeToml treats a quoted-key header as the same table", () => {
+    const r = mergeToml('model = "x"\n\n[mcp_servers."vobiz"]\nurl = "https://old"\n', "mcp_servers", "vobiz", { url: "https://mcp.vobiz.ai/mcp" });
+    expect(r.status).toBe("replaced");
+    expect(r.text).toBe('model = "x"\n\n[mcp_servers.vobiz]\nurl = "https://mcp.vobiz.ai/mcp"\n');
+    expect(tomlKeyPath(`mcp_servers.'vobiz'.env`)).toEqual(["mcp_servers", "vobiz", "env"]);
+  });
+
+  it("mergeToml refuses a file with multi-line strings instead of corrupting it", async () => {
+    expect(() => mergeToml('prompt = """\n[mcp_servers.vobiz]\n"""\nmodel = "x"\n', "mcp_servers", "vobiz", { url: "u" })).toThrow(/multi-line/);
+    const HOME = tempHome();
+    mkdirSync(join(HOME, ".codex"));
+    const file = join(HOME, ".codex", "config.toml");
+    const original = 'prompt = """\n[mcp_servers.vobiz]\n"""\nmodel = "x"\n';
+    writeFileSync(file, original);
+    const r = await runCli(["mcp", "install", "codex", "--yes"], { env: { HOME } });
+    expect(r.code).toBe(2);
+    expect(r.out).toContain("[mcp_servers.vobiz]");
+    expect(readFileSync(file, "utf8")).toBe(original);
   });
 });

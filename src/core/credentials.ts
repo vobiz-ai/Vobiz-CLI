@@ -4,7 +4,7 @@
  *   2. VOBIZ_AUTH_ID + VOBIZ_AUTH_TOKEN environment variables (CI)
  *   3. the profile named by --profile / VOBIZ_PROFILE / the configured default / "default"
  */
-import { ConfigStore, type Profile, SMS_BASE_URL, VOICE_BASE_URL } from "./config.js";
+import { ConfigStore, type Profile, SMS_BASE_URL, VOICE_BASE_URL, assertProfileName } from "./config.js";
 import { VobizError } from "./errors.js";
 
 export interface ResolvedCredentials {
@@ -25,7 +25,7 @@ export interface CredentialFlags {
 }
 
 export function profileName(flags: CredentialFlags, store: ConfigStore, env = process.env): string {
-  return flags.profile ?? env.VOBIZ_PROFILE ?? store.settings().defaultProfile ?? "default";
+  return assertProfileName(flags.profile ?? env.VOBIZ_PROFILE ?? store.settings().defaultProfile ?? "default");
 }
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -105,8 +105,22 @@ export function resolveBaseUrls(
   return urls;
 }
 
+/** Auth ID / Auth Token become HTTP header values: printable ASCII only, never CR/LF or spaces. */
+const HEADER_SAFE = /^[\x21-\x7e]+$/;
+
+function checkHeaderSafe(c: ResolvedCredentials): ResolvedCredentials {
+  const where = c.source === "flags" ? "--auth-id/--auth-token" : c.source === "env" ? "VOBIZ_AUTH_ID/VOBIZ_AUTH_TOKEN" : `profile "${c.profile}"`;
+  if (!HEADER_SAFE.test(c.authId)) throw new VobizError("invalid_input", `The Auth ID from ${where} contains spaces, line breaks or other invalid characters.`);
+  if (!HEADER_SAFE.test(c.authToken)) throw new VobizError("invalid_input", `The Auth Token from ${where} contains spaces, line breaks or other invalid characters.`);
+  return c;
+}
+
 /** `warn` receives one line per non-Vobiz base host (see customBaseUrlWarnings). */
 export function resolveCredentials(flags: CredentialFlags, store: ConfigStore, env = process.env, warn?: (message: string) => void): ResolvedCredentials {
+  return checkHeaderSafe(resolveCredentialsUnchecked(flags, store, env, warn));
+}
+
+function resolveCredentialsUnchecked(flags: CredentialFlags, store: ConfigStore, env: NodeJS.ProcessEnv, warn?: (message: string) => void): ResolvedCredentials {
   const usesProfile = !(flags.authId || flags.authToken || env.VOBIZ_AUTH_ID || env.VOBIZ_AUTH_TOKEN);
   // Flag and env base URLs are checked up front; the profile path re-resolves with the saved URLs (and warns once there).
   const { voiceBaseUrl, smsBaseUrl } = resolveBaseUrls(flags, env, undefined, usesProfile ? undefined : warn);

@@ -18,6 +18,7 @@
   "scripts": {
     "gen": "node scripts/gen-operations.mjs",
     "build": "npm run gen && tsc -p tsconfig.json",
+    "build:internal": "node scripts/build-internal.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "npm run gen && tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
     "test": "vitest run",

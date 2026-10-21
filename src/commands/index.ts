@@ -4,6 +4,7 @@
  * branches merge without conflicts).
  */
 import type { RegisterFn } from "../cli.js";
+import { INTERNAL_BUILD } from "../generated/build-flags.js";
 
 // ── W1 core: auth, config, doctor, api, completion, help topics, update ──
 import { register as auth } from "./auth.js";
@@ -41,6 +42,31 @@ import { register as api } from "./api.js";
 import { register as completion } from "./completion.js";
 import { register as helpTopics } from "./help-topics.js";
 
+// ── W7 internal: `vobiz internal …` lives in src/internal/ (private repo only; never synced to the public repo) ──
+// The module is optional: when it is absent (the public tree) nothing is loaded. When it is present, the group is
+// registered only if `internalEnabled(env)`: VOBIZ_INTERNAL=1 at run time, or a `npm run build:internal` build
+// (unless VOBIZ_INTERNAL=0, which the docs/completions/man generators set so they always describe the public CLI).
+const INTERNAL_MODULE = "../internal/commands/index.js"; // a variable, so tsc does not require the file to exist
+const internalGroups: RegisterFn[] = await import(INTERNAL_MODULE).then(
+  (m: { INTERNAL_GROUPS?: RegisterFn[] }) => m.INTERNAL_GROUPS ?? [],
+  (err: NodeJS.ErrnoException) => {
+    // Only "the internal module itself is missing" means "public tree"; anything else is a real bug.
+    const missing = /'([^']+)'/.exec(String(err?.message))?.[1] ?? "";
+    if (err?.code === "ERR_MODULE_NOT_FOUND" && /internal[\\/]commands[\\/]index(\.[jt]s)?$/.test(missing)) return [];
+    throw err;
+  },
+);
+
+export function internalEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.VOBIZ_INTERNAL === "1") return true;
+  return INTERNAL_BUILD && env.VOBIZ_INTERNAL !== "0";
+}
+
+const internal: RegisterFn = (program, ctx) => {
+  if (!internalGroups.length || !internalEnabled(ctx?.env ?? process.env)) return;
+  for (const register of internalGroups) register(program, ctx);
+};
+
 export const COMMAND_GROUPS: RegisterFn[] = [
   auth,
   config,
@@ -75,4 +101,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   api,
   completion,
   helpTopics,
+
+  // W7 internal (absent unless enabled)
+  internal,
 ];

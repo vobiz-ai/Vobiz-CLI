@@ -18,6 +18,7 @@ import { register as update } from "./update.js";
 // ── W4 messaging: sms ──
 
 // ── W5 agent surface: xml, webhooks, mcp, skills, docs ──
+import { register as xml } from "./xml.js";
 
 // ── W1 core (kept last in help): api, completion, help topics ──
 import { register as api } from "./api.js";
@@ -37,6 +38,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   // W4 messaging
 
   // W5 agent surface
+  xml,
 
   api,
   completion,

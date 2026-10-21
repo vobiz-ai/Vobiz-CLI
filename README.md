@@ -126,7 +126,7 @@ $ vobiz xml build --say "Thanks for calling Acme. Please hold."
 </Response>
 ```
 
-Every command is listed, with its flags, in [docs/COMMANDS.md](docs/COMMANDS.md) and in `vobiz <command> --help`. Anything the dedicated commands do not cover is one `vobiz api` call away: `vobiz api --list` shows every operation, and `vobiz api GET /api/v1/Account/{auth_id}/Number/` sends a raw request with your credentials.
+Every command is listed, with its flags, in [docs/COMMANDS.md](docs/COMMANDS.md) and in `vobiz <command> --help`. Anything the dedicated commands do not cover is one `vobiz api` call away: `vobiz api --list` shows every operation, and `vobiz api GET /api/v1/Account/{auth_id}/numbers` sends a raw request with your credentials.
 
 ## Use it from AI agents
 

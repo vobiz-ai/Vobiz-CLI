@@ -251,3 +251,92 @@ export function detailsFrom(body: Record<string, unknown>, keys: string[]): Reco
 
 /** Text after the examples heading for --help. */
 export const examples = (...lines: string[]): string => `\nExamples:\n${lines.map((l) => `  ${l}`).join("\n")}`;
+
+
+export interface CrudSpec {
+  /** Singular noun for messages ("trunk", "SIP credential"). */
+  noun: string;
+  /** Plural noun (default: noun + "s"). */
+  plural?: string;
+  idArg: string;
+  idKey: string;
+  columns: string[];
+  list: Operation;
+  get?: Operation;
+  create: Operation;
+  update: Operation;
+  delete: Operation;
+  /** Path param name of the id. */
+  idParam: string;
+  /** Body keys shown in the confirmation summary. */
+  summaryKeys: string[];
+  /** A create response may carry a secret to show once. */
+  secretPaths?: string[];
+  createExamples?: string[];
+  /** Generate filter flags for the list operation's query params. */
+  listFilters?: boolean;
+  /** Label for the secret revealed once after create. */
+  secretLabel?: string;
+}
+
+/** list / get / create / update / delete for one resource. */
+export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
+  const plural = s.plural ?? `${s.noun}s`;
+  const list = addListOptions(group.command("list").alias("ls").description(`List ${plural}`));
+  const filters = s.listFilters ? addQueryOptions(list, s.list) : { fields: [] };
+  list.action(async (opts: Opts) => {
+    await runList(ctx, s.list, { query: buildQuery(ctx, opts, filters) }, opts, { columns: s.columns, idKey: s.idKey, empty: `No ${plural}.` });
+  });
+
+  if (s.get) {
+    const getOp = s.get;
+    group
+      .command("get")
+      .argument(`<${s.idArg}>`, `${s.noun} ID`)
+      .description(`Show one ${s.noun}`)
+      .action(async (id: string) => {
+        ctx.out.print(await ctx.client.call(getOp, { path: { [s.idParam]: id } }));
+      });
+  }
+
+  const create = group.command("create").description(`Create a ${s.noun}`);
+  const createSpec = addBodyOptions(create, s.create);
+  if (s.createExamples) create.addHelpText("after", examples(...s.createExamples));
+  create.action(async (opts: Opts) => {
+    const body = await buildBody(ctx, opts, createSpec, s.create);
+    const details = detailsFrom(body, s.summaryKeys);
+    if (typeof body.webhook_url === "string") details.webhook_host = hostOf(body.webhook_url)!;
+    const data = await confirmedCall<Record<string, unknown>>(ctx, { action: `Create a ${s.noun}`, details: { account: ctx.client.authId, ...details } }, s.create, { body });
+    if (s.secretPaths) revealOnce(ctx, data, s.secretPaths, s.secretLabel ?? "Password");
+    ctx.out.status(`Created ${s.noun}${data && data[s.idKey] ? ` ${String(data[s.idKey])}` : ""}.`);
+    ctx.out.print(data ?? {});
+  });
+
+  const update = group.command("update").argument(`<${s.idArg}>`, `${s.noun} ID`).description(`Update a ${s.noun}`);
+  const updateSpec = addBodyOptions(update, s.update);
+  update.action(async (id: string, opts: Opts) => {
+    const body = await buildBody(ctx, opts, updateSpec, s.update, { requireSomething: true });
+    const details = detailsFrom(body, s.summaryKeys);
+    if (typeof body.webhook_url === "string") details.webhook_host = hostOf(body.webhook_url)!;
+    if ("password" in body) details.password = "(changed)";
+    const data = await confirmedCall(ctx, { action: `Update ${s.noun} ${id}`, details: { changes: Object.keys(body).join(", "), ...details } }, s.update, {
+      path: { [s.idParam]: id },
+      body,
+    });
+    ctx.out.status(`Updated ${s.noun} ${id}.`);
+    ctx.out.print(data ?? { [s.idKey]: id, updated: true });
+  });
+
+  group
+    .command("delete")
+    .alias("rm")
+    .argument(`<${s.idArg}>`, `${s.noun} ID`)
+    .description(`Delete a ${s.noun}`)
+    .action(async (id: string) => {
+      await confirmedCall(ctx, { action: `DELETE ${s.noun} ${id}`, details: { account: ctx.client.authId, note: "this cannot be undone" } }, s.delete, {
+        path: { [s.idParam]: id },
+      });
+      ctx.out.success(`Deleted ${s.noun} ${id}.`, { [s.idKey]: id, deleted: true });
+    });
+}
+

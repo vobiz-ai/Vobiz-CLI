@@ -15,6 +15,7 @@ import { register as update } from "./update.js";
 
 // ── W3 provisioning: numbers, trunks, apps, endpoints, sub-accounts, partner ──
 import { register as numbers } from "./numbers.js";
+import { register as trunks } from "./trunks.js";
 
 // ── W4 messaging: sms ──
 
@@ -35,6 +36,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
 
   // W3 provisioning
   numbers,
+  trunks,
 
   // W4 messaging
 

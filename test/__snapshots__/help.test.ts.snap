@@ -57,6 +57,8 @@ Commands:
   numbers                        Voice phone numbers: list, search the
                                  inventory, buy, release, route to a trunk or
                                  sub-account
+  trunks                         SIP trunks, their credentials, IP
+                                 access-control lists and origination URIs
   api [options] [method] [path]  Send a raw request to the Vobiz API, or list
                                  and describe every operation in the spec
   completion <shell>             Print a shell completion script (bash, zsh,

@@ -91,18 +91,17 @@ E164            COUNTRY  REGION  SETUP_FEE  MONTHLY_FEE  CURRENCY
 
 Buying is a separate, confirmed step: `vobiz numbers buy +918012345678` shows the price and asks before it spends anything.
 
-**3. Place a call that speaks a message**
+**3. Place a call**
 
 ```console
-$ vobiz calls create --from +918012345678 --to +919876543210 --say "Your order has shipped." --wait
-About to place a call
-  from  +918012345678
-  to    +919876543210
-  say   "Your order has shipped."
-? Place this call? (y/N) y
-REQUEST_UUID                          MESSAGE     IDEMPOTENCY_KEY
-5a9fd4a0-3d4c-11ef-bef9-0242ac110005  Call fired  cli-3f1c…
-Waiting for the call to finish… completed (47 s, NORMAL_CLEARING)
+$ vobiz calls create --from +918012345678 --to +919876543210 --answer-url https://example.com/answer --wait
+Place a call to +919876543210 (billed)
+  account: MA_XXXXXXXX (profile "default")
+  to: +919876543210
+  caller ID: +918012345678
+  answer URL host: example.com
+? Continue? (y/N) y
+Call queued (request 5a9fd4a0-3d4c-11ef-bef9-0242ac110005). Waiting for it to finish…
 ```
 
 A call reaches a real person and is billed, so the CLI always asks first. In scripts, pass `--yes`.
@@ -143,7 +142,8 @@ Agents should:
 
 - pass `--output json` and read data from stdout; progress and hints go to stderr
 - branch on the [exit code](#exit-codes) and the JSON error `{"error","message","status","retryable"}`
-- never retry exit code `7` (outcome unknown) blindly: check `vobiz calls list` or `vobiz sms messages list` first
+- never retry exit code `7` (outcome unknown) blindly: check `vobiz calls list`, `vobiz cdr recent`, `vobiz sms messages list` or `vobiz account transactions` first. A 5xx answer to a write is exit `7` too, with `"retryable": false`
+- never repeat `calls create` to "make sure": voice calls have no idempotency key, so check `vobiz calls list --queued` and `vobiz cdr recent` before any retry
 - ask the user before any command that would prompt for confirmation, then re-run it with `--yes`
 
 [docs/AGENTS.md](docs/AGENTS.md) has the full contract and copy-paste instructions for `CLAUDE.md` and `AGENTS.md` files.
@@ -163,7 +163,9 @@ When stdin is not a terminal, a write fails with exit code `6` unless you pass `
 
 - **Ask before acting.** Calls, messages, purchases, releases, transfers and deletions print a one-line summary (destination, caller ID, the host of any answer or callback URL, and the price when Vobiz returns one) and ask. Without a terminal they need `--yes`.
 - **Dry runs.** `--dry-run` prints the request (method, path, body with secrets redacted) and sends nothing.
-- **No silent retries.** The CLI never retries a request that has side effects. `calls create` and `sms send` print an idempotency key; reuse it with `--idempotency-key`.
+- **No silent retries.** The CLI never retries a request that has side effects. A timeout, lost connection or 5xx on a write exits `7` (outcome unknown). `sms send` prints an idempotency key; reuse it with `--idempotency-key` to retry without sending twice. `calls create` has no idempotency key (the Vobiz call API does not take one), so check `vobiz calls list --queued` and `vobiz cdr recent` before placing a call again.
+- **Bounded fan-out.** `calls create --to a<b<…` and `sms send` reach at most 50 distinct destinations per command unless `--max-fanout <n>` names a higher count; duplicates are dropped.
+- **Your Vobiz host only.** Credentials go only to `https://*.vobiz.ai` (or localhost for testing). `VOBIZ_ALLOW_ANY_BASE_URL=1` allows another host and warns on every run.
 - **Secrets stay secret.** Tokens are never printed or logged. `--verbose` shows the method, route template, status and duration; `--debug` adds bodies with `authToken`, `password`, `secret` and `token` redacted. The credentials file is mode 0600 in a 0700 directory, and `vobiz doctor` warns when it is not.
 - **Your account only.** Every path is built from the Auth ID you logged in with; no command takes an account ID.
 - **HTTPS call-control URLs.** Answer, callback and stream URLs must be `https://` or `wss://` (plain http only for localhost with `--allow-insecure-url`).
@@ -180,8 +182,8 @@ When stdin is not a terminal, a write fails with exit code `6` unless you pass `
 | 4 | Not found |
 | 5 | Rate limited or insufficient balance |
 | 6 | Confirmation required (pass `--yes`) or the action is not allowed |
-| 7 | Outcome unknown: a side-effecting request timed out; check the state before retrying |
-| 8 | Timeout or network error |
+| 7 | Outcome unknown: a side-effecting request timed out, lost its connection or got a 5xx; check the state before retrying |
+| 8 | Timeout or network error on a read |
 
 `vobiz help exit-codes` prints the same table.
 

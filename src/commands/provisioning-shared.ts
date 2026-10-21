@@ -10,11 +10,13 @@
  *   cover those). Date params (`*_date`) accept `today`, `7d`, `2026-10-01`, ISO timestamps.
  * - `runList` prints a default table, or with --output json/yaml the response body with every page's items merged.
  */
-import { existsSync, writeFileSync } from "node:fs";
+import { closeSync, rmSync, statSync, writeFileSync, writeSync, type Stats } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { requireConfirmation, type ConfirmSummary } from "../core/confirm.js";
-import { usage } from "../core/errors.js";
+import { VobizError, usage } from "../core/errors.js";
+import { openExclusive, pathExists } from "../core/fsafe.js";
 import { tryParseIntStrict } from "../core/parse.js";
 import { readSecretArg } from "../core/secrets.js";
 import { getPath, type PrintOptions } from "../core/output.js";
@@ -293,7 +295,48 @@ export function addSecretOptions(cmd: Command, label: string): Command {
 /** Fails before the request when --secret-file already exists, so the one-time secret is never lost after it. */
 export function checkSecretFile(opts: Opts): void {
   const file = opts.secretFile as string | undefined;
-  if (file !== undefined && existsSync(file)) throw usage(`--secret-file ${file} already exists; pick a new path.`);
+  if (file === undefined) return;
+  if (pathExists(file)) throw usage(`--secret-file ${file} already exists; pick a new path.`);
+  let dir: Stats | undefined;
+  try {
+    dir = statSync(dirname(resolve(file)));
+  } catch {
+    /* reported below */
+  }
+  if (!dir?.isDirectory()) throw usage(`--secret-file ${file}: the folder ${dirname(resolve(file))} does not exist.`);
+}
+
+/** Open --secret-file descriptors, keyed by the command's options object (set by withSecretFile, used by revealOnce). */
+const SECRET_FDS = new WeakMap<Opts, number>();
+
+/**
+ * Runs a create that may return a one-time secret. --secret-file is created (O_EXCL, mode 0600) BEFORE the
+ * request, so a bad path fails without creating anything; revealOnce then writes into that open file. If the
+ * request fails, or no secret comes back, the empty file is removed. --dry-run only checks the path.
+ */
+export async function withSecretFile<T>(ctx: Ctx, opts: Opts, fn: () => Promise<T>): Promise<T> {
+  const file = opts.secretFile as string | undefined;
+  checkSecretFile(opts);
+  if (!file || ctx.flags.dryRun) return fn();
+  let fd: number;
+  try {
+    fd = openExclusive(file, 0o600);
+  } catch (e) {
+    if (e instanceof VobizError) throw usage(`--secret-file ${file} already exists; pick a new path.`);
+    throw usage(`--secret-file ${file} cannot be created: ${(e as NodeJS.ErrnoException).code ?? (e as Error).message}.`);
+  }
+  SECRET_FDS.set(opts, fd);
+  try {
+    return await fn();
+  } finally {
+    const open = SECRET_FDS.get(opts);
+    if (open !== undefined) {
+      // Nothing was written: the request failed or returned no secret. Leave no empty file behind.
+      SECRET_FDS.delete(opts);
+      closeSync(open);
+      rmSync(file, { force: true });
+    }
+  }
 }
 
 /**
@@ -309,7 +352,15 @@ export function revealOnce(ctx: Ctx, data: unknown, paths: string[], label: stri
     if (Object.values(typed).includes(v)) return; // the user already knows it
     const file = opts.secretFile as string | undefined;
     if (file) {
-      writeFileSync(file, v + "\n", { mode: 0o600, flag: "wx" });
+      const fd = SECRET_FDS.get(opts);
+      if (fd !== undefined) {
+        SECRET_FDS.delete(opts);
+        try {
+          writeSync(fd, v + "\n");
+        } finally {
+          closeSync(fd);
+        }
+      } else writeFileSync(file, v + "\n", { mode: 0o600, flag: "wx" });
       ctx.out.status(`Saved the ${label} to ${file} (mode 0600).`);
     }
     if (opts.revealSecret) ctx.out.warn(`${label} (shown ONCE, store it now; it is redacted everywhere else): ${v}`);
@@ -416,8 +467,11 @@ export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
     const body = await buildBody(ctx, opts, createSpec, s.create);
     const details = detailsFrom(body, s.summaryKeys);
     Object.assign(details, urlHosts(body));
-    const data = await confirmedCall<Record<string, unknown>>(ctx, { action: `Create ${aNoun}`, details: { account: ctx.client.authId, ...details } }, s.create, { body });
-    if (s.secretPaths) revealOnce(ctx, data, s.secretPaths, s.secretLabel ?? "password", opts, body);
+    const data = await withSecretFile(ctx, s.secretPaths ? opts : {}, async () => {
+      const res = await confirmedCall<Record<string, unknown>>(ctx, { action: `Create ${aNoun}`, details: { account: ctx.client.authId, ...details } }, s.create, { body });
+      if (s.secretPaths) revealOnce(ctx, res, s.secretPaths, s.secretLabel ?? "password", opts, body);
+      return res;
+    });
     const newId = data ? getPath(data, s.createdIdPath ?? s.idKey) : undefined;
     ctx.out.status(`Created ${s.noun}${newId ? ` ${String(newId)}` : ""}.`);
     ctx.out.print(data && s.sanitizeCreated ? s.sanitizeCreated(data) : (data ?? {}));

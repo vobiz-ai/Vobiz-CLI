@@ -20,6 +20,7 @@ import {
   revealOnce,
   addSecretOptions,
   checkSecretFile,
+  withSecretFile,
   runList,
   urlHosts,
 } from "./provisioning-shared.js";
@@ -63,13 +64,16 @@ function registerAccounts(partner: Command, ctx: Ctx): void {
   create.action(async (opts: Opts) => {
     checkSecretFile(opts);
     const body = await buildBody(ctx, opts, createSpec, CREATE_ACCOUNT);
-    const data = await confirmedCall<Record<string, unknown>>(
-      ctx,
-      { action: "Create a customer account", details: detailsFrom(body, ["name", "email", "phone", "company", "country"]) },
-      CREATE_ACCOUNT,
-      { body },
-    );
-    revealOnce(ctx, data, ["auth_token"], "customer Auth Token", opts, body);
+    const data = await withSecretFile(ctx, opts, async () => {
+      const res = await confirmedCall<Record<string, unknown>>(
+        ctx,
+        { action: "Create a customer account", details: detailsFrom(body, ["name", "email", "phone", "company", "country"]) },
+        CREATE_ACCOUNT,
+        { body },
+      );
+      revealOnce(ctx, res, ["auth_token"], "customer Auth Token", opts, body);
+      return res;
+    });
     ctx.out.status(`Created customer account${data?.auth_id ? ` ${String(data.auth_id)}` : ""}.`);
     ctx.out.print(data ?? {});
   });

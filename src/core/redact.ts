@@ -6,7 +6,7 @@
 export const REDACTED = "[redacted]";
 
 const SECRET_KEYS = new Set(
-  ["auth_token", "auth_secret", "authToken", "password", "secret", "token", "client_secret", "private_key", "x-auth-token"].map((k) =>
+  ["auth_token", "auth_secret", "authToken", "authSecret", "password", "secret", "token", "access_token", "refresh_token", "accessToken", "refreshToken", "api_key", "apiKey", "client_secret", "private_key", "x-auth-token"].map((k) =>
     k.toLowerCase(),
   ),
 );

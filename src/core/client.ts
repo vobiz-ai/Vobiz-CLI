@@ -78,6 +78,11 @@ export class DryRunSignal extends Error {
 
 export const DEFAULT_TIMEOUT_MS = 30_000;
 const BODY_METHODS = new Set<HttpMethod>(["POST", "PUT", "PATCH"]);
+
+/** POST/PUT/PATCH always carry a body (the gateway wants a JSON Content-Type even when empty); DELETE only when the caller gives one (e.g. remove-campaign-numbers, kyc-session revoke reason). */
+function sendsBody(method: HttpMethod, body: unknown): boolean {
+  return BODY_METHODS.has(method) || (method === "DELETE" && body !== undefined);
+}
 const ACCOUNT_PARAMS = new Set(["auth_id", "account_id"]);
 
 export class VobizClient {
@@ -155,7 +160,7 @@ export class VobizClient {
       method,
       url: url.toString(),
       headers: { ...headers, "X-Auth-Token": REDACTED },
-      ...(BODY_METHODS.has(method) ? { body: args.body instanceof FormData ? "[multipart form data]" : redact(args.body ?? {}) } : {}),
+      ...(sendsBody(method, args.body) ? { body: args.body instanceof FormData ? "[multipart form data]" : redact(args.body ?? {}) } : {}),
     };
   }
 
@@ -168,7 +173,7 @@ export class VobizClient {
       "User-Agent": USER_AGENT,
     };
     // The gateway rejects POSTs without a JSON Content-Type, even when the body is empty.
-    if (BODY_METHODS.has(method) && !(body instanceof FormData)) h["Content-Type"] = "application/json";
+    if (sendsBody(method, body) && !(body instanceof FormData)) h["Content-Type"] = "application/json";
     return h;
   }
 
@@ -186,7 +191,7 @@ export class VobizClient {
     if (this.isDryRun(args)) throw new DryRunSignal(this.prepare(api, method, path, args, operation));
     const url = this.buildUrl(api, path, args.query);
     const headers = this.headers(method, args.body);
-    const body = BODY_METHODS.has(method) ? (args.body instanceof FormData ? args.body : JSON.stringify(args.body ?? {})) : undefined;
+    const body = sendsBody(method, args.body) ? (args.body instanceof FormData ? args.body : JSON.stringify(args.body ?? {})) : undefined;
     if (body !== undefined) this.log("debug", `request body: ${args.body instanceof FormData ? "[multipart form data]" : JSON.stringify(redact(args.body ?? {}))}`);
 
     const timeoutMs = this.opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;

@@ -160,3 +160,23 @@ describe("VobizClient", () => {
     expect(logs.join("\n")).not.toContain(TEST_AUTH_TOKEN);
   });
 });
+
+describe("DELETE bodies and extra redaction keys", () => {
+  it("sends a JSON body on DELETE only when one is given", async () => {
+    const api = fakeFetch({ "DELETE /10dlc/campaigns/c1/numbers": { ok: true }, "DELETE /opt-outs/%2B15550100": { ok: true } });
+    const c = client(api.fetch);
+    await c.call(op("remove-campaign-numbers"), { path: { id: "c1" }, body: { phoneNumbers: ["+15550100"] } });
+    expect(api.last().method).toBe("DELETE");
+    expect(api.last().headers["content-type"]).toBe("application/json");
+    expect(api.last().body).toEqual({ phoneNumbers: ["+15550100"] });
+    await c.call(op("delete-opt-out"), { path: { phoneNumber: "+15550100" } });
+    expect(api.last().headers["content-type"]).toBeUndefined();
+    expect(api.last().body).toBeUndefined();
+  });
+  it("redacts access, refresh and api keys", async () => {
+    const { redact } = await import("../src/core/redact.js");
+    expect(redact({ tokens: { access_token: "a", refresh_token: "b" }, api_key: "k", ok: 1 })).toEqual({
+      tokens: { access_token: "[redacted]", refresh_token: "[redacted]" }, api_key: "[redacted]", ok: 1,
+    });
+  });
+});

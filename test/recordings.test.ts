@@ -66,6 +66,21 @@ describe("vobiz recordings", () => {
     expect(stdout.out).toBe("RIFFxxxxWAVE");
   });
 
+  it("download never forwards the API credentials through a redirect to another host", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "vobiz-rec-"));
+    const api = fakeFetch({
+      [`GET ${A}/Recording/${ID}/`]: { ...rec(ID), recording_url: `https://api.vobiz.ai/v1/media/${ID}.wav` },
+      [`GET /v1/media/${ID}.wav`]: reply(302, undefined, { location: `https://evil.example/${ID}.wav` }),
+      [`GET /${ID}.wav`]: textReply(200, "RIFF", { "content-type": "audio/wav" }),
+    });
+    const r = await runCli(["recordings", "download", ID, "--out", join(dir, "x.wav")], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(api.calls[1]!.headers["x-auth-id"]).toBe(TEST_AUTH_ID);
+    expect(api.last().url).toBe(`https://evil.example/${ID}.wav`);
+    expect(api.last().headers["x-auth-id"]).toBeUndefined();
+    expect(api.last().headers["x-auth-token"]).toBeUndefined();
+  });
+
   it("download refuses a missing or non-https recording_url and reports storage errors", async () => {
     let api = fakeFetch({ [`GET ${A}/Recording/${ID}/`]: { recording_id: ID, recording_url: "" } });
     expect((await runCli(["recordings", "download", ID], { fetch: api.fetch })).code).toBe(1);

@@ -2,23 +2,19 @@
  * Helpers shared by the `vobiz sms` command modules. The Messaging API (base https://api.vobiz.ai/api/v1/sms)
  * uses camelCase JSON; every request still goes through `ctx.client` with an operation from the vendored spec.
  *
- * Two things the core client does not do are implemented here, inside the sms module:
- *   - `deleteWithBody`: the spec's `remove-campaign-numbers` is a DELETE with a JSON body, which the core client
- *     never sends (it only sends bodies with POST/PUT/PATCH).
- *   - list printing that keeps the raw response shape in json/yaml modes even across `--all` pages.
+ * Also here: list printing that keeps the raw response shape in json/yaml modes even across `--all` pages.
+ * (DELETE requests with a JSON body, such as `remove-campaign-numbers`, go through `ctx.client.call` like any other.)
  */
 import { readFileSync, statSync } from "node:fs";
 import { basename } from "node:path";
 import { Option, type Command } from "commander";
-import { DryRunSignal, type CallArgs } from "../../core/client.js";
+import type { CallArgs } from "../../core/client.js";
 import type { Ctx } from "../../core/context.js";
-import { VobizError, extractBackendMessage, kindForStatus, usage } from "../../core/errors.js";
+import { VobizError, usage } from "../../core/errors.js";
 import type { Operation } from "../../core/ops.js";
 import { toE164 } from "../../core/phone.js";
 import { extractItems, paginate, type PaginateOptions } from "../../core/pagination.js";
 import type { PrintOptions } from "../../core/output.js";
-import { redact } from "../../core/redact.js";
-import { USER_AGENT } from "../../core/version.js";
 import { readBody } from "../api.js";
 
 export type Rec = Record<string, unknown>;
@@ -217,57 +213,6 @@ export function printResult(ctx: Ctx, message: string, data: unknown): void {
   }
   ctx.out.status(message);
   ctx.out.print(data);
-}
-
-// ── DELETE with a JSON body ───────────────────────────────────────
-
-/**
- * Sends a DELETE that carries a JSON body (the core client sends bodies only with POST/PUT/PATCH). Mirrors the
- * client's behaviour: --dry-run shows the request, the token stays in the header, no retries, and a transport
- * failure is `outcome_unknown` because the change may have reached Vobiz.
- */
-export async function deleteWithBody<T = unknown>(ctx: Ctx, operation: Operation, pathParams: Record<string, string>, body: Rec): Promise<T> {
-  const client = ctx.client;
-  const path = client.fillPath(operation.path, pathParams);
-  const prepared = client.prepare(operation.api, operation.method, path, {}, operation.id);
-  if (ctx.flags.dryRun) throw new DryRunSignal({ ...prepared, headers: { ...prepared.headers, "Content-Type": "application/json" }, body: redact(body) });
-  const creds = client.creds;
-  const url = client.buildUrl(operation.api, path);
-  const controller = new AbortController();
-  const timeoutMs = ctx.flags.timeout * 1000;
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const started = Date.now();
-  const label = `${operation.method} ${operation.path}`;
-  ctx.log("debug", `request body: ${JSON.stringify(redact(body))}`);
-  let res: Response;
-  let text: string;
-  try {
-    res = await ctx.fetch(url, {
-      method: operation.method,
-      headers: { "X-Auth-ID": creds.authId, "X-Auth-Token": creds.authToken, Accept: "application/json", "Content-Type": "application/json", "User-Agent": USER_AGENT },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-      redirect: "manual",
-    });
-    text = await res.text();
-  } catch {
-    clearTimeout(timer);
-    ctx.log("verbose", `${label} -> ${controller.signal.aborted ? "timeout" : "network error"} (${Date.now() - started}ms)`);
-    throw new VobizError(
-      "outcome_unknown",
-      `${controller.signal.aborted ? "The request timed out" : "The connection failed"} before Vobiz answered, so it is unknown whether the request took effect. Do NOT retry blindly; check the current state first.`,
-    );
-  }
-  clearTimeout(timer);
-  ctx.log("verbose", `${label} -> ${res.status} (${Date.now() - started}ms)`);
-  let data: unknown;
-  try {
-    data = text ? JSON.parse(text) : undefined;
-  } catch {
-    data = undefined;
-  }
-  if (res.status >= 200 && res.status < 300) return data as T;
-  throw new VobizError(kindForStatus(res.status), extractBackendMessage(data ?? text) ?? `HTTP ${res.status}`, res.status, data === undefined ? undefined : redact(data));
 }
 
 // ── Flag tables for wide request bodies (RCS senders, 10DLC brands and campaigns) ──

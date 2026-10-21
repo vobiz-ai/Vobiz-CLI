@@ -135,6 +135,31 @@ describe("mcp install", () => {
     expect(JSON.parse(stripJsonc(original))).toEqual({ theme: "One Dark" });
   });
 
+  it("--with-credentials never prints the real Auth Token (dry-run or the comments refusal)", async () => {
+    const HOME = tempHome();
+    const secret = "tok_REAL_LOOKING_SECRET_123";
+    const env = { HOME, XDG_CONFIG_HOME: join(HOME, ".config"), APPDATA: join(HOME, "AppData"), VOBIZ_AUTH_TOKEN: secret };
+    const dry = await runCli(["mcp", "install", "claude", "--local", "--with-credentials", "--dry-run", "--yes"], { env });
+    expect(dry.code).toBe(0);
+    expect(dry.out + dry.err).not.toContain(secret);
+    expect(dry.out).toContain("YOUR_AUTH_TOKEN");
+    expect(dry.out).toContain(TEST_AUTH_ID);
+
+    const file = CLIENT_SPECS.zed.path({ env, platform: process.platform, cwd: HOME, project: false, mode: "local" })!;
+    mkdirSync(join(file, ".."), { recursive: true });
+    writeFileSync(file, "// mine\n{}\n");
+    const refused = await runCli(["mcp", "install", "zed", "--local", "--with-credentials", "--yes"], { env });
+    expect(refused.code).toBe(2);
+    expect(refused.out + refused.err).not.toContain(secret);
+    expect(refused.out).toContain("YOUR_AUTH_TOKEN");
+
+    const real = await runCli(["mcp", "install", "claude", "--local", "--with-credentials", "--yes"], { env });
+    expect(real.code).toBe(0);
+    expect(real.out + real.err).not.toContain(secret);
+    const written = CLIENT_SPECS.claude.path({ env, platform: process.platform, cwd: HOME, project: false, mode: "local" })!;
+    expect(readJson(written).mcpServers.vobiz.env.VOBIZ_AUTH_TOKEN).toBe(secret);
+  });
+
   it.each([
     [["mcp", "install", "cursor", "--with-credentials"], "needs --local"],
     [["mcp", "install", "codex", "--project"], "no project-level config"],

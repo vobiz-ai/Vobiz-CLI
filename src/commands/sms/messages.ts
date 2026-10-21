@@ -205,7 +205,7 @@ Examples:
         } catch (err) {
           if (to.length === 1) throw err;
           if (err instanceof VobizError && err.status === 422) {
-            messages.push({ to: recipient, status: "not_sent", errorCode: "opted_out", errorMessage: err.message });
+            messages.push({ to: recipient, status: "not_sent", errorCode: rejectionCode(err), errorMessage: err.message });
             continue;
           }
           if (!(err instanceof VobizError)) throw err;
@@ -319,6 +319,18 @@ function registerRcsReachability(sms: Command, ctx: Ctx): void {
     .action(async (to: string, o: { from: string }) => {
       ctx.out.print(await ctx.client.call(RCS_REACH, { query: { from: o.from, to: toE164(to) } }));
     });
+}
+
+/**
+ * The per-recipient code for a 422 from send-message. The spec documents 422 as "recipient has opted out", but a
+ * backend code or message saying otherwise wins; only an opt-out (or a bare 422) is labelled `opted_out`.
+ */
+export function rejectionCode(err: VobizError): string {
+  const d = isRec(err.details) ? err.details : {};
+  const code = [d.code, d.errorCode, d.error_code].find((c): c is string => typeof c === "string" && !!c.trim());
+  if (code) return code.trim();
+  if (/opt(ed)?[\s_-]?out/i.test(err.message)) return "opted_out";
+  return err.message && !/^HTTP 422$/.test(err.message) ? "rejected" : "opted_out";
 }
 
 export function registerMessaging(sms: Command, ctx: Ctx): void {

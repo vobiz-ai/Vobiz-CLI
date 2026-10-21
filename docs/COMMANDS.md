@@ -1356,10 +1356,12 @@ vobiz endpoints create [options]
 | Option | Description |
 |---|---|
 | `--username <value>` | username (required) |
-| `--password <value>` | password (required) |
+| `--password <value>` | password (@file or @- for stdin keeps it out of shell history) (required) |
 | `--alias <value>` | alias (required) |
 | `--application <n>` | application (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
+| `--reveal-secret` | print the returned SIP password once on stderr (off by default) |
+| `--secret-file <path>` | write the returned SIP password to this new file (mode 0600), for CI |
 
 ### vobiz endpoints delete
 
@@ -1425,7 +1427,7 @@ vobiz endpoints update <endpoint-id> [options]
 | Option | Description |
 |---|---|
 | `--alias <value>` | alias (required) |
-| `--password <value>` | password (required) |
+| `--password <value>` | password (@file or @- for stdin keeps it out of shell history) (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz feedback
@@ -1751,10 +1753,12 @@ vobiz partner accounts create [options]
 | `--name <value>` | Customer's full name. (required) |
 | `--email <value>` | Customer's email. (required) |
 | `--phone <value>` | E.164 format. (required) |
-| `--password <value>` | Min 8 chars, must include a number and a special character. (required) |
+| `--password <value>` | Min 8 chars, must include a number and a special character. (@file or @- for stdin keeps it out of shell history) (required) |
 | `--company <value>` | Legal company or business name. |
 | `--country <value>` | ISO 2-letter country code. (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
+| `--reveal-secret` | print the returned customer Auth Token once on stderr (off by default) |
+| `--secret-file <path>` | write the returned customer Auth Token to this new file (mode 0600), for CI |
 
 ### vobiz partner accounts list
 
@@ -1919,6 +1923,10 @@ vobiz partner kyc-sessions revoke <session-id> [options]
 | Argument | Required | Description |
 |---|---|---|
 | `session-id` | yes | KYC session ID |
+
+| Option | Description |
+|---|---|
+| `--reason <text>` | why the session is revoked (sent as the optional DELETE body) |
 
 ### vobiz partner me
 
@@ -3549,7 +3557,7 @@ vobiz sms webhooks create [options]
 | Option | Description |
 |---|---|
 | `--url <url>` | https URL that receives the POSTs |
-| `--secret <secret>` | shared secret for the X-Webhook-Signature HMAC |
+| `--secret <secret>` | shared secret for the X-Webhook-Signature HMAC (@file or @- for stdin keeps it out of shell history) |
 | `--event <name>` | event to deliver (repeatable; default: message.received, message.delivered, message.failed) |
 
 ### vobiz sms webhooks delete
@@ -3603,7 +3611,7 @@ vobiz sms webhooks update <id> [options]
 | Option | Description |
 |---|---|
 | `--url <url>` | new https URL |
-| `--secret <secret>` | new signing secret |
+| `--secret <secret>` | new signing secret (@file or @- for stdin) |
 | `--event <name>` | replace the event list (repeatable) |
 | `--active` | resume deliveries |
 | `--no-active` | pause deliveries and keep the subscription |
@@ -3677,11 +3685,13 @@ vobiz sub-accounts create [options]
 |---|---|
 | `--name <value>` | Human-readable name for the sub-account. (required) |
 | `--email <value>` | Required when `kyc_mode` is `customer_use`. |
-| `--password <value>` | Login password for the sub-account. |
+| `--password <value>` | Login password for the sub-account. (@file or @- for stdin keeps it out of shell history) |
 | `--kyc-mode <value>` | `personal_use` inherits parent KYC. (default: personal_use) (one of: `personal_use`, `customer_use`) |
 | `--business-type <value>` | Legal constitution of the customer. (one of: `individual`, `proprietorship`, `private_limited`, `llp`, `partnership`, `public_limited`, `trust`, `society`, `huf`, `government`) |
 | `--enabled` | enabled (--no-enabled to set false) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
+| `--reveal-secret` | print the returned sub-account Auth Token once on stderr (off by default) |
+| `--secret-file <path>` | write the returned sub-account Auth Token to this new file (mode 0600), for CI |
 
 ### vobiz sub-accounts delete
 
@@ -3986,7 +3996,7 @@ vobiz trunks create [options]
 | `--webhook-method <value>` | HTTP method for the webhook callback. (default: POST) (one of: `POST`, `GET`) |
 | `--recording-webhook-enabled` | Fire a `recording.completed` webhook to `webhook_url` after a recording is saved. (--no-recording-webhook-enabled to set false) |
 | `--username <value>` | Deprecated - use `credential_uuid`. |
-| `--password <value>` | Deprecated - use `credential_uuid`. |
+| `--password <value>` | Deprecated - use `credential_uuid`. (@file or @- for stdin keeps it out of shell history) |
 | `--ip-whitelist <value>` | Deprecated - use `ipacl_uuid`. (repeatable or comma-separated) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
@@ -4011,8 +4021,10 @@ vobiz trunks credentials create [options]
 | Option | Description |
 |---|---|
 | `--username <value>` | username (required) |
-| `--password <value>` | password (required) |
+| `--password <value>` | password (@file or @- for stdin keeps it out of shell history) (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
+| `--reveal-secret` | print the returned SIP password once on stderr (off by default) |
+| `--secret-file <path>` | write the returned SIP password to this new file (mode 0600), for CI |
 
 ### vobiz trunks credentials delete
 
@@ -4057,7 +4069,7 @@ vobiz trunks credentials update <credential-id> [options]
 
 | Option | Description |
 |---|---|
-| `--password <value>` | password (required) |
+| `--password <value>` | password (@file or @- for stdin keeps it out of shell history) (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz trunks delete
@@ -4390,7 +4402,7 @@ vobiz xml serve <file> [options]
 
 | Argument | Required | Description |
 |---|---|---|
-| `file` | yes | XML file to serve (re-read on every request) |
+| `file` | yes | XML file to serve (re-read on every request), or - to serve stdin (read once) |
 
 | Option | Description |
 |---|---|

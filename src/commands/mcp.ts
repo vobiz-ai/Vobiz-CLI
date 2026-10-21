@@ -45,9 +45,12 @@ function targetPath(ctx: Ctx, spec: ClientSpec, mode: Mode, o: ModeOpts): string
   return spec.path({ env: ctx.env, platform: process.platform, cwd: resolve(o.dir ?? process.cwd()), project: !!o.project, mode });
 }
 
-/** The snippet as the client's file format. */
+/**
+ * The snippet as the client's file format, for printing. The Auth Token is always the YOUR_AUTH_TOKEN placeholder:
+ * only the 0600 config file written by `install --with-credentials` ever holds the real token.
+ */
 function snippet(spec: ClientSpec, mode: Mode, name: string, creds?: Credentials): string {
-  const frag = fragment(spec, mode, name, creds);
+  const frag = fragment(spec, mode, name, creds ? { authId: creds.authId, authToken: "YOUR_AUTH_TOKEN" } : undefined);
   if (spec.format === "toml") return tomlTable(spec.container, name, (frag[spec.container] as Record<string, Record<string, unknown>>)[name]);
   return JSON.stringify(frag, null, 2) + "\n";
 }

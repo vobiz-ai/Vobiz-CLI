@@ -18,6 +18,8 @@ import {
   detailsFrom,
   examples,
   revealOnce,
+  addSecretOptions,
+  checkSecretFile,
   runList,
   urlHosts,
 } from "./provisioning-shared.js";
@@ -56,8 +58,10 @@ function registerAccounts(partner: Command, ctx: Ctx): void {
 
   const create = accounts.command("create").description("Create a customer account (Vobiz emails the customer)");
   const createSpec = addBodyOptions(create, CREATE_ACCOUNT);
+  addSecretOptions(create, "customer Auth Token");
   create.addHelpText("after", examples("vobiz partner accounts create --name 'Jane Doe' --email jane@example.com --phone +919876543210 --country IN   # prompts for the password"));
   create.action(async (opts: Opts) => {
+    checkSecretFile(opts);
     const body = await buildBody(ctx, opts, createSpec, CREATE_ACCOUNT);
     const data = await confirmedCall<Record<string, unknown>>(
       ctx,
@@ -65,7 +69,7 @@ function registerAccounts(partner: Command, ctx: Ctx): void {
       CREATE_ACCOUNT,
       { body },
     );
-    revealOnce(ctx, data, ["auth_token"], "Customer Auth Token");
+    revealOnce(ctx, data, ["auth_token"], "customer Auth Token", opts, body);
     ctx.out.status(`Created customer account${data?.auth_id ? ` ${String(data.auth_id)}` : ""}.`);
     ctx.out.print(data ?? {});
   });
@@ -175,11 +179,13 @@ function registerKycSessions(partner: Command, ctx: Ctx): void {
     .command("revoke")
     .argument("<session-id>", "KYC session ID")
     .description("Revoke a KYC session so its link stops working")
-    // The spec allows an optional {reason} body on this DELETE, but the core client sends bodies only with
-    // POST/PUT/PATCH, so there is no --reason flag yet.
-    .action(async (id: string) => {
-      const data = await confirmedCall(ctx, { action: `Revoke KYC session ${id}`, details: { effect: "the customer can no longer use the link" } }, REVOKE_SESSION, {
+    .option("--reason <text>", "why the session is revoked (sent as the optional DELETE body)")
+    .action(async (id: string, o: { reason?: string }) => {
+      const details: Record<string, string> = { effect: "the customer can no longer use the link" };
+      if (o.reason) details.reason = o.reason;
+      const data = await confirmedCall(ctx, { action: `Revoke KYC session ${id}`, details }, REVOKE_SESSION, {
         path: { session_id: id },
+        ...(o.reason ? { body: { reason: o.reason } } : {}),
       });
       ctx.out.success(`Revoked KYC session ${id}.`, data ?? { session_id: id, revoked: true });
     });

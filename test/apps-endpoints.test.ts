@@ -15,7 +15,11 @@ describe("apps", () => {
     const r = await runCli(["apps", "list", "--all", "--json"], { fetch: api.fetch });
     expect(r.code).toBe(0);
     expect(api.calls.map((c) => c.query.offset)).toEqual(["0", "1"]);
-    expect(r.json<{ app_id: string }[]>().map((x) => x.app_id)).toEqual(["123", "456"]);
+    // The JSON keeps the API's wrapper whatever the page count; every page's items are merged under `objects`.
+    expect(r.json<{ objects: { app_id: string }[] }>().objects.map((x) => x.app_id)).toEqual(["123", "456"]);
+    expect(r.json()).toMatchObject({ meta: { total_count: 2 } });
+    const page = await runCli(["apps", "list", "--limit", "1", "--json"], { fetch: api.fetch });
+    expect(page.json()).toMatchObject({ meta: { total_count: 2 }, objects: [{ app_id: "123" }] });
     const one = await runCli(["apps", "list", "--limit", "1", "-q"], { fetch: api.fetch });
     expect(one.out).toBe("123\n");
     expect(api.last().query).toMatchObject({ limit: "1", offset: "0" });
@@ -43,6 +47,21 @@ describe("apps", () => {
     expect(api.last()).toMatchObject({ method: "DELETE", path: `${A}/Application/123/` });
   });
 
+  it("refuses non-https URL fields from flags and --body", async () => {
+    const api = fakeFetch({ [`POST ${A}/Application/`]: reply(201, { app_id: "789" }), [`POST ${A}/Application/123/`]: { message: "changed" } });
+    const flag = await runCli(["apps", "create", "--app-name", "IVR", "--answer-url", "http://evil.example/x", "--yes"], { fetch: api.fetch });
+    expect(flag.code).toBe(2);
+    expect(flag.err).toContain("--answer-url must use https://");
+    const body = await runCli(["apps", "update", "123", "--body", '{"hangup_url":"http://localhost:3000/h"}', "--yes"], { fetch: api.fetch });
+    expect(body.code).toBe(2);
+    expect(body.err).toContain("--body hangup_url must use https://");
+    const scheme = await runCli(["apps", "update", "123", "--body", '{"fallbackUrl":"javascript:alert(1)"}', "--yes"], { fetch: api.fetch });
+    expect(scheme.code).toBe(2);
+    expect(api.calls).toHaveLength(0);
+    const ok = await runCli(["apps", "update", "123", "--body", '{"hangup_url":"https://example.com/h","message_url":""}', "--yes"], { fetch: api.fetch });
+    expect(ok.code).toBe(0);
+  });
+
   it("--dry-run create sends nothing", async () => {
     const api = fakeFetch({});
     const r = await runCli(["apps", "create", "--app-name", "a", "--answer-url", "https://e.com", "--answer-method", "GET", "--dry-run", "--json"], { fetch: api.fetch });
@@ -60,13 +79,13 @@ describe("endpoints", () => {
     expect(api.last().query).toMatchObject({ username__contains: "sales", application_id__exact: "42" });
   });
 
-  it("create sends the body, prompts for nothing with --password, reveals a returned password once", async () => {
+  it("create sends the body, prompts for nothing with --password, never echoes the password the user typed", async () => {
     const api = fakeFetch({ [`POST ${A}/Endpoint/`]: reply(201, { alias: "Desk", endpoint_id: "e-1", username: "desk_01", password: "Pw-123456!" }) });
     const r = await runCli(["endpoints", "create", "--username", "desk_01", "--password", "Pw-123456!", "--alias", "Desk", "--application", "42", "--yes", "--json"], { fetch: api.fetch });
     expect(r.code).toBe(0);
     expect(api.last().body).toEqual({ username: "desk_01", password: "Pw-123456!", alias: "Desk", application: 42 });
-    expect(r.out).not.toContain("Pw-123456!");
-    expect(r.err).toContain("SIP password (shown ONCE");
+    expect(r.out + r.err).not.toContain("Pw-123456!"); // the password the user typed is never echoed back
+    expect(r.err).not.toContain("shown ONCE");
   });
 
   it("create without --password and without a terminal is a usage error", async () => {

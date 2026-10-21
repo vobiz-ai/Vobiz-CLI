@@ -6,7 +6,7 @@ import type { Command } from "commander";
 import { CONSOLE_URL, SMS_BASE_URL, VOICE_BASE_URL } from "../core/config.js";
 import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
-import { describeAuthId, profileName, type ResolvedCredentials } from "../core/credentials.js";
+import { describeAuthId, profileName, resolveBaseUrls, type ResolvedCredentials } from "../core/credentials.js";
 import { VobizError } from "../core/errors.js";
 import { op } from "../core/ops.js";
 
@@ -88,8 +88,7 @@ function registerLogin(program: Command, ctx: Ctx) {
       const existing = ctx.store.getProfile(name);
       const creds: ResolvedCredentials = {
         ...pair,
-        voiceBaseUrl: ctx.flags.baseUrl ?? ctx.env.VOBIZ_BASE_URL ?? existing?.voiceBaseUrl ?? VOICE_BASE_URL,
-        smsBaseUrl: ctx.flags.smsBaseUrl ?? ctx.env.VOBIZ_SMS_BASE_URL ?? existing?.smsBaseUrl ?? SMS_BASE_URL,
+        ...resolveBaseUrls(ctx.flags, ctx.env, existing),
         source: "flags",
         profile: name,
       };

@@ -8,18 +8,21 @@
  *   when stdin is a terminal). With `--body`, the body is sent as given.
  * - Query flags are generated the same way from `op.queryParams` (pagination params excluded; `--limit/--all`
  *   cover those). Date params (`*_date`) accept `today`, `7d`, `2026-10-01`, ISO timestamps.
- * - `runList` prints a default table, or the raw response body with --output json/yaml when it is one page.
+ * - `runList` prints a default table, or with --output json/yaml the response body with every page's items merged.
  */
+import { existsSync, writeFileSync } from "node:fs";
 import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { requireConfirmation, type ConfirmSummary } from "../core/confirm.js";
 import { usage } from "../core/errors.js";
+import { readSecretArg } from "../core/secrets.js";
 import { getPath, type PrintOptions } from "../core/output.js";
-import { extractItems, paginate } from "../core/pagination.js";
+import { listBody, paginate } from "../core/pagination.js";
 import { parseTime, toYmd } from "../core/time.js";
 import type { CallArgs } from "../core/client.js";
 import type { Operation, Param } from "../generated/operations.js";
 import { readBody } from "./api.js";
+import { checkUrl } from "./voice-shared.js";
 
 type Opts = Record<string, unknown>;
 
@@ -76,6 +79,7 @@ function addParamOptions(cmd: Command, params: Param[], extraDescription?: (p: P
     if (fields.some((f) => f.flag === flag)) continue;
     const attr = camel(flag);
     let desc = shortDescription(p);
+    if (SECRET_FIELDS.has(p.name)) desc += " (@file or @- for stdin keeps it out of shell history)";
     if (p.required) desc += " (required)";
     if (extraDescription) desc += extraDescription(p);
     if (p.default !== undefined && p.type !== "boolean") desc += ` (default: ${String(p.default)})`;
@@ -99,6 +103,9 @@ function addParamOptions(cmd: Command, params: Param[], extraDescription?: (p: P
   }
   return fields;
 }
+
+/** Body fields whose flag takes a secret: `@file` / `@-` are read, and a literal value warns about shell history. */
+const SECRET_FIELDS = new Set(["password", "secret"]);
 
 export interface BodySpec {
   fields: FieldSpec[];
@@ -127,7 +134,7 @@ export async function buildBody(ctx: Ctx, opts: Opts, spec: BodySpec, op: Operat
     const v = opts[f.attr];
     if (v === undefined) continue;
     if (!allowed.has(f.name)) throw usage(`--${f.flag} is not accepted here (${op.id} takes: ${[...allowed.keys()].join(", ") || "no body"}).`);
-    fromFlags[f.name] = v;
+    fromFlags[f.name] = SECRET_FIELDS.has(f.name) && typeof v === "string" ? await readSecretArg(ctx, v, `--${f.flag}`) : v;
   }
   let body: Record<string, unknown> = {};
   const usingBody = opts.body !== undefined;
@@ -137,6 +144,7 @@ export async function buildBody(ctx: Ctx, opts: Opts, spec: BodySpec, op: Operat
     body = parsed as Record<string, unknown>;
   }
   body = { ...body, ...fromFlags };
+  checkBodyUrls(body, fromFlags, opts);
   if (!usingBody) {
     const missing: Param[] = [];
     for (const p of op.body.props) {
@@ -148,6 +156,26 @@ export async function buildBody(ctx: Ctx, opts: Opts, spec: BodySpec, op: Operat
   }
   if (o.requireSomething && !Object.keys(body).length) throw usage(`Nothing to change. Pass at least one of ${[...allowed.keys()].map((k) => `--${kebab(k)}`).join(", ")}.`);
   return body;
+}
+
+const URL_KEY = /(_url|Url)$/;
+
+/**
+ * Every URL-valued body property (`*_url`, `*Url`, from a flag or from --body) must be https, since Vobiz calls
+ * it with call or account data. http is accepted only for localhost, and only where the command offers
+ * --allow-insecure-url. An empty string (clearing the field) is left alone.
+ */
+function checkBodyUrls(body: Record<string, unknown>, fromFlags: Record<string, unknown>, opts: Opts): void {
+  for (const [key, value] of Object.entries(body)) {
+    if (!URL_KEY.test(key) || value === "" || value === null || value === undefined) continue;
+    const label = key in fromFlags ? `--${kebab(key)}` : `--body ${key}`;
+    if (typeof value !== "string") throw usage(`${label} must be a URL string.`);
+    if (opts.allowInsecureUrl === true) checkUrl(value, label, { allowInsecure: true });
+    else if (!/^https:\/\//i.test(value)) {
+      checkUrl(value, label); // invalid URL or another scheme: its message
+      throw usage(`${label} must use https:// (got "${value}").`);
+    }
+  }
 }
 
 export interface QuerySpec {
@@ -186,18 +214,16 @@ export interface ListPrint extends PrintOptions {
 }
 
 /**
- * Lists through the pagination helper. Table/tsv/plain print `columns`; json/yaml print the raw response body when
- * it was a single untruncated page, otherwise the collected items.
+ * Lists through the pagination helper. Table/tsv/plain print `columns`; json/yaml print the response body with the
+ * collected items (every page, cut to --limit) under its list key, so the shape never depends on the page count.
  */
 export async function runList(ctx: Ctx, op: Operation, args: CallArgs, opts: Opts, print: ListPrint): Promise<void> {
   const limit = opts.limit as number | undefined;
   const all = !!opts.all;
   const r = await paginate(ctx.client, op, args, { limit, all, itemsKey: print.itemsKey });
   const mode = ctx.out.mode;
-  const pageItems = extractItems(r.last, print.itemsKey) ?? [];
-  const raw = (mode === "json" || mode === "yaml") && !ctx.flags.fields && !ctx.flags.quiet && r.pages === 1 && pageItems.length === r.items.length;
-  if (raw) {
-    ctx.out.print(r.last ?? []);
+  if ((mode === "json" || mode === "yaml") && !ctx.flags.fields && !ctx.flags.quiet) {
+    ctx.out.print(listBody(r.last, r.items, print.itemsKey));
     return;
   }
   ctx.out.print(r.items, print);
@@ -213,18 +239,38 @@ export async function confirmedCall<T = unknown>(ctx: Ctx, summary: ConfirmSumma
 
 const LOOKS_REDACTED = /^(<?redacted>?|\[redacted\]|\*+|x+)$/i;
 
+/** Adds --reveal-secret and --secret-file to a create command whose response carries a secret shown only once. */
+export function addSecretOptions(cmd: Command, label: string): Command {
+  return cmd
+    .option("--reveal-secret", `print the returned ${label} once on stderr (off by default)`)
+    .option("--secret-file <path>", `write the returned ${label} to this new file (mode 0600), for CI`);
+}
+
+/** Fails before the request when --secret-file already exists, so the one-time secret is never lost after it. */
+export function checkSecretFile(opts: Opts): void {
+  const file = opts.secretFile as string | undefined;
+  if (file !== undefined && existsSync(file)) throw usage(`--secret-file ${file} already exists; pick a new path.`);
+}
+
 /**
- * Shows a secret the API returns exactly once (a new SIP password or Auth Token) on stderr, clearly marked. The
- * printed record stays redacted (only `--debug --show-secrets` lifts that).
+ * Handles a secret the API returns exactly once (a new SIP password or Auth Token). The printed record stays
+ * redacted (only `--debug --show-secrets` lifts that). The value is written to --secret-file (0600) and shown on
+ * stderr only with --reveal-secret; a value equal to one the user typed (e.g. their own --password) is never echoed.
  */
-export function revealOnce(ctx: Ctx, data: unknown, paths: string[], label: string): void {
+export function revealOnce(ctx: Ctx, data: unknown, paths: string[], label: string, opts: Opts = {}, typed: Record<string, unknown> = {}): void {
   if (ctx.flags.debug && ctx.flags.showSecrets) return; // already visible in the record
   for (const path of paths) {
     const v = getPath(data, path);
-    if (typeof v === "string" && v && !LOOKS_REDACTED.test(v)) {
-      ctx.out.warn(`${label} (shown ONCE, store it now; it is redacted everywhere else): ${v}`);
-      return;
+    if (typeof v !== "string" || !v || LOOKS_REDACTED.test(v)) continue;
+    if (Object.values(typed).includes(v)) return; // the user already knows it
+    const file = opts.secretFile as string | undefined;
+    if (file) {
+      writeFileSync(file, v + "\n", { mode: 0o600, flag: "wx" });
+      ctx.out.status(`Saved the ${label} to ${file} (mode 0600).`);
     }
+    if (opts.revealSecret) ctx.out.warn(`${label} (shown ONCE, store it now; it is redacted everywhere else): ${v}`);
+    else if (!file) ctx.out.warn(`A ${label} was returned but not shown. Pass --reveal-secret or --secret-file <path> to capture it, or read it from the Vobiz console.`);
+    return;
   }
 }
 
@@ -319,13 +365,15 @@ export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
 
   const create = group.command("create").description(`Create ${aNoun}`);
   const createSpec = addBodyOptions(create, s.create);
+  if (s.secretPaths) addSecretOptions(create, s.secretLabel ?? "password");
   if (s.createExamples) create.addHelpText("after", examples(...s.createExamples));
   create.action(async (opts: Opts) => {
+    if (s.secretPaths) checkSecretFile(opts);
     const body = await buildBody(ctx, opts, createSpec, s.create);
     const details = detailsFrom(body, s.summaryKeys);
     Object.assign(details, urlHosts(body));
     const data = await confirmedCall<Record<string, unknown>>(ctx, { action: `Create ${aNoun}`, details: { account: ctx.client.authId, ...details } }, s.create, { body });
-    if (s.secretPaths) revealOnce(ctx, data, s.secretPaths, s.secretLabel ?? "Password");
+    if (s.secretPaths) revealOnce(ctx, data, s.secretPaths, s.secretLabel ?? "password", opts, body);
     const newId = data ? getPath(data, s.createdIdPath ?? s.idKey) : undefined;
     ctx.out.status(`Created ${s.noun}${newId ? ` ${String(newId)}` : ""}.`);
     ctx.out.print(data && s.sanitizeCreated ? s.sanitizeCreated(data) : (data ?? {}));

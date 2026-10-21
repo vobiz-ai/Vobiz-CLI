@@ -59,7 +59,10 @@ export interface CtxOptions {
   fetch?: typeof fetch;
   prompts?: Prompts;
   now?: () => Date;
-  /** Opens a URL in the user's browser (login --browser). */
+  /**
+   * Opens a URL in the user's browser (login --browser, docs open). The default only launches a browser for an
+   * interactive user: with VOBIZ_NO_BROWSER or CI set, or stdout not a TTY, it prints the URL instead.
+   */
   openUrl?: (url: string) => Promise<void>;
   flags?: Partial<GlobalFlags>;
 }
@@ -202,6 +205,11 @@ export async function openUrlGuarded(
     return;
   }
   await openInBrowser(url, spawnFn);
+}
+
+/** Alias kept for callers/tests written against the review-fix branch. */
+export function mayOpenBrowser(env: NodeJS.ProcessEnv, stdout: Stream): boolean {
+  return browserAllowed(env, Boolean(stdout.isTTY));
 }
 
 async function openInBrowser(url: string, spawnFn: SpawnFn = spawn): Promise<void> {

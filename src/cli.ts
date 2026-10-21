@@ -10,6 +10,7 @@ import { COMMAND_GROUPS } from "./commands/index.js";
 import { DryRunSignal } from "./core/client.js";
 import type { Ctx, GlobalFlags } from "./core/context.js";
 import { EXIT, VobizError } from "./core/errors.js";
+import { assertSecureBaseUrl } from "./core/credentials.js";
 import { OUTPUT_MODES, parseQuery, toVobizError, type OutputMode } from "./core/output.js";
 import { startUpdateCheck } from "./core/update.js";
 import { CLI_VERSION } from "./core/version.js";
@@ -68,18 +69,9 @@ function addGlobalOptions(program: Command): void {
 export function resolveGlobalFlags(raw: RawGlobals, env: NodeJS.ProcessEnv): GlobalFlags {
   const timeoutText = raw.timeout ?? env.VOBIZ_TIMEOUT;
   const timeout = timeoutText === undefined ? 30 : Number(timeoutText);
-  if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 3600) throw new VobizError("invalid_input", `--timeout must be a number of seconds between 1 and 3600 (got "${timeoutText}").`);
-  for (const [flag, url] of [["--base-url", raw.baseUrl], ["--sms-base-url", raw.smsBaseUrl]] as const) {
-    if (url === undefined) continue;
-    let u: URL;
-    try {
-      u = new URL(url);
-    } catch {
-      throw new VobizError("invalid_input", `${flag} is not a valid URL.`);
-    }
-    const local = u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
-    if (u.protocol !== "https:" && !(local && u.protocol === "http:")) throw new VobizError("invalid_input", `${flag} must use https (http is allowed only for localhost).`);
-  }
+  if (!Number.isFinite(timeout) || timeout < 1 || timeout > 3600) throw new VobizError("invalid_input", `--timeout must be a number of seconds between 1 and 3600 (got "${timeoutText}").`);
+  if (raw.baseUrl !== undefined) assertSecureBaseUrl(raw.baseUrl, "--base-url", env);
+  if (raw.smsBaseUrl !== undefined) assertSecureBaseUrl(raw.smsBaseUrl, "--sms-base-url", env);
   if (raw.query && raw.query.length > 1) throw new VobizError("invalid_input", "--query can be given only once.");
   const query = raw.query?.[0];
   if (query !== undefined) parseQuery(query);

@@ -28,9 +28,49 @@ export function profileName(flags: CredentialFlags, store: ConfigStore, env = pr
   return flags.profile ?? env.VOBIZ_PROFILE ?? store.settings().defaultProfile ?? "default";
 }
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * Why `url` may not be used as an API base URL, or undefined when it may. Credentials go to this host, so it must be
+ * https; plain http is accepted only for localhost/127.0.0.1/[::1], and only when `allowLocalHttp` is true.
+ */
+export function baseUrlProblem(url: string, allowLocalHttp: boolean): string | undefined {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return "is not a valid URL";
+  }
+  if (u.protocol === "https:") return undefined;
+  if (u.protocol === "http:" && LOCAL_HOSTS.has(u.hostname)) {
+    return allowLocalHttp ? undefined : "uses http; set VOBIZ_ALLOW_INSECURE_BASE_URL=1 to allow http for localhost";
+  }
+  return "must use https (http is allowed only for localhost with VOBIZ_ALLOW_INSECURE_BASE_URL=1)";
+}
+
+/** Throws invalid_input unless `url` is an https base URL (or http on localhost with VOBIZ_ALLOW_INSECURE_BASE_URL=1). */
+export function assertSecureBaseUrl(url: string, label: string, env: NodeJS.ProcessEnv = process.env): string {
+  const problem = baseUrlProblem(url, env.VOBIZ_ALLOW_INSECURE_BASE_URL === "1");
+  if (problem) throw new VobizError("invalid_input", `${label} ${problem} (got "${url}").`);
+  return url;
+}
+
+/** Picks the voice and Messaging base URLs (flag, env, profile, default) and checks both. */
+export function resolveBaseUrls(flags: CredentialFlags, env: NodeJS.ProcessEnv, p?: Pick<Profile, "voiceBaseUrl" | "smsBaseUrl">): { voiceBaseUrl: string; smsBaseUrl: string } {
+  const pick = (flag: string | undefined, flagName: string, envName: string, saved: string | undefined, savedName: string, dflt: string) => {
+    if (flag !== undefined) return assertSecureBaseUrl(flag, flagName, env);
+    if (env[envName] !== undefined) return assertSecureBaseUrl(env[envName]!, envName, env);
+    if (saved !== undefined) return assertSecureBaseUrl(saved, savedName, env);
+    return dflt;
+  };
+  return {
+    voiceBaseUrl: pick(flags.baseUrl, "--base-url", "VOBIZ_BASE_URL", p?.voiceBaseUrl, "The profile's voiceBaseUrl", VOICE_BASE_URL),
+    smsBaseUrl: pick(flags.smsBaseUrl, "--sms-base-url", "VOBIZ_SMS_BASE_URL", p?.smsBaseUrl, "The profile's smsBaseUrl", SMS_BASE_URL),
+  };
+}
+
 export function resolveCredentials(flags: CredentialFlags, store: ConfigStore, env = process.env): ResolvedCredentials {
-  const voiceBaseUrl = flags.baseUrl ?? env.VOBIZ_BASE_URL ?? VOICE_BASE_URL;
-  const smsBaseUrl = flags.smsBaseUrl ?? env.VOBIZ_SMS_BASE_URL ?? SMS_BASE_URL;
+  const { voiceBaseUrl, smsBaseUrl } = resolveBaseUrls(flags, env);
   if (flags.authId || flags.authToken) {
     if (!flags.authId || !flags.authToken) throw new VobizError("missing_credentials", "Pass both --auth-id and --auth-token, or neither.");
     return { authId: flags.authId, authToken: flags.authToken, voiceBaseUrl, smsBaseUrl, source: "flags" };
@@ -49,8 +89,7 @@ export function resolveCredentials(flags: CredentialFlags, store: ConfigStore, e
   return {
     authId: p.authId,
     authToken: p.authToken,
-    voiceBaseUrl: flags.baseUrl ?? env.VOBIZ_BASE_URL ?? p.voiceBaseUrl ?? VOICE_BASE_URL,
-    smsBaseUrl: flags.smsBaseUrl ?? env.VOBIZ_SMS_BASE_URL ?? p.smsBaseUrl ?? SMS_BASE_URL,
+    ...resolveBaseUrls(flags, env, p),
     source: "profile",
     profile: name,
   };

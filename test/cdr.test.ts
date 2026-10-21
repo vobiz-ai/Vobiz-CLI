@@ -150,6 +150,37 @@ describe("vobiz cdr", () => {
       expect(existsSync(join(dir, "x.csv"))).toBe(false);
     });
 
+    it("follows redirects itself: drops the auth headers on another origin, refuses http and loops", async () => {
+      const api = fakeFetch({
+        [`GET ${A}/cdr/export`]: reply(302, undefined, { location: "/api/v1/mirror/export" }),
+        "GET /api/v1/mirror/export": reply(302, undefined, { location: "https://storage.example/dl.csv?sig=1" }),
+        "GET /dl.csv": textReply(200, csv, { "content-type": "text/csv" }),
+      });
+      const r = await runCli(["cdr", "export"], { fetch: api.fetch });
+      expect(r.code, r.err).toBe(0);
+      expect(r.out).toBe(csv);
+      expect(api.calls.map((c) => c.url)).toEqual([
+        expect.stringContaining(`https://api.vobiz.ai${A}/cdr/export`),
+        "https://api.vobiz.ai/api/v1/mirror/export",
+        "https://storage.example/dl.csv?sig=1",
+      ]);
+      expect(api.calls[1]!.headers["x-auth-token"]).toBe(TEST_AUTH_TOKEN);
+      expect(api.calls[2]!.headers["x-auth-id"]).toBeUndefined();
+      expect(api.calls[2]!.headers["x-auth-token"]).toBeUndefined();
+
+      const http = fakeFetch({ [`GET ${A}/cdr/export`]: reply(301, undefined, { location: "http://storage.example/dl.csv" }) });
+      const refused = await runCli(["cdr", "export"], { fetch: http.fetch });
+      expect(refused.code).toBe(1);
+      expect(refused.err).toContain("refusing to follow a redirect to http:");
+      expect(http.calls).toHaveLength(1);
+
+      const loop = fakeFetch({ [`GET ${A}/cdr/export`]: reply(302, undefined, { location: `${A}/cdr/export` }) });
+      const looped = await runCli(["cdr", "export"], { fetch: loop.fetch });
+      expect(looped.code).toBe(1);
+      expect(looped.err).toContain("more than 5 redirects");
+      expect(loop.calls).toHaveLength(6);
+    });
+
     it("--dry-run prints the request and sends nothing", async () => {
       const api = fakeFetch();
       const r = await runCli(["cdr", "export", "--from", "2026-10-01", "--dry-run", "--json"], { fetch: api.fetch, now: NOW });

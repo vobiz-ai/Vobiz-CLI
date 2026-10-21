@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TEST_AUTH_ID, fakeFetch, reply, runCli } from "./helpers.js";
 
@@ -31,8 +34,25 @@ describe("sub-accounts", () => {
     expect(r.out).not.toContain("jwt-access-abc");
     expect(r.out).not.toContain("jwt-refresh-def");
     expect(r.json()).toMatchObject({ tokens: { token_type: "bearer" } });
-    expect(r.err.match(/real-sub-token-123/g)).toHaveLength(1);
+    expect(r.err).not.toContain("real-sub-token-123");
+    expect(r.err).toContain("A sub-account Auth Token was returned but not shown. Pass --reveal-secret or --secret-file");
     expect(r.err).toContain("Created sub-account SA_XXXXXXXX.");
+
+    const shown = await runCli(["sub-accounts", "create", "--name", "Acme", "--kyc-mode", "personal_use", "--reveal-secret", "--yes"], { fetch: api.fetch });
+    expect(shown.out).not.toContain("real-sub-token-123");
+    expect(shown.err.match(/real-sub-token-123/g)).toHaveLength(1);
+
+    const dir = mkdtempSync(join(tmpdir(), "vobiz-secret-"));
+    const file = join(dir, "token");
+    const saved = await runCli(["sub-accounts", "create", "--name", "Acme", "--kyc-mode", "personal_use", "--secret-file", file, "--yes"], { fetch: api.fetch });
+    expect(saved.code).toBe(0);
+    expect(saved.out + saved.err).not.toContain("real-sub-token-123");
+    expect(readFileSync(file, "utf8")).toBe("real-sub-token-123\n");
+    if (process.platform !== "win32") expect(statSync(file).mode & 0o777).toBe(0o600);
+    const calls = api.calls.length;
+    const again = await runCli(["sub-accounts", "create", "--name", "Acme", "--kyc-mode", "personal_use", "--secret-file", file, "--yes"], { fetch: api.fetch });
+    expect(again.code).toBe(2);
+    expect(api.calls).toHaveLength(calls);
   });
 
   it("create validates enums; update/delete/get paths", async () => {

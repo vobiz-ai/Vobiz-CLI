@@ -38,6 +38,7 @@ describe("pagination", () => {
     expect(pageStyle(fakeOp([param("page", { description: "Zero-based page index" }), param("limit")]))).toMatchObject({ kind: "page", first: 0 });
     expect(pageStyle(fakeOp([param("limit"), param("offset")]))).toEqual({ kind: "offset", sizeParam: "limit" });
     expect(pageStyle(fakeOp([]))).toEqual({ kind: "none" });
+    expect(pageStyle(fakeOp([param("limit")]))).toEqual({ kind: "none", sizeParam: "limit" });
   });
 
   it("--all follows page/per_page until has_next is false", async () => {
@@ -66,5 +67,59 @@ describe("pagination", () => {
     expect(r.hasMore).toBe(true);
     expect(r.total).toBe(50);
     expect(api.calls).toHaveLength(1);
+  });
+});
+
+describe("listBody", () => {
+  it("puts the collected items under the body's list key, nested or not", async () => {
+    const { listBody } = await import("../src/core/pagination.js");
+    expect(listBody({ meta: { total_count: 3 }, objects: [1] }, [1, 2, 3])).toEqual({ meta: { total_count: 3 }, objects: [1, 2, 3] });
+    expect(listBody({ data: { items: [1] }, ok: true }, [1, 2])).toEqual({ data: { items: [1, 2] }, ok: true });
+    expect(listBody({ accounts: null, total: 0 }, [], "accounts")).toEqual({ accounts: [], total: 0 });
+    expect(listBody([1], [1, 2])).toEqual([1, 2]);
+  });
+});
+
+describe("paginate guards", () => {
+  const client = (fetch: typeof globalThis.fetch, warnings: string[]) => new VobizClient({ creds, fetch, log: (level, msg) => level === "warn" && warnings.push(msg) });
+
+  it("sends the size param on a single-request endpoint so --limit is honoured", async () => {
+    const api = fakeFetch({ "GET /list": (req: RecordedRequest) => ({ data: Array.from({ length: Number(req.query.per_page ?? 50) }, (_, i) => i) }) });
+    const r = await paginate(client(api.fetch, []), fakeOp([param("per_page"), param("start_date")]), {}, { limit: 7 });
+    expect(api.calls).toHaveLength(1);
+    expect(api.last().query.per_page).toBe("7");
+    expect(r.items).toHaveLength(7);
+  });
+
+  it("stops at maxPages and warns that --all may be truncated", async () => {
+    const warnings: string[] = [];
+    const api = fakeFetch({ "GET /list": (req: RecordedRequest) => ({ data: [{ id: req.query.page }], pagination: { has_next: true } }) });
+    const r = await paginate(client(api.fetch, warnings), fakeOp([param("page", { default: 1 }), param("per_page")]), {}, { all: true, maxPages: 3 });
+    expect(api.calls).toHaveLength(3);
+    expect(r.items).toHaveLength(3);
+    expect(warnings.join("\n")).toContain("stopped after 3 pages; results may be truncated");
+  });
+
+  it("warns when a server caps the page size below the one requested and sends no paging info", async () => {
+    const warnings: string[] = [];
+    const api = fakeFetch({ "GET /list": (req: RecordedRequest) => ({ data: req.query.page === "1" ? Array.from({ length: 50 }, (_, i) => i) : [] }) });
+    const r = await paginate(client(api.fetch, warnings), fakeOp([param("page", { default: 1 }), param("per_page")]), {}, { all: true });
+    expect(api.last().query.per_page).toBe("100");
+    expect(r.items).toHaveLength(50);
+    expect(warnings.join("\n")).toContain("returned 50 items for a page size of 100 and no paging info; results may be truncated");
+
+    const quiet: string[] = [];
+    await paginate(client(api.fetch, quiet), fakeOp([param("page", { default: 1 }), param("per_page")]), {}, { limit: 20 });
+    expect(quiet).toEqual([]);
+  });
+
+  it("stops when the server ignores the page parameter and returns the same page again", async () => {
+    const warnings: string[] = [];
+    const api = fakeFetch({ "GET /list": () => ({ data: [{ id: 1 }, { id: 2 }], pagination: { has_next: true } }) });
+    const r = await paginate(client(api.fetch, warnings), fakeOp([param("page", { default: 1 }), param("per_page")]), {}, { all: true });
+    expect(api.calls).toHaveLength(2);
+    expect(r.items).toHaveLength(2);
+    expect(r.hasMore).toBe(true);
+    expect(warnings.join("\n")).toContain("the server returned the same page twice");
   });
 });

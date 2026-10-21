@@ -190,6 +190,11 @@ export class VobizClient {
     this.opts.log?.(level, msg);
   }
 
+  /** A warning on stderr through the ctx logger (used by the pagination helper). */
+  warn(msg: string): void {
+    this.log("warn", msg);
+  }
+
   private async send<T>(api: Api, method: HttpMethod, path: string, route: string, args: CallArgs, operation?: string): Promise<T> {
     if (this.isDryRun(args)) throw new DryRunSignal(this.prepare(api, method, path, args, operation));
     const url = this.buildUrl(api, path, args.query);

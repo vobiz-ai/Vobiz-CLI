@@ -10,7 +10,8 @@
   "type": "module",
   "bin": { "vobiz": "dist/index.js" },
   "main": "dist/cli.js",
-  "files": ["dist/**/*.js", "spec/*.yaml", "skills/**", "README.md", "LICENSE", "completions/**"],
+  "man": "./man/vobiz.1",
+  "files": ["dist/**/*.js", "spec/*.yaml", "skills/**", "README.md", "LICENSE", "completions/**", "man/**"],
   "engines": { "node": ">=22.9" },
   "repository": { "type": "git", "url": "git+https://github.com/vobiz-ai/Vobiz-CLI.git" },
   "publishConfig": { "access": "public", "provenance": true },
@@ -25,6 +26,12 @@
     "start": "node dist/index.js",
     "dev": "npm run build && node dist/index.js",
     "spec:sync": "node scripts/sync-spec.mjs",
+    "completions:gen": "node scripts/gen-completions.mjs",
+    "man:gen": "node scripts/gen-man.mjs",
+    "docs:commands": "node scripts/gen-command-docs.mjs",
+    "build:assets": "npm run completions:gen && npm run man:gen",
+    "build:sea": "node scripts/build-sea.mjs",
+    "prepack": "npm run build:assets",
     "prepublishOnly": "npm run check"
   },
   "dependencies": {

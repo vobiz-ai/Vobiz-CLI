@@ -178,7 +178,16 @@ function inquirerPrompts(): Prompts {
   };
 }
 
+/** True when launching a browser would surprise someone: tests, CI, pipes, or an explicit opt-out. */
+export function browserAllowed(env: NodeJS.ProcessEnv = process.env, isTTY: boolean = Boolean(process.stdout.isTTY)): boolean {
+  return isTTY && !env.CI && !env.VOBIZ_NO_BROWSER && env.NODE_ENV !== "test" && !env.VITEST;
+}
+
 async function openInBrowser(url: string): Promise<void> {
+  if (!browserAllowed()) {
+    process.stderr.write(`Open this URL in your browser: ${url}\n`);
+    return;
+  }
   const [cmd, args] =
     process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
   await new Promise<void>((resolve) => {

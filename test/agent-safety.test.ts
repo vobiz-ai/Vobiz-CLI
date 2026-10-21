@@ -270,3 +270,40 @@ describe("#9/#11/#13 sms send", () => {
     expect(r.err).toContain("https://evil.example/login");
   });
 });
+
+describe("#7 vobiz api writes", () => {
+  const callPath = "/api/v1/Account/{auth_id}/Call/";
+
+  it("shows method, path, destinations, URL hosts and a redacted body preview", async () => {
+    const body = JSON.stringify({ from: "+918012345678", to: "+919876543210<+919876543211", answer_url: "https://hooks.example.com/x", password: "Sup3r-S3cret-PW", pad: "p".repeat(900) });
+    const r = await runCli(["api", "POST", callPath, "--body", body, "--dry-run"]);
+    expect(r.code, r.err).toBe(0);
+    expect(r.err).toContain(`[dry-run] POST ${callPath}`);
+    expect(r.err).toContain("  to: +919876543210, +919876543211");
+    expect(r.err).toContain("  URL hosts in body: hooks.example.com");
+    expect(r.err).toMatch(/ {2}body: \{"from":"\+918012345678".*\u2026 \(\d+ characters\)/);
+    expect(r.err).not.toContain("Sup3r-S3cret-PW");
+  });
+
+  it("refuses http URLs in a write body", async () => {
+    const api = fakeFetch();
+    for (const b of [{ answer_url: "http://attacker.example/x" }, { nested: { hangupUrl: "http://attacker.example" } }, { mediaUrls: ["https://ok.example", "http://bad.example"] }]) {
+      const r = await runCli(["api", "POST", callPath, "--body", JSON.stringify(b), "--yes"], { fetch: api.fetch });
+      expect(r.code, JSON.stringify(b)).toBe(2);
+      expect(r.err).toMatch(/must use https/);
+    }
+    expect(api.calls).toHaveLength(0);
+  });
+
+  it("caps to fan-out like calls create", async () => {
+    const api = fakeFetch();
+    const to = Array.from({ length: 60 }, (_, i) => `+91987654${String(3000 + i)}`).join("<");
+    const r = await runCli(["api", "POST", callPath, "--body", JSON.stringify({ to, from: "+918012345678", answer_url: "https://a.example" }), "--yes"], { fetch: api.fetch });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("--max-fanout 60");
+    expect(api.calls).toHaveLength(0);
+    const ok = await runCli(["api", "POST", callPath, "--body", JSON.stringify({ to, from: "+918012345678", answer_url: "https://a.example" }), "--max-fanout", "60", "--dry-run"]);
+    expect(ok.code, ok.err).toBe(0);
+    expect(ok.err).toContain("(60 destinations)");
+  });
+});

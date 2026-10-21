@@ -42,7 +42,7 @@ describe("vobiz api --list / --describe", () => {
 describe("vobiz api <METHOD> <path>", () => {
   it("GETs with the auth_id filled and prints the redacted response", async () => {
     const api = fakeFetch({ [`GET /api/v1/Account/${TEST_AUTH_ID}/Call/`]: { objects: [{ call_uuid: "c1" }], auth_secret: "zzz-secret" } });
-    const r = await runCli(["api", "get", "/api/v1/Account/{auth_id}/Call/", "--query", "status=live", "--json"], { fetch: api.fetch });
+    const r = await runCli(["api", "get", "/api/v1/Account/{auth_id}/Call/", "--param", "status=live", "--json"], { fetch: api.fetch });
     expect(r.code).toBe(0);
     expect(api.last().query).toEqual({ status: "live" });
     expect(r.json()).toMatchObject({ auth_secret: "[redacted]" });
@@ -88,7 +88,7 @@ describe("vobiz api <METHOD> <path>", () => {
   it("validates method, body and query syntax", async () => {
     expect((await runCli(["api", "TRACE", "/x"])).code).toBe(2);
     expect((await runCli(["api", "GET", "/x", "--body", "{}"])).code).toBe(2);
-    expect((await runCli(["api", "GET", "/x", "--query", "novalue"])).code).toBe(2);
+    expect((await runCli(["api", "GET", "/x", "--param", "novalue"])).code).toBe(2);
     expect((await runCli(["api", "POST", "/x", "--body", "{bad", "-y"])).code).toBe(2);
     expect((await runCli(["api"])).code).toBe(2);
   });

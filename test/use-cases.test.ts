@@ -552,7 +552,7 @@ describe("agent tooling", () => {
       [`GET ${A}/Call/`]: (req: RecordedRequest) => ({ objects: [], echo: req.query }),
       [`POST ${A}/Call/`]: (req: RecordedRequest) => reply(201, { request_uuid: UUID, echo: req.body }),
     });
-    const get = await runCli(["api", "GET", "/api/v1/Account/{auth_id}/Call/", "--query", "status=queued", "--query", "limit=5", "--json"], { fetch: api.fetch });
+    const get = await runCli(["api", "GET", "/api/v1/Account/{auth_id}/Call/", "--param", "status=queued", "--param", "limit=5", "--json"], { fetch: api.fetch });
     expect(get.json()).toMatchObject({ echo: { status: "queued", limit: "5" } });
     const file = join(tmp("vobiz-body-"), "call.json");
     writeFileSync(file, JSON.stringify({ from: "+918012345678", to: "+919876543210", answer_url: "https://e.com/a", answer_method: "POST" }));

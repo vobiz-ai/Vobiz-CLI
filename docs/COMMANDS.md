@@ -454,6 +454,7 @@ vobiz api [method] [path] [options]
 
 | Option | Description |
 |---|---|
+| `--param <key=value>` | query-string parameter (repeatable) |
 | `--body <json>` | JSON body, @file.json, or @- for stdin |
 | `--sms` | send to the Messaging API (base https://api.vobiz.ai/api/v1/sms) |
 | `--list` | list every operation in the spec |

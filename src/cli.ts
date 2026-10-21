@@ -25,7 +25,6 @@ interface RawGlobals {
   output?: OutputMode;
   json?: boolean;
   fields?: string;
-  /** Collected so a command with its own --query (`vobiz api`) can take every value; see the preAction hook. */
   query?: string[];
   quiet?: boolean;
   yes?: boolean;
@@ -130,13 +129,7 @@ export function buildProgram(ctx: Ctx): Command {
   );
 
   program.hook("preAction", (_root, action) => {
-    let raw = program.opts<RawGlobals>();
-    // Global options are parsed anywhere on the line, so a command's own --query (`vobiz api --query k=v`) lands
-    // here. Hand those values to the command instead of treating them as an output filter.
-    if (raw.query && action.options.some((o) => o.long === "--query")) {
-      action.setOptionValue("query", [...raw.query]);
-      raw = { ...raw, query: undefined };
-    }
+    const raw = program.opts<RawGlobals>();
     ctx.flags = resolveGlobalFlags(raw, ctx.env);
     ctx.resetAuth();
     if (ctx.flags.authToken) ctx.log("warn", "--auth-token is saved in your shell history. Prefer `vobiz login` or VOBIZ_AUTH_TOKEN.");

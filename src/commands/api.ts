@@ -18,7 +18,7 @@ export function parseQueryPairs(pairs: string[]): Record<string, string | string
   const out: Record<string, string | string[]> = {};
   for (const p of pairs) {
     const i = p.indexOf("=");
-    if (i <= 0) throw new VobizError("invalid_input", `--query expects key=value (got "${p}").`);
+    if (i <= 0) throw new VobizError("invalid_input", `--param expects key=value (got "${p}").`);
     const k = p.slice(0, i);
     const v = p.slice(i + 1);
     const prev = out[k];
@@ -84,7 +84,7 @@ export function register(program: Command, ctx: Ctx): void {
     .description("Send a raw request to the Vobiz API, or list and describe every operation in the spec")
     .argument("[method]", "HTTP method: GET, POST, PUT, PATCH or DELETE")
     .argument("[path]", "path relative to the API base, e.g. /api/v1/Account/{auth_id}/Call/ or /messages with --sms")
-    .option("--query <key=value>", "query parameter (repeatable)", (v: string, prev: string[] = []) => [...prev, v])
+    .option("--param <key=value>", "query-string parameter (repeatable)", (v: string, prev: string[] = []) => [...prev, v])
     .option("--body <json>", "JSON body, @file.json, or @- for stdin")
     .option("--sms", "send to the Messaging API (base https://api.vobiz.ai/api/v1/sms)")
     .option("--list", "list every operation in the spec")
@@ -92,9 +92,9 @@ export function register(program: Command, ctx: Ctx): void {
     .option("--describe <operationId>", "show the parameters and body of one operation (sms:<id> or voice:<id> when ambiguous)")
     .addHelpText(
       "after",
-      "\nExamples:\n  vobiz api --list --tag Trunks\n  vobiz api --describe make-call\n  vobiz api GET /api/v1/auth/me\n  vobiz api GET '/api/v1/Account/{auth_id}/Call/' --query status=live\n  vobiz api GET /messages --sms --query limit=5",
+      "\nExamples:\n  vobiz api --list --tag Trunks\n  vobiz api --describe make-call\n  vobiz api GET /api/v1/auth/me\n  vobiz api GET '/api/v1/Account/{auth_id}/Call/' --param status=live\n  vobiz api GET /messages --sms --param limit=5",
     )
-    .action(async (method: string | undefined, path: string | undefined, opts: { query?: string[]; body?: string; sms?: boolean; list?: boolean; tag?: string; describe?: string }) => {
+    .action(async (method: string | undefined, path: string | undefined, opts: { param?: string[]; body?: string; sms?: boolean; list?: boolean; tag?: string; describe?: string }) => {
       if (opts.list) {
         const tag = opts.tag?.toLowerCase();
         const rows = OPERATIONS.filter((o) => !tag || o.tag.toLowerCase() === tag).map((o) => ({
@@ -116,13 +116,13 @@ export function register(program: Command, ctx: Ctx): void {
         else ctx.out.print(found.length === 1 ? describe(found[0]) : found.map(describe));
         return;
       }
-      if (!method || !path) throw new VobizError("invalid_input", "Usage: vobiz api <METHOD> <path> [--query k=v] [--body json|@file] [--sms], or vobiz api --list.");
+      if (!method || !path) throw new VobizError("invalid_input", "Usage: vobiz api <METHOD> <path> [--param k=v] [--body json|@file] [--sms], or vobiz api --list.");
       const m = method.toUpperCase() as HttpMethod;
       if (!METHODS.includes(m)) throw new VobizError("invalid_input", `Unsupported method "${method}". Use ${METHODS.join(", ")}.`);
       const hasBody = m === "POST" || m === "PUT" || m === "PATCH";
       if (opts.body !== undefined && !hasBody) throw new VobizError("invalid_input", `--body is only sent with POST, PUT or PATCH.`);
       const body = opts.body !== undefined ? await readBody(ctx, opts.body) : undefined;
-      const query = parseQueryPairs(opts.query ?? []);
+      const query = parseQueryPairs(opts.param ?? []);
       const api = opts.sms ? "sms" : "voice";
       if (m !== "GET") {
         await requireConfirmation(ctx, {

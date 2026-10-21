@@ -97,6 +97,9 @@ export async function runDoctor(ctx: Ctx, opts: { offline?: boolean }): Promise<
         }
       : { check: "proxy env", status: "ok", detail: "none set" },
   );
+  // Node honours this silently for every HTTPS request, including the ones that carry your Auth Token.
+  if (ctx.env.NODE_TLS_REJECT_UNAUTHORIZED === "0")
+    checks.push({ check: "tls", status: "warn", detail: "NODE_TLS_REJECT_UNAUTHORIZED=0 turns off certificate checks, so a man in the middle can read your Auth Token; unset it" });
 
   if (opts.offline) {
     checks.push({ check: "network", status: "skip", detail: "--offline" });

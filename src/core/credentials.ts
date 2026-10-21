@@ -69,7 +69,21 @@ export function resolveBaseUrls(flags: CredentialFlags, env: NodeJS.ProcessEnv, 
   };
 }
 
+/** Auth ID / Auth Token become HTTP header values: printable ASCII only, never CR/LF or spaces. */
+const HEADER_SAFE = /^[\x21-\x7e]+$/;
+
+function checkHeaderSafe(c: ResolvedCredentials): ResolvedCredentials {
+  const where = c.source === "flags" ? "--auth-id/--auth-token" : c.source === "env" ? "VOBIZ_AUTH_ID/VOBIZ_AUTH_TOKEN" : `profile "${c.profile}"`;
+  if (!HEADER_SAFE.test(c.authId)) throw new VobizError("invalid_input", `The Auth ID from ${where} contains spaces, line breaks or other invalid characters.`);
+  if (!HEADER_SAFE.test(c.authToken)) throw new VobizError("invalid_input", `The Auth Token from ${where} contains spaces, line breaks or other invalid characters.`);
+  return c;
+}
+
 export function resolveCredentials(flags: CredentialFlags, store: ConfigStore, env = process.env): ResolvedCredentials {
+  return checkHeaderSafe(resolveCredentialsUnchecked(flags, store, env));
+}
+
+function resolveCredentialsUnchecked(flags: CredentialFlags, store: ConfigStore, env = process.env): ResolvedCredentials {
   const { voiceBaseUrl, smsBaseUrl } = resolveBaseUrls(flags, env);
   if (flags.authId || flags.authToken) {
     if (!flags.authId || !flags.authToken) throw new VobizError("missing_credentials", "Pass both --auth-id and --auth-token, or neither.");

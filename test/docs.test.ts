@@ -106,6 +106,16 @@ describe("docs helpers", () => {
   });
 });
 
+describe("docs search --dry-run", () => {
+  it("prints the prepared request and sends nothing", async () => {
+    const api = fakeFetch();
+    const r = await runCli(["docs", "search", "gather", "speech", "--dry-run", "--json"], { fetch: api.fetch, loggedOut: true });
+    expect(r.code).toBe(0);
+    expect(api.calls).toHaveLength(0);
+    expect(r.json()).toMatchObject({ dry_run: true, method: "POST", url: "https://www.vobiz.ai/docs/mcp", body: { method: "tools/call", params: { arguments: { query: "gather speech" } } } });
+  });
+});
+
 describe("docs open", () => {
   it("opens the page in the browser and prints the URL", async () => {
     const r = await runCli(["docs", "open", "xml/gather"], { loggedOut: true });

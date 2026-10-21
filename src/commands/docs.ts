@@ -29,6 +29,19 @@ Table output shows title, URL and a snippet; --json gives the full text of each 
       if (!query) throw new VobizError("invalid_input", "Give a search query.");
       const limit = Number(opts.limit);
       if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new VobizError("invalid_input", "--limit must be a whole number from 1 to 50.");
+      if (ctx.flags.dryRun) {
+        // The search is a JSON-RPC exchange (initialize, tools/list, tools/call); show it and send nothing.
+        ctx.out.print({
+          dry_run: true,
+          operation: "docs-search",
+          method: "POST",
+          url: DOCS_MCP_URL,
+          steps: ["initialize", "notifications/initialized", "tools/list", "tools/call"],
+          body: { jsonrpc: "2.0", method: "tools/call", params: { name: "<the server's search tool>", arguments: { query } } },
+          limit,
+        });
+        return;
+      }
       ctx.log("verbose", `docs search via ${DOCS_MCP_URL}`);
       const client = new DocsMcpClient(ctx.fetch, DOCS_MCP_URL, ctx.flags.timeout * 1000);
       const results = (await client.search(query)).slice(0, limit);

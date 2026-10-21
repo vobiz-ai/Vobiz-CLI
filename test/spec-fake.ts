@@ -48,7 +48,7 @@ export interface SpecFake extends FakeApi {
   ops(): string[];
 }
 
-const ITEM_KEYS = ["objects", "items", "data", "results", "numbers", "messages", "accounts", "sessions", "transactions", "sub_accounts"];
+const ITEM_KEYS = ["objects", "items", "data", "results", "numbers", "messages", "accounts", "sessions", "transactions", "sub_accounts", "broadcasts", "recipients", "purchases", "countries"];
 
 /** Which 1-based page a request asks for, from the operation's paging style. */
 export function pageOf(op: Operation, req: RecordedRequest): number {

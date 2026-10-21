@@ -8,6 +8,7 @@
  *
  * It runs in a fresh temporary HOME; it never touches the network or your real config.
  */
+process.env.VOBIZ_NO_BROWSER = "1"; // never launch the real browser (docs open, login --browser)
 const D = new URL("../dist", import.meta.url).pathname;
 const { run, buildProgram, listCommandTree } = await import(D + "/cli.js");
 const { Ctx } = await import(D + "/core/context.js");
@@ -42,6 +43,7 @@ const mk = (fetchLog, failWrites = false) => new Ctx({
   env: { VOBIZ_AUTH_ID: "MA_XXXXXXXX", VOBIZ_AUTH_TOKEN: "YOUR_AUTH_TOKEN_SECRET", CI: "1", VOBIZ_CONFIG_DIR: mkdtempSync(join(base, "cfg")), HOME: base },
   store: undefined, stdin: { isTTY: false, read: async () => "" },
   stdout: { write: (s) => { fetchLog.out += s; }, isTTY: false }, stderr: { write: (s) => { fetchLog.err += s; }, isTTY: false },
+  openUrl: async () => {}, // and inject a no-op launcher on top of the guard
   fetch: async (url, init) => { fetchLog.calls.push(`${init?.method ?? "GET"} ${url}`); if (failWrites && (init?.method ?? "GET") !== "GET") throw new TypeError("fetch failed"); return new Response(JSON.stringify({ items: [], numbers: [], request_uuid: "r1", id: "m1", status: "sent" }), { status: 200, headers: { "content-type": "application/json" } }); },
   prompts: { confirm: async () => { throw new Error("PROMPT"); }, input: async () => { throw new Error("PROMPT"); }, password: async () => { throw new Error("PROMPT"); } },
 });

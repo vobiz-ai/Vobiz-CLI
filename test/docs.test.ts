@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { docsUrl, parseRpcBody, snippet } from "../src/agent/docs-mcp.js";
-import { fakeFetch, reply, runCli, textReply, type RecordedRequest } from "./helpers.js";
+import { run } from "../src/cli.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ConfigStore } from "../src/core/config.js";
+import { Ctx } from "../src/core/context.js";
+import { capture, fakeFetch, reply, runCli, textReply, type RecordedRequest } from "./helpers.js";
+
+const spawnSpy = vi.hoisted(() => vi.fn());
+vi.mock("node:child_process", async (orig) => ({ ...(await orig<typeof import("node:child_process")>()), spawn: spawnSpy }));
 
 const HIT_1 = "Title: Gather XML Element\nLink: https://www.vobiz.ai/docs/xml/gather\nPage: xml/gather\nContent: You can use the **Gather** XML element to collect [DTMF](/xml/dtmf) input.";
 const HIT_2 = "Title: Detecting speech inputs\nLink: https://www.vobiz.ai/docs/xml/gather/detecting-speech-inputs#ai\nPage: xml/gather/detecting-speech-inputs\nContent: ### Speech\n\nReal-time transcription.";
@@ -103,5 +112,20 @@ describe("docs open", () => {
     expect(r.code).toBe(0);
     expect(r.out).toBe("https://www.vobiz.ai/docs/xml/gather\n");
     expect(r.opened).toEqual(["https://www.vobiz.ai/docs/xml/gather"]);
+  });
+
+  it.each([
+    ["stdout is not a TTY", {}, false],
+    ["CI is set", { CI: "1" }, true],
+    ["VOBIZ_NO_BROWSER is set", { VOBIZ_NO_BROWSER: "1" }, true],
+  ])("the default launcher prints the URL and spawns nothing when %s", async (_why, env, tty) => {
+    spawnSpy.mockClear();
+    const stdout = capture(tty);
+    const stderr = capture();
+    const ctx = new Ctx({ env: { ...env }, store: new ConfigStore(mkdtempSync(join(tmpdir(), "vobiz-test-"))), stdout, stderr, stdin: { isTTY: false, read: async () => "" } });
+    expect(await run(["docs", "open", "xml/gather", "--no-update-check"], ctx)).toBe(0);
+    expect(spawnSpy).not.toHaveBeenCalled();
+    expect(stdout.text).toBe("https://www.vobiz.ai/docs/xml/gather\n");
+    expect(stderr.text).toContain("Not opening a browser here; open https://www.vobiz.ai/docs/xml/gather yourself.");
   });
 });

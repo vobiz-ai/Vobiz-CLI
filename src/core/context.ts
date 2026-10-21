@@ -57,7 +57,10 @@ export interface CtxOptions {
   fetch?: typeof fetch;
   prompts?: Prompts;
   now?: () => Date;
-  /** Opens a URL in the user's browser (login --browser). */
+  /**
+   * Opens a URL in the user's browser (login --browser, docs open). The default only launches a browser for an
+   * interactive user: with VOBIZ_NO_BROWSER or CI set, or stdout not a TTY, it prints the URL instead.
+   */
   openUrl?: (url: string) => Promise<void>;
   flags?: Partial<GlobalFlags>;
 }
@@ -91,7 +94,7 @@ export class Ctx {
     this.fetch = o.fetch ?? globalThis.fetch;
     this.prompts = o.prompts ?? inquirerPrompts();
     this.now = o.now ?? (() => new Date());
-    this.openUrl = o.openUrl ?? openInBrowser;
+    this.openUrl = o.openUrl ?? ((url) => openUrlGuarded(this.env, this.stdout, this.stderr, url));
     this.flags = { ...defaultFlags(), ...o.flags };
     const ctx = this;
     this.out = new Printer({
@@ -176,6 +179,20 @@ function inquirerPrompts(): Prompts {
       return password({ message, mask: "•", validate: (v) => (v.trim() ? true : "Required") }, ctx);
     },
   };
+}
+
+/** True when a browser may be launched: an interactive terminal, not CI, and VOBIZ_NO_BROWSER unset. */
+export function mayOpenBrowser(env: NodeJS.ProcessEnv, stdout: Stream): boolean {
+  return !env.VOBIZ_NO_BROWSER && !env.CI && !!stdout.isTTY;
+}
+
+/** The default ctx.openUrl: launches the browser only when mayOpenBrowser(), otherwise prints the URL to stderr. */
+export async function openUrlGuarded(env: NodeJS.ProcessEnv, stdout: Stream, stderr: Stream, url: string): Promise<void> {
+  if (!mayOpenBrowser(env, stdout)) {
+    stderr.write(`Not opening a browser here; open ${url} yourself.\n`);
+    return;
+  }
+  await openInBrowser(url);
 }
 
 async function openInBrowser(url: string): Promise<void> {

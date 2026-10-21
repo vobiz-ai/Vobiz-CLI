@@ -5,7 +5,25 @@
 import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Option, type Command } from "commander";
-import { decodeBody, parsePort, readBody, startServer, tunnelHint, untilInterrupted, type LocalServer } from "../agent/http.js";
+import {
+  checkBindHost,
+  checkToken,
+  decodeBody,
+  logPath,
+  maskSensitive,
+  newToken,
+  notFound,
+  parsePort,
+  pathHasToken,
+  readBody,
+  rejectMethod,
+  requestPath,
+  safeLogText,
+  startServer,
+  tunnelHint,
+  untilInterrupted,
+  type LocalServer,
+} from "../agent/http.js";
 import { applyAttr, attrNamesFor, buildResponseXml, validateXml, type XmlAction, type XmlIssue } from "../agent/xml.js";
 import type { Ctx } from "../core/context.js";
 import { EXIT, VobizError } from "../core/errors.js";
@@ -59,33 +77,60 @@ export function issuesSummary(issues: XmlIssue[]): { errors: number; warnings: n
   return { errors: issues.filter((i) => i.level === "error").length, warnings: issues.filter((i) => i.level === "warning").length };
 }
 
+export interface XmlServeOptions {
+  port: number;
+  host: string;
+  /** The XML already read from stdin for `xml serve -`; served from memory instead of re-reading `file`. */
+  text?: string;
+  /** Answer only on `/<token>` and `/<token>/…`; other paths get 404. Without it every path is answered. */
+  token?: string;
+  /** Log Digits, Speech, From and To in clear instead of masked. */
+  logSensitive?: boolean;
+}
+
+const LOGGED_FIELDS = ["CallUUID", "From", "To", "CallStatus", "Digits", "Speech", "Event"];
+const SENSITIVE_FIELDS = new Set(["From", "To", "Digits", "Speech"]);
+
 /**
  * Starts the `xml serve` server. The file is re-read on every request, so edits apply without a restart. With
- * `opts.text` (the XML already read from stdin for `xml serve -`) that text is served from memory instead.
+ * `opts.text` (the XML already read from stdin for `xml serve -`) that text is served from memory instead. Only GET
+ * and POST are answered, and with `opts.token` only on the token path.
  */
-export async function startXmlServer(ctx: Ctx, file: string, opts: { port: number; host: string; text?: string }): Promise<LocalServer> {
+export async function startXmlServer(ctx: Ctx, file: string, opts: XmlServeOptions): Promise<LocalServer> {
   const handler = async (req: IncomingMessage, res: ServerResponse) => {
+    const shown = logPath(req.url, opts.token);
+    const path = requestPath(req.url);
+    if (!path || (opts.token && !pathHasToken(path, opts.token))) {
+      ctx.out.status(`${safeLogText(req.method, 10)} ${shown}  → 404 (${opts.token ? "missing or wrong path token" : "not a path"})`);
+      return notFound(req, res);
+    }
+    if (rejectMethod(req, res)) {
+      ctx.out.status(`${safeLogText(req.method, 10)} ${shown}  → 405`);
+      return;
+    }
     const raw = await readBody(req);
     const params = decodeBody(raw, req.headers["content-type"]);
     const query = Object.fromEntries(new URL(req.url ?? "/", "http://localhost").searchParams);
-    const fields = { ...query, ...(params && typeof params === "object" ? (params as Record<string, string>) : {}) };
-    const keys = ["CallUUID", "From", "To", "CallStatus", "Digits", "Speech", "Event"].filter((k) => fields[k]);
-    ctx.out.status(`${req.method} ${req.url}${keys.length ? "  " + keys.map((k) => `${k}=${fields[k]}`).join(" ") : ""}`);
+    const fields: Record<string, unknown> = { ...query, ...(params && typeof params === "object" ? (params as Record<string, unknown>) : {}) };
+    const keys = LOGGED_FIELDS.filter((k) => fields[k]);
+    const show = (k: string) => (SENSITIVE_FIELDS.has(k) && !opts.logSensitive ? maskSensitive(k, fields[k]) : safeLogText(fields[k], 80));
+    ctx.out.status(`${req.method} ${shown}${keys.length ? "  " + keys.map((k) => `${k}=${show(k)}`).join(" ") : ""}`);
     let xml: string;
     try {
       xml = opts.text ?? readFileSync(file, "utf8");
     } catch (e) {
       ctx.out.warn(`cannot read ${file}: ${(e as Error).message}`);
       res.writeHead(500, { "content-type": "text/plain" });
-      res.end("cannot read the XML file\n");
+      res.end("internal error\n");
       return;
     }
     const { errors } = issuesSummary(validateXml(xml));
     if (errors) ctx.out.warn(`${file} has ${errors} error(s); run \`vobiz xml validate ${file}\`.`);
-    res.writeHead(200, { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store" });
+    res.writeHead(200, { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
     res.end(xml);
   };
-  return startServer(handler, opts);
+  const server = await startServer(handler, { port: opts.port, host: opts.host, onError: (e) => ctx.out.warn(`xml serve: ${safeLogText((e as Error)?.message ?? e)}`) });
+  return opts.token ? { ...server, url: `${server.url}/${opts.token}` } : server;
 }
 
 export function register(program: Command, ctx: Ctx): void {
@@ -177,26 +222,41 @@ Examples:
     .description("Serve a VobizXML file over local HTTP so you can use it as an answer URL while developing")
     .argument("<file>", "XML file to serve (re-read on every request), or - to serve stdin (read once)")
     .option("--port <port>", "port to listen on (0 picks a free one)", "3000")
-    .option("--host <address>", "address to bind; use 0.0.0.0 to accept connections from other machines", "127.0.0.1")
+    .option("--host <address>", "address to bind (default 127.0.0.1); anything else also needs --allow-lan", "127.0.0.1")
+    .option("--allow-lan", "allow a non-loopback --host such as 0.0.0.0 (the server is then reachable from your network)")
+    .option("--token <token>", "path token to require instead of a random one (16-128 characters of A-Z a-z 0-9 - _)")
+    .option("--no-token", "answer on every path instead of only /<token> (anyone who finds the URL can read the XML)")
+    .option("--log-sensitive", "log Digits, Speech, From and To in clear (masked by default)")
     .addHelpText(
       "after",
       `
-Every request (any path, GET or POST) gets the file's current content; each request's CallUUID, From, To and
-Digits are logged to stderr. Stop with Ctrl-C.
+The file is served only on a random path, printed at start (http://127.0.0.1:3000/<token>); other paths get 404,
+so only someone who knows the full URL can read your call script. GET and POST are answered; each request's
+CallUUID, CallStatus and Event are logged to stderr, with From, To, Digits and Speech masked unless you pass
+--log-sensitive. Stop with Ctrl-C.
 
 Example:
   vobiz xml serve answer.xml --port 3000
-  cloudflared tunnel --url http://localhost:3000     # in another terminal; use the https URL as answer_url`,
+  cloudflared tunnel --url http://localhost:3000     # in another terminal; answer_url = https://<tunnel>/<token>`,
     )
-    .action(async (file: string, opts: { port?: string; host: string }) => {
+    .action(async (file: string, opts: { port?: string; host: string; allowLan?: boolean; token?: string | boolean; logSensitive?: boolean }) => {
+      checkBindHost(ctx, opts.host, opts.allowLan);
+      const token = opts.token === false ? undefined : typeof opts.token === "string" ? checkToken(opts.token) : newToken();
       const source = await readSource(ctx, file);
       const { errors } = issuesSummary(validateXml(source));
       if (errors) ctx.out.warn(`${file} has ${errors} error(s); run \`vobiz xml validate ${file}\`. Serving it anyway.`);
-      const server = await startXmlServer(ctx, file, { port: parsePort(opts.port, 3000), host: opts.host, ...(file === "-" ? { text: source } : {}) });
-      if (ctx.out.explicitJson) ctx.out.print({ url: server.url, file });
+      const server = await startXmlServer(ctx, file, {
+        port: parsePort(opts.port, 3000),
+        host: opts.host,
+        token,
+        logSensitive: opts.logSensitive,
+        ...(file === "-" ? { text: source } : {}),
+      });
+      if (ctx.out.explicitJson) ctx.out.print({ url: server.url, file, bind: server.bind });
       else ctx.stdout.write(server.url + "\n");
-      ctx.out.status(`Serving ${file} at ${server.url} (Ctrl-C to stop).`);
-      ctx.out.status(tunnelHint(server.port));
+      ctx.out.status(`Serving ${file} at ${server.url} (listening on ${server.bind}; Ctrl-C to stop).`);
+      if (!token) ctx.out.warn("--no-token: every path answers, so anyone who finds the URL can read this XML.");
+      ctx.out.status(tunnelHint(server.port) + (token ? ` Append /${token} to it.` : ""));
       await untilInterrupted();
       await server.close();
     });

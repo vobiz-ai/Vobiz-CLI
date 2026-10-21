@@ -19,6 +19,7 @@ import { register as update } from "./update.js";
 
 // ── W5 agent surface: xml, webhooks, mcp, skills, docs ──
 import { register as xml } from "./xml.js";
+import { register as webhooks } from "./webhooks.js";
 
 // ── W1 core (kept last in help): api, completion, help topics ──
 import { register as api } from "./api.js";
@@ -39,6 +40,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
 
   // W5 agent surface
   xml,
+  webhooks,
 
   api,
   completion,

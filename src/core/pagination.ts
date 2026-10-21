@@ -110,7 +110,7 @@ export function pageMeta(body: unknown): { total?: number; hasMore?: boolean } {
   return { total, hasMore };
 }
 
-type Style = { kind: "page"; pageParam: string; sizeParam?: string; first: number } | { kind: "offset"; sizeParam: string } | { kind: "none" };
+type Style = { kind: "page"; pageParam: string; sizeParam?: string; first: number } | { kind: "offset"; sizeParam: string } | { kind: "none"; sizeParam?: string };
 
 export function pageStyle(op: Operation): Style {
   const names = new Set(op.queryParams.map((p) => p.name));
@@ -121,7 +121,8 @@ export function pageStyle(op: Operation): Style {
     return { kind: "page", pageParam: "page", sizeParam: size, first: typeof def === "number" ? def : zeroBased ? 0 : 1 };
   }
   if (names.has("offset") && names.has("limit")) return { kind: "offset", sizeParam: "limit" };
-  return { kind: "none" };
+  // One request, but a size param (e.g. `limit` without `offset`) still caps it so --limit is honoured.
+  return size ? { kind: "none", sizeParam: size } : { kind: "none" };
 }
 
 export async function paginate<T = Rec>(client: VobizClient, op: Operation, args: CallArgs = {}, opts: PaginateOptions = {}): Promise<PageResult<T>> {
@@ -135,25 +136,46 @@ export async function paginate<T = Rec>(client: VobizClient, op: Operation, args
   let pages = 0;
   let last: unknown;
   const query = { ...args.query };
+  let previous: string | undefined;
+  let stoppedEarly: string | undefined;
 
-  for (let i = 0; i < maxPages; i++) {
+  for (let i = 0; ; i++) {
+    if (i >= maxPages) {
+      stoppedEarly = `stopped after ${maxPages} pages`;
+      break;
+    }
     if (style.kind === "page") {
       query[style.pageParam] = style.first + i;
       if (style.sizeParam && size !== undefined) query[style.sizeParam] = size;
     } else if (style.kind === "offset") {
       if (size !== undefined) query[style.sizeParam] = size;
       query.offset = items.length;
-    }
+    } else if (style.sizeParam && size !== undefined) query[style.sizeParam] = size;
     last = await client.call(op, { ...args, query });
     pages++;
     const got = (extractItems(last, opts.itemsKey) ?? []) as T[];
+    // A server that ignores the page parameter returns the same page forever: stop instead of looping.
+    const fingerprint = got.length ? JSON.stringify(got) : undefined;
+    if (fingerprint !== undefined && fingerprint === previous) {
+      stoppedEarly = "the server returned the same page twice";
+      hasMore = true;
+      break;
+    }
+    previous = fingerprint;
     items.push(...got);
     const meta = pageMeta(last);
     total = meta.total ?? total;
     hasMore = meta.hasMore ?? (total !== undefined ? items.length < total : size !== undefined && got.length >= size);
-    if (style.kind === "none" || !got.length || !hasMore) break;
+    if (style.kind === "none" || !got.length || !hasMore) {
+      // Without paging info a short page ends the walk, but a server that caps the page size below the one
+      // requested looks the same.
+      if (opts.all && style.kind !== "none" && meta.hasMore === undefined && total === undefined && size !== undefined && got.length > 0 && got.length < size)
+        client.warn(`The server returned ${got.length} items for a page size of ${size} and no paging info; results may be truncated.`);
+      break;
+    }
     if (want === undefined || items.length >= want) break;
   }
+  if (stoppedEarly && opts.all) client.warn(`Listing ${stoppedEarly}; results may be truncated.`);
   if (want !== undefined && want !== Infinity && items.length > want) {
     items.length = want;
     hasMore = true;

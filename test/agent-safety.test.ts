@@ -2,7 +2,7 @@
  * S6 agent-safety regressions (docs/internal/security/S6-authorization-and-agents.md, docs/internal/security/FIXES-S6.md).
  * Placeholder credentials only; every request goes to a fake fetch.
  */
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -192,5 +192,81 @@ describe("#10/#15 credential changes", () => {
     const r = await runCli(["profiles", "use", "prod"], { loggedOut: true, configDir: t.configDir });
     expect(r.code).toBe(0);
     expect(r.out + r.err).toContain("MA_PROD0001");
+  });
+});
+
+describe("#9/#13 calls create fan-out and content", () => {
+  const base = ["calls", "create", "--from", "+918012345678", "--answer-url", "https://example.com/a"];
+  const nums = (n: number) => Array.from({ length: n }, (_, i) => `+9198765${String(43210 + i).padStart(5, "0")}`);
+
+  it("de-duplicates destinations", async () => {
+    const api = fakeFetch({ [`POST ${CALL}`]: reply(201, { request_uuid: "r1" }) });
+    const r = await runCli([...base, "--to", Array(1000).fill("+919876543210").join("<"), "--yes", "--json"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect((api.last().body as { to: string }).to).toBe("+919876543210");
+  });
+
+  it("caps at 50 unless --max-fanout raises it, and shows the count", async () => {
+    const api = fakeFetch({ [`POST ${CALL}`]: reply(201, { request_uuid: "r1" }) });
+    const r = await runCli([...base, "--to", nums(51).join("<"), "--yes"], { fetch: api.fetch });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("--max-fanout 51");
+    expect(api.calls).toHaveLength(0);
+    const ok = await runCli([...base, "--to", nums(51).join("<"), "--max-fanout", "51", "--dry-run"], { fetch: api.fetch });
+    expect(ok.code, ok.err).toBe(0);
+    expect(ok.err).toContain("Place 51 calls (billed)");
+    expect(ok.err).toMatch(/calls: 51 separate calls, each billed/);
+  });
+
+  it("shows --say in full up to 1,000 characters", async () => {
+    const say = "word ".repeat(150).trim();
+    const r = await runCli(["calls", "create", "--to", "+919876543210", "--from", "+918012345678", "--say", say, "--serve", "--public-url", "https://t.example/answer", "--dry-run"]);
+    expect(r.err).toContain(say);
+    const long = await runCli(["calls", "create", "--to", "+919876543210", "--from", "+918012345678", "--say", "x".repeat(1500), "--serve", "--public-url", "https://t.example/answer", "--dry-run"]);
+    expect(long.err).toContain("1500 characters; the first 1000 are shown");
+  });
+
+  it("prints the size and a sha256 prefix of --xml-file", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "vobiz-s6-xml-"));
+    const file = join(dir, "answer.xml");
+    writeFileSync(file, "<Response><Dial>+14155550100</Dial></Response>");
+    const r = await runCli(["calls", "create", "--to", "+919876543210", "--from", "+918012345678", "--xml-file", file, "--serve", "--public-url", "https://t.example/answer", "--dry-run"]);
+    expect(r.err).toMatch(/answer XML: .*answer\.xml \(46 B, sha256 [0-9a-f]{12}\)/);
+  });
+});
+
+describe("#9/#11/#13 sms send", () => {
+  const nums = (n: number) => Array.from({ length: n }, (_, i) => `+1415555${String(1000 + i)}`);
+
+  it("caps recipients at 50 unless --max-fanout raises it, and shows the count and total cost", async () => {
+    const api = fakeFetch({ "GET /messages/cost-preview": PREVIEW, "POST /messages": reply(201, { id: "m", status: "sent" }) });
+    const r = await runCli(["sms", "send", "--from", "+14155550100", "--to", nums(51).join(","), "--text", "Hi", "--yes"], { fetch: api.fetch });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("--max-fanout 51");
+    expect(api.calls).toHaveLength(0);
+    const ok = await runCli(["sms", "send", "--from", "+14155550100", "--to", nums(51).join(","), "--text", "Hi", "--max-fanout", "51", "--dry-run"], { fetch: api.fetch });
+    expect(ok.code, ok.err).toBe(0);
+    expect(ok.err).toContain("  recipients: 51");
+    expect(ok.err).toMatch(/cost: about USD 0\.4029 for 51 recipients/);
+  });
+
+  it("derives per-recipient keys from the number, so a reordered retry keeps them", async () => {
+    const keys = async (to: string[]) => {
+      const api = fakeFetch({ "GET /messages/cost-preview": PREVIEW, "POST /messages": (req: { body: unknown }) => reply(201, { id: "m", status: "sent", to: (req.body as { to: string[] }).to[0] }) });
+      await runCli(["sms", "send", "--from", "+14155550100", "--to", to.join(","), "--text", "Hi", "--idempotency-key", "k1", "--yes", "--json"], { fetch: api.fetch });
+      return Object.fromEntries(api.calls.filter((c) => c.method === "POST").map((c) => [(c.body as { to: string[] }).to[0], (c.body as { idempotencyKey: string }).idempotencyKey]));
+    };
+    const a = await keys(["+14155550123", "+14155550124"]);
+    const b = await keys(["+14155550125", "+14155550124", "+14155550123"]);
+    expect(a["+14155550123"]).toBe("k1:14155550123");
+    expect(b["+14155550123"]).toBe(a["+14155550123"]);
+    expect(b["+14155550124"]).toBe(a["+14155550124"]);
+  });
+
+  it("shows message text up to 500 characters", async () => {
+    const text = `Your code is 123456. ${"a".repeat(80)} https://evil.example/login`;
+    const api = fakeFetch({ "GET /messages/cost-preview": PREVIEW });
+    const r = await runCli(["sms", "send", "--from", "+14155550100", "--to", "+14155550123", "--text", text, "--dry-run"], { fetch: api.fetch });
+    expect(r.err).toContain("https://evil.example/login");
   });
 });

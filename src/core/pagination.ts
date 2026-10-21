@@ -61,6 +61,41 @@ export function extractItems(body: unknown, itemsKey?: string): unknown[] | unde
   return arrays.length === 1 ? (arrays[0] as unknown[]) : undefined;
 }
 
+/** The dot path of the list inside a response body (as extractItems finds it), or undefined. */
+export function itemsPath(body: unknown, itemsKey?: string): string | undefined {
+  if (!isRec(body)) return undefined;
+  if (itemsKey) return itemsKey;
+  for (const k of ITEM_KEYS) {
+    const v = body[k];
+    if (Array.isArray(v) || (v === null && k in body)) return k;
+    if (k === "data" && isRec(v)) {
+      const inner = itemsPath(v);
+      if (inner) return `data.${inner}`;
+    }
+  }
+  const keys = Object.keys(body).filter((k) => Array.isArray(body[k]));
+  return keys.length === 1 ? keys[0] : undefined;
+}
+
+/**
+ * The body to print for --output json/yaml: the last response with `items` (every page collected, cut to --limit)
+ * in place of its list, so the shape is the same for one page or many. A bare-array body becomes the items.
+ */
+export function listBody(body: unknown, items: unknown[], itemsKey?: string): unknown {
+  const path = itemsPath(body, itemsKey);
+  if (!isRec(body) || !path) return items;
+  const parts = path.split(".");
+  const copy: Rec = { ...body };
+  let cur = copy;
+  for (const p of parts.slice(0, -1)) {
+    const next = isRec(cur[p]) ? { ...(cur[p] as Rec) } : {};
+    cur[p] = next;
+    cur = next;
+  }
+  cur[parts[parts.length - 1]!] = items;
+  return copy;
+}
+
 /** Total count and "is there a next page" from whichever meta block the endpoint uses. */
 export function pageMeta(body: unknown): { total?: number; hasMore?: boolean } {
   if (!isRec(body)) return {};

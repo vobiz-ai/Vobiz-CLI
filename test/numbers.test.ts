@@ -42,7 +42,8 @@ describe("numbers list/get/search/health", () => {
     const r = await runCli(["numbers", "list", "--all", "--json"], { fetch: api.fetch });
     expect(r.code).toBe(0);
     expect(api.calls).toHaveLength(2);
-    expect(r.json<unknown[]>()).toHaveLength(2);
+    expect(r.json().items).toHaveLength(2); // the same wrapper as a single page, every page's items merged
+    expect(r.json()).toMatchObject({ total: 2 });
   });
 
   it("get filters list-numbers to an exact match", async () => {

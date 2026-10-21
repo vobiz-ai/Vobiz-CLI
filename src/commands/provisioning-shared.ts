@@ -8,7 +8,7 @@
  *   when stdin is a terminal). With `--body`, the body is sent as given.
  * - Query flags are generated the same way from `op.queryParams` (pagination params excluded; `--limit/--all`
  *   cover those). Date params (`*_date`) accept `today`, `7d`, `2026-10-01`, ISO timestamps.
- * - `runList` prints a default table, or the raw response body with --output json/yaml when it is one page.
+ * - `runList` prints a default table, or with --output json/yaml the response body with every page's items merged.
  */
 import { existsSync, writeFileSync } from "node:fs";
 import { Option, type Command } from "commander";
@@ -16,7 +16,7 @@ import type { Ctx } from "../core/context.js";
 import { requireConfirmation, type ConfirmSummary } from "../core/confirm.js";
 import { usage } from "../core/errors.js";
 import { getPath, type PrintOptions } from "../core/output.js";
-import { extractItems, paginate } from "../core/pagination.js";
+import { listBody, paginate } from "../core/pagination.js";
 import { parseTime, toYmd } from "../core/time.js";
 import type { CallArgs } from "../core/client.js";
 import type { Operation, Param } from "../generated/operations.js";
@@ -214,18 +214,16 @@ export interface ListPrint extends PrintOptions {
 }
 
 /**
- * Lists through the pagination helper. Table/tsv/plain print `columns`; json/yaml print the raw response body when
- * it was a single untruncated page, otherwise the collected items.
+ * Lists through the pagination helper. Table/tsv/plain print `columns`; json/yaml print the response body with the
+ * collected items (every page, cut to --limit) under its list key, so the shape never depends on the page count.
  */
 export async function runList(ctx: Ctx, op: Operation, args: CallArgs, opts: Opts, print: ListPrint): Promise<void> {
   const limit = opts.limit as number | undefined;
   const all = !!opts.all;
   const r = await paginate(ctx.client, op, args, { limit, all, itemsKey: print.itemsKey });
   const mode = ctx.out.mode;
-  const pageItems = extractItems(r.last, print.itemsKey) ?? [];
-  const raw = (mode === "json" || mode === "yaml") && !ctx.flags.fields && !ctx.flags.quiet && r.pages === 1 && pageItems.length === r.items.length;
-  if (raw) {
-    ctx.out.print(r.last ?? []);
+  if ((mode === "json" || mode === "yaml") && !ctx.flags.fields && !ctx.flags.quiet) {
+    ctx.out.print(listBody(r.last, r.items, print.itemsKey));
     return;
   }
   ctx.out.print(r.items, print);

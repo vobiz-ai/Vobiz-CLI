@@ -68,3 +68,13 @@ describe("pagination", () => {
     expect(api.calls).toHaveLength(1);
   });
 });
+
+describe("listBody", () => {
+  it("puts the collected items under the body's list key, nested or not", async () => {
+    const { listBody } = await import("../src/core/pagination.js");
+    expect(listBody({ meta: { total_count: 3 }, objects: [1] }, [1, 2, 3])).toEqual({ meta: { total_count: 3 }, objects: [1, 2, 3] });
+    expect(listBody({ data: { items: [1] }, ok: true }, [1, 2])).toEqual({ data: { items: [1, 2] }, ok: true });
+    expect(listBody({ accounts: null, total: 0 }, [], "accounts")).toEqual({ accounts: [], total: 0 });
+    expect(listBody([1], [1, 2])).toEqual([1, 2]);
+  });
+});

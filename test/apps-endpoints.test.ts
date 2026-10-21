@@ -15,7 +15,11 @@ describe("apps", () => {
     const r = await runCli(["apps", "list", "--all", "--json"], { fetch: api.fetch });
     expect(r.code).toBe(0);
     expect(api.calls.map((c) => c.query.offset)).toEqual(["0", "1"]);
-    expect(r.json<{ app_id: string }[]>().map((x) => x.app_id)).toEqual(["123", "456"]);
+    // The JSON keeps the API's wrapper whatever the page count; every page's items are merged under `objects`.
+    expect(r.json<{ objects: { app_id: string }[] }>().objects.map((x) => x.app_id)).toEqual(["123", "456"]);
+    expect(r.json()).toMatchObject({ meta: { total_count: 2 } });
+    const page = await runCli(["apps", "list", "--limit", "1", "--json"], { fetch: api.fetch });
+    expect(page.json()).toMatchObject({ meta: { total_count: 2 }, objects: [{ app_id: "123" }] });
     const one = await runCli(["apps", "list", "--limit", "1", "-q"], { fetch: api.fetch });
     expect(one.out).toBe("123\n");
     expect(api.last().query).toMatchObject({ limit: "1", offset: "0" });

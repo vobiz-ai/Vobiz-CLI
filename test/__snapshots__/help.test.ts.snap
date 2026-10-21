@@ -93,6 +93,9 @@ Commands:
                                  for Claude Code, Codex and other agents
   docs                           Search the Vobiz documentation and open pages
                                  in your browser
+  feedback [options]             Open a prefilled GitHub issue for the Vobiz CLI
+                                 (or print its URL); nothing is sent until you
+                                 submit it
   api [options] [method] [path]  Send a raw request to the Vobiz API, or list
                                  and describe every operation in the spec
   completion <shell>             Print a shell completion script (bash, zsh,

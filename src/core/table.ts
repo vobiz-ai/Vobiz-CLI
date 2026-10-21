@@ -11,6 +11,8 @@ export interface TableOptions {
   maxColumn?: number;
 }
 
+import { cleanCell } from "./sanitize.js";
+
 const GAP = 2;
 const MIN_COL = 6;
 const len = (s: string) => [...s].length;
@@ -23,7 +25,9 @@ export function truncate(s: string, width: number): string {
 
 /** Renders `rows` (already stringified cells) under `headers`; returns the text with a trailing newline. */
 export function renderTable(headers: string[], rows: string[][], opts: TableOptions = {}): string {
-  const clean = (s: string) => s.replace(/[\r\n\t]+/g, " ");
+  // Sanitise first (escape sequences, controls, line breaks), so widths and truncation see only printable text.
+  const clean = (s: string) => cleanCell(s).replace(/\t+/g, " ");
+  headers = headers.map(clean);
   const body = rows.map((r) => headers.map((_, i) => clean(r[i] ?? "")));
   const maxColumn = opts.maxColumn ?? 60;
   const widths = headers.map((h, i) => Math.min(maxColumn, Math.max(len(h), ...body.map((r) => len(r[i])))));

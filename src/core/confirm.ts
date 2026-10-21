@@ -6,6 +6,7 @@
  *   no TTY      refuse with confirmation_required (exit 6): scripts must opt in with --yes.
  *   TTY         show the summary and ask; "no" exits 6 and nothing is sent.
  */
+import { cleanMessage } from "./sanitize.js";
 import type { Ctx } from "./context.js";
 import { VobizError } from "./errors.js";
 
@@ -22,7 +23,7 @@ export function formatSummary(s: ConfirmSummary): string {
   const lines = [s.action];
   for (const [k, v] of Object.entries(s.details ?? {})) lines.push(`  ${k}: ${v}`);
   if (s.cost) lines.push(`  cost: ${s.cost}`);
-  return lines.join("\n");
+  return cleanMessage(lines.join("\n"));
 }
 
 export function yesFlag(ctx: Ctx): boolean {

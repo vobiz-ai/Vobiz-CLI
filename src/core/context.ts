@@ -11,6 +11,7 @@ import { ConfigStore } from "./config.js";
 import { resolveCredentials, type ResolvedCredentials } from "./credentials.js";
 import { VobizClient, type LogLevel } from "./client.js";
 import { Printer, type OutputMode, type Stream } from "./output.js";
+import { cleanMessage } from "./sanitize.js";
 
 export interface GlobalFlags {
   profile?: string;
@@ -154,7 +155,7 @@ export class Ctx {
     if (level === "verbose" && !(this.flags.verbose || debug)) return;
     if (level === "info" && this.flags.quiet) return;
     const prefix = level === "warn" ? "warning: " : level === "info" ? "" : `[${level}] `;
-    this.stderr.write(prefix + message + "\n");
+    this.stderr.write(prefix + cleanMessage(message) + "\n");
   }
 }
 

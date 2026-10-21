@@ -3,7 +3,11 @@
  * https://www.vobiz.ai/docs/mcp. It does exactly what `vobiz docs search` needs: initialize, tools/list,
  * tools/call. Responses may be plain JSON or a text/event-stream of `data:` lines; both are handled.
  */
+import { readBodyCapped } from "../core/body.js";
 import { VobizError } from "../core/errors.js";
+
+/** Largest docs-server answer read (search results are a few hundred KB at most). */
+const MAX_DOCS_RESPONSE_BYTES = 10 * 1024 * 1024;
 import { CLI_VERSION, USER_AGENT } from "../core/version.js";
 
 export const DOCS_MCP_URL = "https://www.vobiz.ai/docs/mcp";
@@ -77,14 +81,28 @@ export class DocsMcpClient {
     return h;
   }
 
-  private async post(body: unknown): Promise<Response> {
+  /** POSTs one JSON-RPC message and reads the whole answer; the timeout covers the body too, and it is size-capped. */
+  private async post(body: unknown): Promise<{ res: Response; text: string }> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timedOut = () => new VobizError("timeout", `The Vobiz docs server did not answer within ${Math.round(this.timeoutMs / 1000)}s.`);
     try {
-      return await this.fetchFn(this.url, { method: "POST", headers: this.headers(), body: JSON.stringify(body), signal: controller.signal });
-    } catch (e) {
-      if (controller.signal.aborted) throw new VobizError("timeout", `The Vobiz docs server did not answer within ${Math.round(this.timeoutMs / 1000)}s.`);
-      throw new VobizError("network_error", `Cannot reach ${new URL(this.url).host}: ${(e as Error).message}`);
+      let res: Response;
+      try {
+        res = await this.fetchFn(this.url, { method: "POST", headers: this.headers(), body: JSON.stringify(body), signal: controller.signal });
+      } catch (e) {
+        if (controller.signal.aborted) throw timedOut();
+        throw new VobizError("network_error", `Cannot reach ${new URL(this.url).host}: ${(e as Error).message}`);
+      }
+      let bytes: Uint8Array;
+      try {
+        bytes = await readBodyCapped(res, MAX_DOCS_RESPONSE_BYTES, "The docs server's answer");
+      } catch (e) {
+        if (e instanceof VobizError) throw e;
+        if (controller.signal.aborted) throw timedOut();
+        throw new VobizError("network_error", `The docs server's answer was cut off: ${(e as Error).message}`);
+      }
+      return { res, text: new TextDecoder().decode(bytes) };
     } finally {
       clearTimeout(timer);
     }
@@ -92,10 +110,9 @@ export class DocsMcpClient {
 
   async request<T>(method: string, params?: unknown): Promise<T> {
     const id = this.nextId++;
-    const res = await this.post({ jsonrpc: "2.0", id, method, ...(params === undefined ? {} : { params }) });
+    const { res, text } = await this.post({ jsonrpc: "2.0", id, method, ...(params === undefined ? {} : { params }) });
     const session = res.headers.get("mcp-session-id");
     if (session) this.sessionId = session;
-    const text = await res.text();
     if (!res.ok) {
       const kind = res.status === 429 ? "rate_limited" : res.status >= 500 ? "service_unavailable" : "unexpected_response";
       throw new VobizError(kind, `The Vobiz docs server answered HTTP ${res.status} to ${method}.`, res.status);
@@ -107,8 +124,7 @@ export class DocsMcpClient {
   }
 
   async notify(method: string, params?: unknown): Promise<void> {
-    const res = await this.post({ jsonrpc: "2.0", method, ...(params === undefined ? {} : { params }) });
-    await res.arrayBuffer().catch(() => undefined);
+    await this.post({ jsonrpc: "2.0", method, ...(params === undefined ? {} : { params }) });
   }
 
   async initialize(): Promise<void> {

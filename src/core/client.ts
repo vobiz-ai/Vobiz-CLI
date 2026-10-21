@@ -10,6 +10,7 @@
  *   `outcome_unknown`, because the request may have reached Vobiz.
  * - The token travels only in the `X-Auth-Token` header; logs and dry-run output never contain it.
  */
+import { MAX_RESPONSE_BYTES, readBodyCapped } from "./body.js";
 import type { ResolvedCredentials } from "./credentials.js";
 import { VobizError, extractBackendMessage, kindForStatus } from "./errors.js";
 import type { Api, HttpMethod, Operation } from "../generated/operations.js";
@@ -226,8 +227,12 @@ export class VobizClient {
 
     let bytes: Uint8Array;
     try {
-      bytes = new Uint8Array(await res.arrayBuffer());
-    } catch {
+      bytes = await readBodyCapped(res, args.responseType === "bytes" ? MAX_BYTES_RESPONSE : MAX_RESPONSE_BYTES);
+    } catch (e) {
+      if (e instanceof VobizError) {
+        clearTimeout(timer);
+        throw e;
+      }
       bytes = new Uint8Array();
       if (controller.signal.aborted && res.ok) {
         clearTimeout(timer);
@@ -267,6 +272,9 @@ export class VobizClient {
     throw new VobizError(kindForStatus(res.status), message, res.status, data === undefined ? undefined : redact(data));
   }
 }
+
+/** Cap for `responseType: "bytes"` downloads held in memory (documents, 10 MB upload limit; generous headroom). */
+const MAX_BYTES_RESPONSE = 200 * 1024 * 1024;
 
 /** Percent-decodes a Content-Disposition file name; a malformed escape keeps the raw text instead of throwing. */
 function decodeFilename(raw: string): string {

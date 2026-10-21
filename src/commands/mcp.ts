@@ -3,8 +3,9 @@
  * CLI, Zed) to the Vobiz MCP server by writing or printing the client's config entry. The default is the hosted
  * connector (OAuth, no secret in any file); --local runs `npx -y @vobiz/mcp` with credentials from the environment.
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { Option, type Command } from "commander";
 import {
   CLIENTS,
@@ -20,6 +21,7 @@ import {
   type MergeResult,
   type Mode,
 } from "../agent/mcp-clients.js";
+import { writeFileAtomic } from "../core/atomic.js";
 import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
@@ -61,20 +63,57 @@ function credentialNote(spec: ClientSpec, mode: Mode, creds?: Credentials): stri
   return spec.envAware ? "read from VOBIZ_AUTH_ID and VOBIZ_AUTH_TOKEN (not stored in the file)" : "placeholders MA_XXXXXXXX / YOUR_AUTH_TOKEN for you to replace";
 }
 
-/** Writes atomically, keeping the original file's permissions (0600 when the file holds a token). */
-function writeConfig(file: string, text: string, hasSecret: boolean): string | undefined {
-  mkdirSync(dirname(file), { recursive: true });
+/** Literal Auth Token values in a client config (not `${VOBIZ_AUTH_TOKEN}`, `${input:…}`/`${env:…}` or the placeholder). */
+export function literalTokens(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/"?VOBIZ_AUTH_TOKEN"?\s*[:=]\s*"([^"]+)"/g)) {
+    const v = m[1];
+    if (!v.startsWith("${") && v !== "YOUR_AUTH_TOKEN" && v !== REDACTED) out.add(v);
+  }
+  return [...out];
+}
+
+/**
+ * Writes atomically (exclusive random temp file, no symlink at the destination; see core/atomic.ts), keeping the
+ * original file's permissions (0600 when the file holds a token). The previous file is kept as <file>.bak, but a
+ * token the new file no longer carries is replaced by YOUR_AUTH_TOKEN in the backup, so moving to env-based
+ * credentials does not leave the token behind in a stale copy.
+ */
+function writeConfig(file: string, text: string, hasSecret: boolean): { backup?: string; scrubbed: boolean } {
   let backup: string | undefined;
+  let scrubbed = false;
   let mode = hasSecret ? 0o600 : 0o644;
   if (existsSync(file)) {
+    const previous = readFileSync(file, "utf8");
+    const oldMode = statSync(file).mode & 0o777;
+    let backupText = previous;
+    for (const token of literalTokens(previous)) {
+      if (text.includes(token)) continue;
+      backupText = backupText.split(token).join("YOUR_AUTH_TOKEN");
+      scrubbed = true;
+    }
     backup = `${file}.bak`;
-    copyFileSync(file, backup);
-    mode = hasSecret ? 0o600 : statSync(file).mode & 0o777;
+    writeFileAtomic(backup, backupText, { mode: literalTokens(backupText).length ? 0o600 : oldMode });
+    mode = hasSecret ? 0o600 : oldMode;
   }
-  const tmp = `${file}.vobiz-${process.pid}.tmp`;
-  writeFileSync(tmp, text, { mode });
-  renameSync(tmp, file);
-  return backup;
+  writeFileAtomic(file, text, { mode });
+  return { backup, scrubbed };
+}
+
+/**
+ * Whether `file` would be committed: inside a git work tree and not ignored (`git check-ignore -q`). A work tree
+ * whose state git cannot report (git missing, a broken repo) counts as tracked, so the token is never written there.
+ */
+export function trackedByGit(file: string): boolean {
+  let dir = dirname(file);
+  for (;;) {
+    if (existsSync(join(dir, ".git"))) break;
+    const up = dirname(dir);
+    if (up === dir) return false; // not inside a work tree
+    dir = up;
+  }
+  const r = spawnSync("git", ["-C", dirname(file), "check-ignore", "-q", "--", file], { stdio: "ignore", timeout: 10_000 });
+  return r.status !== 0;
 }
 
 export function register(program: Command, ctx: Ctx): void {
@@ -132,6 +171,15 @@ Examples:
         if (ctx.out.explicitJson) ctx.out.print({ client: spec.id, mode, url: HOSTED_URL, file: null, steps: spec.next(mode) });
         return;
       }
+      if (opts.withCredentials && opts.project && trackedByGit(file))
+        throw new VobizError(
+          "not_allowed",
+          `${file} is inside a git work tree and not ignored, so --with-credentials would put your Auth Token in a file you may commit. ` +
+            (spec.envAware
+              ? `Drop --with-credentials: the entry then reads VOBIZ_AUTH_ID and VOBIZ_AUTH_TOKEN from the environment (\${VOBIZ_AUTH_TOKEN}), so no secret is stored. `
+              : `Drop --with-credentials to write the MA_XXXXXXXX / YOUR_AUTH_TOKEN placeholders, or use the user-scope config (no --project). `) +
+            `If the file must hold the token, add it to .gitignore first.`,
+        );
       const creds: Credentials | undefined = opts.withCredentials ? { authId: ctx.creds.authId, authToken: ctx.creds.authToken } : undefined;
 
       const existing = existsSync(file) ? readFileSync(file, "utf8") : undefined;
@@ -164,7 +212,8 @@ Examples:
         ctx.stdout.write(snippet(spec, mode, name, creds ? { ...creds, authToken: REDACTED } : undefined));
         return;
       }
-      const backup = writeConfig(file, merged.text, !!creds);
+      const { backup, scrubbed } = writeConfig(file, merged.text, !!creds);
+      if (scrubbed) ctx.out.status(`The backup ${backup} has the old Auth Token replaced by YOUR_AUTH_TOKEN, so no stale copy of it is left.`);
       ctx.out.success(`${merged.status === "replaced" ? "Updated" : "Added"} the Vobiz MCP server in ${file}${backup ? ` (backup: ${backup})` : ""}.`, {
         client: spec.id,
         mode,

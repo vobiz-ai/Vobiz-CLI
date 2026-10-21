@@ -15,6 +15,7 @@ import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { requireConfirmation, type ConfirmSummary } from "../core/confirm.js";
 import { usage } from "../core/errors.js";
+import { tryParseIntStrict } from "../core/parse.js";
 import { readSecretArg } from "../core/secrets.js";
 import { getPath, type PrintOptions } from "../core/output.js";
 import { listBody, paginate } from "../core/pagination.js";
@@ -54,9 +55,10 @@ export interface FieldSpec {
 
 function parseNumber(flag: string, integer: boolean) {
   return (v: string): number => {
-    const n = Number(v);
-    if (v.trim() === "" || !Number.isFinite(n) || (integer && !Number.isInteger(n))) throw usage(`--${flag} must be ${integer ? "an integer" : "a number"} (got "${v}").`);
-    return n;
+    // Integers: plain decimal digits (no 0x, 1e3 or padding). Decimals: a plain decimal literal.
+    const ok = integer ? tryParseIntStrict(v, { min: -Number.MAX_SAFE_INTEGER }) !== undefined : /^-?\d{1,16}(\.\d{1,16})?$/.test(v);
+    if (!ok) throw usage(`--${flag} must be ${integer ? "an integer" : "a number"} (got "${v}").`);
+    return Number(v);
   };
 }
 
@@ -199,9 +201,12 @@ export function buildQuery(ctx: Ctx, opts: Opts, spec: QuerySpec): Record<string
   return q;
 }
 
+/** Upper bound for --limit: far above any page size, low enough that a typo cannot ask for billions of rows. */
+const MAX_LIMIT = 1_000_000;
+
 const positiveInt = (flag: string) => (v: string): number => {
-  const n = Number(v);
-  if (!Number.isInteger(n) || n < 1) throw usage(`--${flag} must be a positive integer (got "${v}").`);
+  const n = tryParseIntStrict(v, { min: 1, max: MAX_LIMIT });
+  if (n === undefined) throw usage(`--${flag} must be a whole number from 1 to ${MAX_LIMIT} (got "${v}").`);
   return n;
 };
 

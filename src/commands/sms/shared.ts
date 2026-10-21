@@ -13,6 +13,7 @@ import type { Ctx } from "../../core/context.js";
 import { VobizError, usage } from "../../core/errors.js";
 import type { Operation } from "../../core/ops.js";
 import { toE164 } from "../../core/phone.js";
+import { tryParseIntStrict } from "../../core/parse.js";
 import { assertRealIsoDate, relativeMs } from "../../core/time.js";
 import { extractItems, paginate, type PaginateOptions } from "../../core/pagination.js";
 import type { PrintOptions } from "../../core/output.js";
@@ -28,8 +29,8 @@ export const collectRaw = (v: string, prev: string[] = []): string[] => [...prev
 
 export function intArg(name: string, min = 0, max = Number.MAX_SAFE_INTEGER) {
   return (v: string): number => {
-    const n = Number(v);
-    if (!Number.isInteger(n) || n < min || n > max) throw usage(`${name} must be a whole number between ${min} and ${max} (got "${v}").`);
+    const n = tryParseIntStrict(v, { min, max });
+    if (n === undefined) throw usage(`${name} must be a whole number between ${min} and ${max} (got "${v}").`);
     return n;
   };
 }

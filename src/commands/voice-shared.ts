@@ -12,6 +12,7 @@ import type { Ctx } from "../core/context.js";
 import { VobizError, extractBackendMessage, kindForStatus, usage } from "../core/errors.js";
 import { writeStreamAtomicExclusive } from "../core/fsafe.js";
 import { op, type Operation } from "../core/ops.js";
+import { tryParseIntStrict } from "../core/parse.js";
 import type { PageResult } from "../core/pagination.js";
 import { toE164 } from "../core/phone.js";
 import { cleanMessage } from "../core/sanitize.js";
@@ -23,8 +24,8 @@ export const isRec = (v: unknown): v is Rec => !!v && typeof v === "object" && !
 /** Commander parser for whole numbers in [min, max]. */
 export function intArg(min = 1, max = Number.MAX_SAFE_INTEGER) {
   return (value: string): number => {
-    const n = Number(value);
-    if (!/^\d+$/.test(value.trim()) || !Number.isSafeInteger(n) || n < min || n > max)
+    const n = tryParseIntStrict(value, { min, max }) ?? NaN;
+    if (Number.isNaN(n))
       throw new InvalidArgumentError(`expected a whole number between ${min} and ${max}.`);
     return n;
   };

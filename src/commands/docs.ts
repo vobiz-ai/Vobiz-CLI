@@ -6,6 +6,7 @@ import type { Command } from "commander";
 import { DOCS_MCP_URL, DocsMcpClient, docsUrl, snippet } from "../agent/docs-mcp.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
+import { tryParseIntStrict } from "../core/parse.js";
 
 export function register(program: Command, ctx: Ctx): void {
   const docs = program.command("docs").description("Search the Vobiz documentation and open pages in your browser");
@@ -27,8 +28,8 @@ Table output shows title, URL and a snippet; --json gives the full text of each 
     .action(async (words: string[], opts: { limit: string }) => {
       const query = words.join(" ").trim();
       if (!query) throw new VobizError("invalid_input", "Give a search query.");
-      const limit = Number(opts.limit);
-      if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new VobizError("invalid_input", "--limit must be a whole number from 1 to 50.");
+      const limit = tryParseIntStrict(opts.limit, { min: 1, max: 50 });
+      if (limit === undefined) throw new VobizError("invalid_input", "--limit must be a whole number from 1 to 50.");
       if (ctx.flags.dryRun) {
         // The search is a JSON-RPC exchange (initialize, tools/list, tools/call); show it and send nothing.
         ctx.out.print({

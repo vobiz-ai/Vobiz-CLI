@@ -25,6 +25,8 @@ guessing. Format: `operationId` (api) — why — what is needed.
 
 - `list-recordings` (voice) — declares only `limit`/`offset`, no `call_uuid` filter, so `vobiz diagnose call` scans the newest recordings (`--scan`, default 200) and matches `call_uuid` itself. Needed: a `call_uuid` query param (the bulk export body already has one).
 - `list-streams` (voice) — on a finished call the endpoint answered an error instead of the stopped streams the docs describe ("active + stopped"), so `diagnose call` lists streams only for live/queued calls and reports `streaming_cost` from the call record otherwise. Needed: confirm whether stopped streams stay listable after hangup, and a response schema.
+- Stream WebSocket `clearedAudio` (docs) — `xml/stream/stream-events` shows `{event, streamId}`, while the `vobiz-audio-streams` skill lists `{event, streamId, sequenceNumber}`. `vobiz streams test` sends the page's shape. Needed: one documented shape (and whether `playedStream`, documented as `{event, name}`, also carries `sequenceNumber`).
+- Stream WebSocket end of stream (docs, not a gap) — Vobiz sends no inbound `stop` event; the socket close is the end-of-stream signal, so `streams test` closes the socket after the last `media` frame instead of sending a `stop`.
 
 ## Messaging API (`vobiz sms`, W4)
 

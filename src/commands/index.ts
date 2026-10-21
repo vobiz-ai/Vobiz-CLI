@@ -39,6 +39,7 @@ import { register as docs } from "./docs.js";
 // ── W9 agent ops: diagnose, streams, setup, feedback ──
 import { register as diagnose } from "./diagnose.js";
 import { register as feedback } from "./feedback.js";
+import { register as streams } from "./streams.js";
 
 // ── W1 core (kept last in help): api, completion, help topics ──
 import { register as api } from "./api.js";
@@ -78,6 +79,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
 
   // W9 agent ops
   diagnose,
+  streams,
   feedback,
 
   api,

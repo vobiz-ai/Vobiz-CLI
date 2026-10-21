@@ -95,6 +95,8 @@ Commands:
                                  in your browser
   diagnose                       Explain why a call or message ended the way it
                                  did (read-only)
+  streams                        Test and debug the WebSocket server behind
+                                 <Stream> audio streams, without placing a call
   feedback [options]             Open a prefilled GitHub issue for the Vobiz CLI
                                  (or print its URL); nothing is sent until you
                                  submit it

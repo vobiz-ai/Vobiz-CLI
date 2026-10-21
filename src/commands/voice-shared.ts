@@ -88,6 +88,33 @@ export function isInternalHost(hostname: string): boolean {
   return false;
 }
 
+/** True for localhost names and loopback addresses (`127.0.0.0/8`, `[::1]`). */
+export function isLoopbackHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return h === "localhost" || h.endsWith(".localhost") || h === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
+}
+
+/**
+ * Validates a URL the CLI itself sends live data to (`streams forward --to`, `webhooks listen --forward`):
+ * wss:// / https:// anywhere, plain ws:// / http:// only on a loopback host unless `allowInsecure` is set,
+ * because call audio and webhook bodies (phone numbers) would otherwise cross the network in cleartext.
+ */
+export function checkForwardUrl(raw: string, flag: string, opts: { websocket?: boolean; allowInsecure?: boolean } = {}): string {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw usage(`${flag} is not a valid URL: "${raw}".`);
+  }
+  const [secure, insecure] = opts.websocket ? ["wss:", "ws:"] : ["https:", "http:"];
+  if (u.protocol === secure) return raw;
+  if (u.protocol !== insecure) throw usage(`${flag} must be a ${secure.slice(0, -1)}:// or ${insecure.slice(0, -1)}:// URL (got ${u.protocol.slice(0, -1)}://).`);
+  if (isLoopbackHost(u.hostname) || opts.allowInsecure) return raw;
+  throw usage(
+    `${flag} uses ${insecure.slice(0, -1)}:// to ${u.hostname}, which would send the data unencrypted. Use ${secure.slice(0, -1)}://, a localhost URL, or pass --allow-insecure-url.`,
+  );
+}
+
 export function hostOf(url: string): string {
   try {
     return new URL(url).host;

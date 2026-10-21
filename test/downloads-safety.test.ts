@@ -130,3 +130,26 @@ describe("10dlc documents get file name (S3 #7) and SMS writers (S3 #4)", () => 
     expect(existsSync(join(dir, "elsewhere"))).toBe(false);
   });
 });
+
+describe("forwarders need TLS for remote targets (S2 #6)", async () => {
+  const { checkForwardUrl } = await import("../src/commands/voice-shared.js");
+  it("accepts wss/https anywhere and ws/http only on loopback without the flag", () => {
+    expect(checkForwardUrl("wss://agent.example.com/media", "--to", { websocket: true })).toBe("wss://agent.example.com/media");
+    expect(checkForwardUrl("ws://localhost:8080/media", "--to", { websocket: true })).toBe("ws://localhost:8080/media");
+    expect(checkForwardUrl("http://127.0.0.1:3000/x", "--forward")).toBe("http://127.0.0.1:3000/x");
+    expect(checkForwardUrl("http://[::1]:3000/x", "--forward")).toBe("http://[::1]:3000/x");
+    expect(() => checkForwardUrl("ws://agent.example.com/media", "--to", { websocket: true })).toThrow(/unencrypted/);
+    expect(() => checkForwardUrl("http://10.0.0.5/hook", "--forward")).toThrow(/unencrypted/);
+    expect(checkForwardUrl("http://10.0.0.5/hook", "--forward", { allowInsecure: true })).toBe("http://10.0.0.5/hook");
+    expect(() => checkForwardUrl("ftp://x", "--forward")).toThrow(/https:\/\/ or http:\/\//);
+  });
+  it("streams forward and webhooks listen refuse a remote cleartext target before listening", async () => {
+    const s = await runCli(["streams", "forward", "--to", "ws://agent.example.com/media", "--dry-run"]);
+    expect(s.code).toBe(2);
+    expect(s.err).toContain("--allow-insecure-url");
+    const ok = await runCli(["streams", "forward", "--to", "ws://agent.example.com/media", "--allow-insecure-url", "--dry-run", "--json"]);
+    expect(ok.code, ok.err).toBe(0);
+    const w = await runCli(["webhooks", "listen", "--forward", "http://app.example.com/hook", "--port", "0"]);
+    expect(w.code).toBe(2);
+  });
+});

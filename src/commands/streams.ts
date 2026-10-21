@@ -20,7 +20,7 @@ import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
 import { parsePort, startServer, untilInterrupted, type LocalServer } from "../agent/http.js";
 import { acceptUpgrade } from "../agent/websocket.js";
-import { checkUrl, isRec, secondsArg, sleep, type Rec } from "./voice-shared.js";
+import { checkForwardUrl, checkUrl, isRec, secondsArg, sleep, type Rec } from "./voice-shared.js";
 
 export const STREAM_DOCS = "https://www.vobiz.ai/docs/xml/stream/stream-events";
 const ENCODINGS = { mulaw: "audio/x-mulaw", l16: "audio/x-l16" } as const;
@@ -420,17 +420,6 @@ export async function startForwarder(ctx: Ctx, o: ForwardOptions): Promise<Local
 
 // ── Commands ──
 
-const toWs = (raw: string): string => {
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    throw usage(`--to is not a valid URL: "${raw}".`);
-  }
-  if (u.protocol !== "ws:" && u.protocol !== "wss:") throw usage("--to must be a ws:// or wss:// URL, e.g. ws://localhost:8080/media.");
-  return raw;
-};
-
 export function register(program: Command, ctx: Ctx): void {
   const streams = program
     .command("streams")
@@ -498,7 +487,8 @@ Frame reference: ${STREAM_DOCS}`,
   streams
     .command("forward")
     .description("Run a local WebSocket proxy that relays a Vobiz stream to your server and logs every frame")
-    .requiredOption("--to <ws-url>", "your stream server, e.g. ws://localhost:8080/media", toWs)
+    .requiredOption("--to <ws-url>", "your stream server: wss://, or ws:// on localhost (e.g. ws://localhost:8080/media)")
+    .option("--allow-insecure-url", "allow a plain ws:// --to on a host other than localhost (audio is sent unencrypted)")
     .option("--port <port>", "local port to listen on (0 picks a free one; default: 8765)")
     .option("--host <host>", "interface to listen on", "127.0.0.1")
     .option("--every-media", "log each media frame instead of one summary line per second")
@@ -512,7 +502,8 @@ Examples:
   vobiz streams forward --to ws://localhost:8080/media
   cloudflared tunnel --url http://localhost:8765     # then use wss://<name>.trycloudflare.com/<path>`,
     )
-    .action(async (opts: { to: string; port?: string; host: string; everyMedia?: boolean }) => {
+    .action(async (opts: { to: string; port?: string; host: string; everyMedia?: boolean; allowInsecureUrl?: boolean }) => {
+      checkForwardUrl(opts.to, "--to", { websocket: true, allowInsecure: opts.allowInsecureUrl });
       const port = parsePort(opts.port, 8765);
       if (ctx.flags.dryRun) {
         ctx.out.print({ dry_run: true, listen: `ws://${opts.host}:${port}`, forward_to: maskUrl(opts.to) });

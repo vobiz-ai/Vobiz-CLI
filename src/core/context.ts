@@ -11,6 +11,7 @@ import { ConfigStore } from "./config.js";
 import { resolveCredentials, type ResolvedCredentials } from "./credentials.js";
 import { VobizClient, type LogLevel } from "./client.js";
 import { Printer, type OutputMode, type Stream } from "./output.js";
+import { VobizError } from "./errors.js";
 import { cleanMessage } from "./sanitize.js";
 
 export interface GlobalFlags {
@@ -212,12 +213,39 @@ export function mayOpenBrowser(env: NodeJS.ProcessEnv, stdout: Stream): boolean 
   return browserAllowed(env, Boolean(stdout.isTTY));
 }
 
-async function openInBrowser(url: string, spawnFn: SpawnFn = spawn): Promise<void> {
+/**
+ * Why `url` may not be handed to the platform opener, or undefined when it may. Only http(s) URLs without
+ * whitespace or control characters are opened; on Windows the shell metacharacters `" ^ < > |` (and `%` escapes
+ * that decode to one of them or to `&`) are refused as defence in depth, although no shell is involved.
+ */
+export function openUrlProblem(url: string, platform: NodeJS.Platform = process.platform): string | undefined {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return "is not a valid URL";
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return "is not an http(s) URL";
+  if (/[\s\x00-\x1f\x7f]/.test(url)) return "contains whitespace or control characters";
+  if (platform === "win32") {
+    if (/["^<>|`]/.test(url)) return 'contains one of " ^ < > | `';
+    if (/%(22|5e|3c|3e|7c|60)/i.test(u.pathname + u.hash)) return "contains an encoded shell metacharacter";
+  }
+  return undefined;
+}
+
+/**
+ * Launches the platform's URL handler with the URL as one argv entry and no shell. Windows uses
+ * `rundll32 url.dll,FileProtocolHandler <url>` rather than `cmd /c start`, because cmd.exe would run `&` and `|`.
+ */
+export async function openInBrowser(url: string, spawnFn: SpawnFn = spawn, platform: NodeJS.Platform = process.platform): Promise<void> {
+  const problem = openUrlProblem(url, platform);
+  if (problem) throw new VobizError("invalid_input", `Not opening ${JSON.stringify(url)}: it ${problem}.`);
   const [cmd, args] =
-    process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
+    platform === "darwin" ? ["open", [url]] : platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url]] : ["xdg-open", [url]];
   await new Promise<void>((resolve) => {
     try {
-      const child = spawnFn(cmd, args as string[], { stdio: "ignore", detached: true });
+      const child = spawnFn(cmd, args as string[], { stdio: "ignore", detached: true, shell: false, windowsVerbatimArguments: false });
       child.on("error", () => resolve());
       child.unref();
       resolve();

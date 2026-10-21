@@ -40,7 +40,7 @@ The official command-line interface for [Vobiz](https://www.vobiz.ai). Run every
 
 | Channel | Command |
 |---|---|
-| npm (Node.js 22.9+) | `npm install --global @vobiz/cli` |
+| npm (Node.js 22.12+) | `npm install --global @vobiz/cli` |
 | npx (no install) | `npx @vobiz/cli --help` |
 | Homebrew (macOS, Linux) | `brew install vobiz-ai/tap/vobiz` |
 | Install script (macOS, Linux) | `curl -fsSL https://raw.githubusercontent.com/vobiz-ai/Vobiz-CLI/main/install.sh \| sh` |

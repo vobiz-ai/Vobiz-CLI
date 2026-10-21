@@ -3,6 +3,7 @@
  * To add a group: one import line and one array entry in YOUR slot below (the slots are separated so parallel
  * branches merge without conflicts).
  */
+import { createRequire } from "node:module";
 import type { RegisterFn } from "../cli.js";
 import { INTERNAL_BUILD } from "../generated/build-flags.js";
 
@@ -53,15 +54,23 @@ import { register as helpTopics } from "./help-topics.js";
 // registered only if `internalEnabled(env)`: VOBIZ_INTERNAL=1 at run time, or a `npm run build:internal` build
 // (unless VOBIZ_INTERNAL=0, which the docs/completions/man generators set so they always describe the public CLI).
 const INTERNAL_MODULE = "../internal/commands/index.js"; // a variable, so tsc does not require the file to exist
-const internalGroups: RegisterFn[] = await import(INTERNAL_MODULE).then(
-  (m: { INTERNAL_GROUPS?: RegisterFn[] }) => m.INTERNAL_GROUPS ?? [],
-  (err: NodeJS.ErrnoException) => {
+// Loaded synchronously with require(): a top-level await would break the CommonJS bundle the single-executable
+// build produces. Node 22.12+ can require() an ES module that has no top-level await, which is all the internal
+// index needs to honour (engines in package.json says so).
+const requireHere = createRequire(import.meta.url);
+function loadInternalGroups(): RegisterFn[] {
+  try {
+    const m = requireHere(INTERNAL_MODULE) as { INTERNAL_GROUPS?: RegisterFn[] };
+    return m.INTERNAL_GROUPS ?? [];
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
     // Only "the internal module itself is missing" means "public tree"; anything else is a real bug.
-    const missing = /'([^']+)'/.exec(String(err?.message))?.[1] ?? "";
-    if (err?.code === "ERR_MODULE_NOT_FOUND" && /internal[\\/]commands[\\/]index(\.[jt]s)?$/.test(missing)) return [];
+    const missing = /'([^']+)'/.exec(String(e?.message))?.[1] ?? "";
+    if ((e?.code === "ERR_MODULE_NOT_FOUND" || e?.code === "MODULE_NOT_FOUND") && /internal[\\/]commands[\\/]index(\.[jt]s)?$/.test(missing)) return [];
     throw err;
-  },
-);
+  }
+}
+const internalGroups: RegisterFn[] = loadInternalGroups();
 
 export function internalEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.VOBIZ_INTERNAL === "1") return true;

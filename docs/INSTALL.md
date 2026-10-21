@@ -4,7 +4,7 @@ Pick the channel that fits your machine. Every channel installs the same `vobiz`
 
 | Channel | Best for | Needs |
 |---|---|---|
-| [npm](#npm) | Developers who already have Node.js | Node.js 22.9+ |
+| [npm](#npm) | Developers who already have Node.js | Node.js 22.12+ |
 | [Homebrew](#homebrew) | macOS and Linux | Homebrew |
 | [Install script](#install-script) | Servers, containers, quick setup | `curl` or `wget`, `tar`, `sha256sum` or `shasum` |
 | [Scoop](#scoop) and [PowerShell script](#windows-powershell-script) | Windows | PowerShell 5.1+ |
@@ -156,7 +156,7 @@ Your saved logins stay in the config directory (`vobiz config path`). Run `vobiz
 | Symptom | Fix |
 |---|---|
 | `vobiz: command not found` | Add the install directory to `PATH` (the installer prints the line to add). |
-| `Node.js 22.9 or newer is required` (npm) | Upgrade Node.js, or use Homebrew, the install script or Docker. |
+| `Node.js 22.12 or newer is required` (npm) | Upgrade Node.js, or use Homebrew, the install script or Docker. |
 | Requests fail with `network_error` behind a proxy | Set `HTTPS_PROXY`; `vobiz doctor` shows which proxy variables it sees. |
 | Requests are refused from CI or a server | If your account restricts API access by IP, allow that machine's address. See [IP whitelisting](https://www.vobiz.ai/docs/concepts/ip-whitelisting). |
 | `checksum mismatch` from the installer | Retry; if it persists, report it as described in [SECURITY.md](../SECURITY.md). |

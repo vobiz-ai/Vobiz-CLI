@@ -19,7 +19,7 @@ export interface Check {
   detail: string;
 }
 
-const MIN_NODE = [22, 9];
+const MIN_NODE = [22, 12];
 const SKEW_WARN_MS = 60_000;
 const PROXY_VARS = ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy", "ALL_PROXY", "NODE_USE_ENV_PROXY", "NODE_EXTRA_CA_CERTS"];
 

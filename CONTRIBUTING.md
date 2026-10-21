@@ -18,7 +18,7 @@ Thanks for helping make the Vobiz CLI better. Bug reports, fixes, new commands a
 
 ## Development setup
 
-Requirements: Node.js 22.9+ and npm.
+Requirements: Node.js 22.12+ and npm.
 
 ```bash
 git clone https://github.com/vobiz-ai/Vobiz-CLI.git

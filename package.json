@@ -12,7 +12,7 @@
   "main": "dist/cli.js",
   "man": "./man/vobiz.1",
   "files": ["dist/**/*.js", "spec/*.yaml", "skills/**", "README.md", "LICENSE", "completions/**", "man/**"],
-  "engines": { "node": ">=22.9" },
+  "engines": { "node": ">=22.12" },
   "repository": { "type": "git", "url": "git+https://github.com/vobiz-ai/Vobiz-CLI.git" },
   "publishConfig": { "access": "public", "provenance": true },
   "scripts": {

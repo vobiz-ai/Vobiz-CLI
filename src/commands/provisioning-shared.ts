@@ -15,6 +15,7 @@ import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { requireConfirmation, type ConfirmSummary } from "../core/confirm.js";
 import { usage } from "../core/errors.js";
+import { readSecretArg } from "../core/secrets.js";
 import { getPath, type PrintOptions } from "../core/output.js";
 import { listBody, paginate } from "../core/pagination.js";
 import { parseTime, toYmd } from "../core/time.js";
@@ -83,6 +84,7 @@ function addParamOptions(cmd: Command, params: Param[], extraDescription?: (p: P
     if (fields.some((f) => f.flag === flag)) continue;
     const attr = camel(flag);
     let desc = shortDescription(p);
+    if (SECRET_FIELDS.has(p.name)) desc += " (@file or @- for stdin keeps it out of shell history)";
     if (p.required) desc += " (required)";
     if (extraDescription) desc += extraDescription(p);
     if (p.default !== undefined && p.type !== "boolean") desc += ` (default: ${String(p.default)})`;
@@ -106,6 +108,9 @@ function addParamOptions(cmd: Command, params: Param[], extraDescription?: (p: P
   }
   return fields;
 }
+
+/** Body fields whose flag takes a secret: `@file` / `@-` are read, and a literal value warns about shell history. */
+const SECRET_FIELDS = new Set(["password", "secret"]);
 
 export interface BodySpec {
   fields: FieldSpec[];
@@ -134,7 +139,7 @@ export async function buildBody(ctx: Ctx, opts: Opts, spec: BodySpec, op: Operat
     const v = opts[f.attr];
     if (v === undefined) continue;
     if (!allowed.has(f.name)) throw usage(`--${f.flag} is not accepted here (${op.id} takes: ${[...allowed.keys()].join(", ") || "no body"}).`);
-    fromFlags[f.name] = v;
+    fromFlags[f.name] = SECRET_FIELDS.has(f.name) && typeof v === "string" ? await readSecretArg(ctx, v, `--${f.flag}`) : v;
   }
   let body: Record<string, unknown> = {};
   const usingBody = opts.body !== undefined;

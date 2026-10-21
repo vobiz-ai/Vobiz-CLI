@@ -166,3 +166,35 @@ describe("trunks ip-acl and origination-uris", () => {
     expect(api.last()).toMatchObject({ method: "DELETE", path: `${A}/origination-uris/u-1` });
   });
 });
+
+describe("secret flags", () => {
+  it("--password reads @file and @-, and a literal value warns about shell history", async () => {
+    const A = `/api/v1/Account/${TEST_AUTH_ID}`;
+    const api = fakeFetch({ [`POST ${A}/credentials`]: reply(201, { id: "c-9", username: "u" }) });
+    const file = join(mkdtempSync(join(tmpdir(), "vobiz-pw-")), "pw");
+    writeFileSync(file, "from-file-pass1\n");
+    const f = await runCli(["trunks", "credentials", "create", "--username", "u", "--password", `@${file}`, "--yes"], { fetch: api.fetch });
+    expect(f.code, f.err).toBe(0);
+    expect(api.last().body).toEqual({ username: "u", password: "from-file-pass1" });
+    expect(f.err).not.toContain("shell history");
+
+    const s = await runCli(["trunks", "credentials", "create", "--username", "u", "--password", "@-", "--yes"], { fetch: api.fetch, stdin: "from-stdin-pass2\n" });
+    expect(s.code, s.err).toBe(0);
+    expect(api.last().body).toEqual({ username: "u", password: "from-stdin-pass2" });
+
+    const lit = await runCli(["trunks", "credentials", "create", "--username", "u", "--password", "literal-pass3", "--yes"], { fetch: api.fetch });
+    expect(lit.code).toBe(0);
+    expect(lit.err).toContain("--password on the command line is saved in your shell history");
+    expect(lit.err).not.toContain("literal-pass3");
+
+    const missing = await runCli(["trunks", "credentials", "create", "--username", "u", "--password", "@/nonexistent/pw", "--yes"], { fetch: api.fetch });
+    expect(missing.code).toBe(2);
+
+    const sms = fakeFetch({ "POST /webhooks": reply(201, { id: "w1" }) });
+    const wh = await runCli(["sms", "webhooks", "create", "--url", "https://example.com/h", "--secret", "@-", "--yes"], { fetch: sms.fetch, stdin: "whsec-from-stdin\n" });
+    expect(wh.code, wh.err).toBe(0);
+    expect(sms.last().body).toMatchObject({ secret: "whsec-from-stdin" });
+    const whLit = await runCli(["sms", "webhooks", "update", "w1", "--secret", "whsec-literal", "--yes"], { fetch: fakeFetch({ "PATCH /webhooks/w1": { id: "w1" }, "PUT /webhooks/w1": { id: "w1" } }).fetch });
+    expect(whLit.err).toContain("--secret on the command line is saved in your shell history");
+  });
+});

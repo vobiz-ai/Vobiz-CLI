@@ -14,7 +14,7 @@ export function register(program: Command, ctx: Ctx): void {
     "after",
     examples(
       "vobiz trunks list",
-      "vobiz trunks credentials create --username pbx_01 --password '…'",
+      "vobiz trunks credentials create --username pbx_01 --password @pbx_01.pass   # or --password @- to read stdin",
       "vobiz trunks create --name 'Office PBX' --trunk-direction outbound --credential-uuid <credential-id>",
       "vobiz trunks origination-uris create --name primary --sip-uri sip:pbx.example.com --priority 1",
     ),

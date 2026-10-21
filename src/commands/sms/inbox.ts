@@ -9,6 +9,7 @@ import { op } from "../../core/ops.js";
 import { toE164 } from "../../core/phone.js";
 import { MESSAGE_COLUMNS } from "./messages.js";
 import { collect, compact, httpsUrl, listCommand, pagingOptions, printResult, simpleList, urlHost, type ListFlags, type Rec } from "./shared.js";
+import { readSecretArg } from "../../core/secrets.js";
 
 const CONV_LIST = op("list-conversations");
 const CONV_GET = op("get-conversation");
@@ -148,10 +149,11 @@ function registerWebhooks(sms: Command, ctx: Ctx): void {
   wh.command("create")
     .description("Subscribe an https URL to messaging events")
     .requiredOption("--url <url>", "https URL that receives the POSTs", httpsUrl("--url"))
-    .option("--secret <secret>", "shared secret for the X-Webhook-Signature HMAC")
+    .option("--secret <secret>", "shared secret for the X-Webhook-Signature HMAC (@file or @- for stdin keeps it out of shell history)")
     .option("--event <name>", "event to deliver (repeatable; default: message.received, message.delivered, message.failed)", collect)
-    .addHelpText("after", '\nExample:\n  vobiz sms webhooks create --url https://example.com/vobiz/sms --secret "$WEBHOOK_SECRET"')
+    .addHelpText("after", '\nExample:\n  vobiz sms webhooks create --url https://example.com/vobiz/sms --secret @webhook.secret')
     .action(async (o: WebhookOpts) => {
+      if (o.secret !== undefined) o.secret = await readSecretArg(ctx, o.secret, "--secret");
       if (!o.secret) ctx.out.warn("No --secret: deliveries will be signed with an empty secret, so you cannot verify them.");
       await requireConfirmation(ctx, { action: "Create a messaging webhook", details: { "URL host": urlHost(o.url!), events: o.event?.join(", ") ?? "default" } });
       const res = await ctx.client.call(WH_CREATE, { body: compact({ url: o.url, secret: o.secret, events: o.event }), sideEffect: true });
@@ -162,11 +164,12 @@ function registerWebhooks(sms: Command, ctx: Ctx): void {
     .description("Change a webhook's URL, secret, events or active state")
     .argument("<id>", "webhook id")
     .option("--url <url>", "new https URL", httpsUrl("--url"))
-    .option("--secret <secret>", "new signing secret")
+    .option("--secret <secret>", "new signing secret (@file or @- for stdin)")
     .option("--event <name>", "replace the event list (repeatable)", collect)
     .option("--active", "resume deliveries")
     .option("--no-active", "pause deliveries and keep the subscription")
     .action(async (id: string, o: WebhookOpts) => {
+      if (o.secret !== undefined) o.secret = await readSecretArg(ctx, o.secret, "--secret");
       const body = compact({ url: o.url, secret: o.secret, events: o.event, active: o.active });
       if (!Object.keys(body).length) throw usage("Nothing to change. Pass --url, --secret, --event, --active or --no-active.");
       const details: Record<string, string> = {};

@@ -59,8 +59,11 @@ export function issuesSummary(issues: XmlIssue[]): { errors: number; warnings: n
   return { errors: issues.filter((i) => i.level === "error").length, warnings: issues.filter((i) => i.level === "warning").length };
 }
 
-/** Starts the `xml serve` server. The file is re-read on every request, so edits apply without a restart. */
-export async function startXmlServer(ctx: Ctx, file: string, opts: { port: number; host: string }): Promise<LocalServer> {
+/**
+ * Starts the `xml serve` server. The file is re-read on every request, so edits apply without a restart. With
+ * `opts.text` (the XML already read from stdin for `xml serve -`) that text is served from memory instead.
+ */
+export async function startXmlServer(ctx: Ctx, file: string, opts: { port: number; host: string; text?: string }): Promise<LocalServer> {
   const handler = async (req: IncomingMessage, res: ServerResponse) => {
     const raw = await readBody(req);
     const params = decodeBody(raw, req.headers["content-type"]);
@@ -70,7 +73,7 @@ export async function startXmlServer(ctx: Ctx, file: string, opts: { port: numbe
     ctx.out.status(`${req.method} ${req.url}${keys.length ? "  " + keys.map((k) => `${k}=${fields[k]}`).join(" ") : ""}`);
     let xml: string;
     try {
-      xml = readFileSync(file, "utf8");
+      xml = opts.text ?? readFileSync(file, "utf8");
     } catch (e) {
       ctx.out.warn(`cannot read ${file}: ${(e as Error).message}`);
       res.writeHead(500, { "content-type": "text/plain" });
@@ -172,7 +175,7 @@ Examples:
   xml
     .command("serve")
     .description("Serve a VobizXML file over local HTTP so you can use it as an answer URL while developing")
-    .argument("<file>", "XML file to serve (re-read on every request)")
+    .argument("<file>", "XML file to serve (re-read on every request), or - to serve stdin (read once)")
     .option("--port <port>", "port to listen on (0 picks a free one)", "3000")
     .option("--host <address>", "address to bind; use 0.0.0.0 to accept connections from other machines", "127.0.0.1")
     .addHelpText(
@@ -186,10 +189,10 @@ Example:
   cloudflared tunnel --url http://localhost:3000     # in another terminal; use the https URL as answer_url`,
     )
     .action(async (file: string, opts: { port?: string; host: string }) => {
-      const issues = validateXml(await readSource(ctx, file));
-      const { errors } = issuesSummary(issues);
+      const source = await readSource(ctx, file);
+      const { errors } = issuesSummary(validateXml(source));
       if (errors) ctx.out.warn(`${file} has ${errors} error(s); run \`vobiz xml validate ${file}\`. Serving it anyway.`);
-      const server = await startXmlServer(ctx, file, { port: parsePort(opts.port, 3000), host: opts.host });
+      const server = await startXmlServer(ctx, file, { port: parsePort(opts.port, 3000), host: opts.host, ...(file === "-" ? { text: source } : {}) });
       if (ctx.out.explicitJson) ctx.out.print({ url: server.url, file });
       else ctx.stdout.write(server.url + "\n");
       ctx.out.status(`Serving ${file} at ${server.url} (Ctrl-C to stop).`);

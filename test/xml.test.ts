@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildResponseXml, parseXml, validateXml } from "../src/agent/xml.js";
 import { startXmlServer } from "../src/commands/xml.js";
+import { run } from "../src/cli.js";
 import { makeCtx, runCli } from "./helpers.js";
 
 const fixture = (name: string) => join(__dirname, "fixtures", "xml", name);
@@ -168,6 +169,33 @@ describe("xml serve", () => {
       expect(await (await fetch(server.url)).text()).toContain("Two");
     } finally {
       await server.close();
+    }
+  });
+
+  it("`xml serve -` reads stdin once and serves that text on every request", async () => {
+    let reads = 0;
+    const t = makeCtx();
+    const ctx = t.ctx;
+    (ctx as unknown as { stdin: { isTTY: boolean; read: () => Promise<string> } }).stdin = {
+      isTTY: false,
+      read: async () => (++reads, "<Response><Speak>Piped</Speak></Response>"),
+    };
+    const done = run(["xml", "serve", "-", "--port", "0"], ctx);
+    let url = "";
+    for (let i = 0; i < 100 && !url; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+      url = t.stdout.text.trim();
+    }
+    try {
+      for (const _ of [1, 2]) {
+        const res = await fetch(url);
+        expect(res.status).toBe(200);
+        expect(await res.text()).toBe("<Response><Speak>Piped</Speak></Response>");
+      }
+      expect(reads).toBe(1);
+    } finally {
+      process.emit("SIGINT");
+      expect(await done).toBe(0);
     }
   });
 });

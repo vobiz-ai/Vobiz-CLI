@@ -22,9 +22,8 @@ export const HELP_TOPICS: Record<string, { summary: string; text: string }> = {
   6  confirmation_required or not_allowed (a write without --yes when stdin is not a terminal, or a declined prompt)
   7  outcome_unknown: a side-effecting request (call, message, purchase, transfer) timed out, lost its
      connection, or got a 5xx/408 answer. It may have taken effect, so "retryable" is false. Check the current
-     state first (vobiz calls list, vobiz cdr recent, vobiz sms messages list,
-     vobiz account transactions list);
-     the CLI never retries on its own.
+     state first (vobiz calls list, vobiz cdr recent, vobiz sms messages list, vobiz account transactions
+     list); the CLI never retries on its own.
   8  timeout or network_error on a read (nothing was changed, safe to retry)
 130  interrupted (Ctrl-C)
 

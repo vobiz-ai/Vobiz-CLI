@@ -16,6 +16,7 @@ import { register as update } from "./update.js";
 // ── W3 provisioning: numbers, trunks, apps, endpoints, sub-accounts, partner ──
 
 // ── W4 messaging: sms ──
+import { register as sms } from "./sms/index.js";
 
 // ── W5 agent surface: xml, webhooks, mcp, skills, docs ──
 
@@ -35,6 +36,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   // W3 provisioning
 
   // W4 messaging
+  sms,
 
   // W5 agent surface
 

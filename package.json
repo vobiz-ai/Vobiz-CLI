@@ -26,6 +26,7 @@
     "start": "node dist/index.js",
     "dev": "npm run build && node dist/index.js",
     "spec:sync": "node scripts/sync-spec.mjs",
+    "skills:sync": "node scripts/sync-skills.mjs",
     "prepublishOnly": "npm run check"
   },
   "dependencies": {

@@ -21,6 +21,11 @@ guessing. Format: `operationId` (api) — why — what is needed.
 - `list-trunks`, `list-credentials`, `list-ip-acls`, `list-origination-uris`, `list-subaccounts` (voice) — responses carry `meta.limit/offset/total` but no `limit`/`offset` query params are declared, so the CLI fetches one page. Needed: the paging params, if the endpoints accept them.
 - `create-credential`, `create-endpoint` (voice) — the spec examples return `password: "<redacted>"`; whether the API ever echoes the password in clear is undocumented. The CLI shows a returned password once on stderr only when it is not already redacted. Needed: document the create response.
 
+### Agent ops (W9: diagnose, streams, setup)
+
+- `list-recordings` (voice) — declares only `limit`/`offset`, no `call_uuid` filter, so `vobiz diagnose call` scans the newest recordings (`--scan`, default 200) and matches `call_uuid` itself. Needed: a `call_uuid` query param (the bulk export body already has one).
+- `list-streams` (voice) — on a finished call the endpoint answered an error instead of the stopped streams the docs describe ("active + stopped"), so `diagnose call` lists streams only for live/queued calls and reports `streaming_cost` from the call record otherwise. Needed: confirm whether stopped streams stay listable after hangup, and a response schema.
+
 ## Messaging API (`vobiz sms`, W4)
 
 All 78 sms operations have a command. Gaps and behaviour the spec does not fully describe:

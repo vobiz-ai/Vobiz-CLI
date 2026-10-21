@@ -37,6 +37,7 @@ import { register as skills } from "./skills.js";
 import { register as docs } from "./docs.js";
 
 // ── W9 agent ops: diagnose, streams, setup, feedback ──
+import { register as diagnose } from "./diagnose.js";
 import { register as feedback } from "./feedback.js";
 
 // ── W1 core (kept last in help): api, completion, help topics ──
@@ -76,6 +77,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   docs,
 
   // W9 agent ops
+  diagnose,
   feedback,
 
   api,

@@ -12,9 +12,10 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
 | `--profile <name>` | saved login to use (env: VOBIZ_PROFILE) |
 | `--auth-id <id>` | one-off Auth ID (env: VOBIZ_AUTH_ID) |
 | `--auth-token <token>` | one-off Auth Token; lands in shell history (env: VOBIZ_AUTH_TOKEN) |
-| `-o, --output <format>` | output format (env: VOBIZ_OUTPUT; default: table on a terminal, json when piped) (one of: `table`, `json`, `yaml`, `tsv`, `plain`) |
+| `-o, --output <format>` | output format (env: VOBIZ_OUTPUT; default: table on a terminal, json when piped) (one of: `table`, `json`, `yaml`, `tsv`, `plain`, `jsonl`) |
 | `--json` | shorthand for --output json |
 | `--fields <paths>` | comma-separated fields to show (dot paths, e.g. id,meta.total) |
+| `--query <path>` | print only this path of the output, after --fields (e.g. data[0].uuid, items[*].e164) |
 | `-q, --quiet` | print only ids, one per line |
 | `-y, --yes` | skip confirmation prompts; required for writes when stdin is not a terminal (env: VOBIZ_YES) |
 | `--dry-run` | show the request (secrets redacted) and exit without sending |
@@ -110,6 +111,9 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
   - [`vobiz config path`](#vobiz-config-path)
   - [`vobiz config set`](#vobiz-config-set)
   - [`vobiz config unset`](#vobiz-config-unset)
+- [`vobiz diagnose`](#vobiz-diagnose)
+  - [`vobiz diagnose call`](#vobiz-diagnose-call)
+  - [`vobiz diagnose message`](#vobiz-diagnose-message)
 - [`vobiz docs`](#vobiz-docs)
   - [`vobiz docs open`](#vobiz-docs-open)
   - [`vobiz docs search`](#vobiz-docs-search)
@@ -120,6 +124,7 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
   - [`vobiz endpoints get`](#vobiz-endpoints-get)
   - [`vobiz endpoints list`](#vobiz-endpoints-list)
   - [`vobiz endpoints update`](#vobiz-endpoints-update)
+- [`vobiz feedback`](#vobiz-feedback)
 - [`vobiz login`](#vobiz-login)
 - [`vobiz logout`](#vobiz-logout)
 - [`vobiz mcp`](#vobiz-mcp)
@@ -443,7 +448,6 @@ vobiz api [method] [path] [options]
 
 | Option | Description |
 |---|---|
-| `--query <key=value>` | query parameter (repeatable) |
 | `--body <json>` | JSON body, @file.json, or @- for stdin |
 | `--sms` | send to the Messaging API (base https://api.vobiz.ai/api/v1/sms) |
 | `--list` | list every operation in the spec |
@@ -1236,6 +1240,44 @@ vobiz config unset <key> [options]
 |---|---|---|
 | `key` | yes | setting name |
 
+### vobiz diagnose
+
+Explain why a call or message ended the way it did (read-only)
+
+```
+vobiz diagnose <command> [options]
+```
+
+Subcommands: [`call`](#vobiz-diagnose-call), [`message`](#vobiz-diagnose-message)
+
+### vobiz diagnose call
+
+Explain a call: hangup cause, who hung up, quality, recordings and streams, and what to check next
+
+```
+vobiz diagnose call <call-uuid> [options]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `call-uuid` | yes | call UUID (from `vobiz cdr recent`, `calls list` or a webhook) |
+
+| Option | Description |
+|---|---|
+| `--scan <n>` | how many of the newest recordings to search for this call (default: 200) |
+
+### vobiz diagnose message
+
+Explain a message's delivery status and history, and what to check next
+
+```
+vobiz diagnose message <message-id> [options]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `message-id` | yes | message ID (UUID) from `vobiz sms send` or `sms messages list` |
+
 ### vobiz docs
 
 Search the Vobiz documentation and open pages in your browser
@@ -1378,6 +1420,20 @@ vobiz endpoints update <endpoint-id> [options]
 | `--alias <value>` | alias (required) |
 | `--password <value>` | password (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
+
+### vobiz feedback
+
+Open a prefilled GitHub issue for the Vobiz CLI (or print its URL); nothing is sent until you submit it
+
+```
+vobiz feedback [options]
+```
+
+| Option | Description |
+|---|---|
+| `-m, --message <text>` | what happened or what you would like; becomes the issue body |
+| `--title <text>` | issue title (default: the first line of --message) |
+| `--print` | only print the URL; do not open a browser |
 
 ### vobiz login
 

@@ -93,6 +93,8 @@ Commands:
                                  for Claude Code, Codex and other agents
   docs                           Search the Vobiz documentation and open pages
                                  in your browser
+  diagnose                       Explain why a call or message ended the way it
+                                 did (read-only)
   feedback [options]             Open a prefilled GitHub issue for the Vobiz CLI
                                  (or print its URL); nothing is sent until you
                                  submit it

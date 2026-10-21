@@ -462,7 +462,7 @@ Subcommands: [`create`](#vobiz-apps-create), [`delete`](#vobiz-apps-delete), [`g
 
 ### vobiz apps create
 
-Create a application
+Create an application
 
 ```
 vobiz apps create [options]
@@ -477,7 +477,7 @@ vobiz apps create [options]
 
 ### vobiz apps delete
 
-Delete a application
+Delete an application
 
 ```
 vobiz apps delete <app-id> [options]
@@ -518,7 +518,7 @@ Aliases: `ls`
 
 ### vobiz apps update
 
-Update a application
+Update an application
 
 ```
 vobiz apps update <app-id> [options]
@@ -1298,7 +1298,7 @@ Subcommands: [`create`](#vobiz-endpoints-create), [`delete`](#vobiz-endpoints-de
 
 ### vobiz endpoints create
 
-Create a endpoint
+Create an endpoint
 
 ```
 vobiz endpoints create [options]
@@ -1314,7 +1314,7 @@ vobiz endpoints create [options]
 
 ### vobiz endpoints delete
 
-Delete a endpoint
+Delete an endpoint
 
 ```
 vobiz endpoints delete <endpoint-id> [options]
@@ -1363,7 +1363,7 @@ Aliases: `ls`
 
 ### vobiz endpoints update
 
-Update a endpoint
+Update an endpoint
 
 ```
 vobiz endpoints update <endpoint-id> [options]
@@ -3938,7 +3938,7 @@ Subcommands: [`create`](#vobiz-trunks-ip-acl-create), [`delete`](#vobiz-trunks-i
 
 ### vobiz trunks ip-acl create
 
-Create a IP ACL entry
+Create an IP ACL entry
 
 ```
 vobiz trunks ip-acl create [options]
@@ -3952,7 +3952,7 @@ vobiz trunks ip-acl create [options]
 
 ### vobiz trunks ip-acl delete
 
-Delete a IP ACL entry
+Delete an IP ACL entry
 
 ```
 vobiz trunks ip-acl delete <ip-acl-id> [options]
@@ -3981,7 +3981,7 @@ Aliases: `ls`
 
 ### vobiz trunks ip-acl update
 
-Update a IP ACL entry
+Update an IP ACL entry
 
 ```
 vobiz trunks ip-acl update <ip-acl-id> [options]
@@ -4024,7 +4024,7 @@ Subcommands: [`create`](#vobiz-trunks-origination-uris-create), [`delete`](#vobi
 
 ### vobiz trunks origination-uris create
 
-Create a origination URI
+Create an origination URI
 
 ```
 vobiz trunks origination-uris create [options]
@@ -4039,7 +4039,7 @@ vobiz trunks origination-uris create [options]
 
 ### vobiz trunks origination-uris delete
 
-Delete a origination URI
+Delete an origination URI
 
 ```
 vobiz trunks origination-uris delete <uri-id> [options]
@@ -4068,7 +4068,7 @@ Aliases: `ls`
 
 ### vobiz trunks origination-uris update
 
-Update a origination URI
+Update an origination URI
 
 ```
 vobiz trunks origination-uris update <uri-id> [options]

@@ -123,6 +123,10 @@ describe("command tree", () => {
     }
   });
 
+  it("descriptions use \"an\" before a vowel (Create an application, not a application)", () => {
+    for (const n of nodes) expect(n.description, n.path.join(" ")).not.toMatch(/\b(Create|Update|Delete|Show) a [aeiouAEIOU]/);
+  });
+
   it("command names are lower-case kebab words", () => {
     for (const n of nodes) expect(n.name, n.path.join(" ")).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
   });

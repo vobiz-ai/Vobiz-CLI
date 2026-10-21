@@ -293,9 +293,13 @@ export interface CrudSpec {
   sanitizeCreated?: (data: Record<string, unknown>) => unknown;
 }
 
+/** "a trunk", "an application", "an IP ACL entry". */
+export const withArticle = (noun: string): string => `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`;
+
 /** list / get / create / update / delete for one resource. */
 export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
   const plural = s.plural ?? `${s.noun}s`;
+  const aNoun = withArticle(s.noun);
   const list = addListOptions(group.command("list").alias("ls").description(`List ${plural}`));
   const filters = s.listFilters ? addQueryOptions(list, s.list) : { fields: [] };
   list.action(async (opts: Opts) => {
@@ -313,21 +317,21 @@ export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
       });
   }
 
-  const create = group.command("create").description(`Create a ${s.noun}`);
+  const create = group.command("create").description(`Create ${aNoun}`);
   const createSpec = addBodyOptions(create, s.create);
   if (s.createExamples) create.addHelpText("after", examples(...s.createExamples));
   create.action(async (opts: Opts) => {
     const body = await buildBody(ctx, opts, createSpec, s.create);
     const details = detailsFrom(body, s.summaryKeys);
     Object.assign(details, urlHosts(body));
-    const data = await confirmedCall<Record<string, unknown>>(ctx, { action: `Create a ${s.noun}`, details: { account: ctx.client.authId, ...details } }, s.create, { body });
+    const data = await confirmedCall<Record<string, unknown>>(ctx, { action: `Create ${aNoun}`, details: { account: ctx.client.authId, ...details } }, s.create, { body });
     if (s.secretPaths) revealOnce(ctx, data, s.secretPaths, s.secretLabel ?? "Password");
     const newId = data ? getPath(data, s.createdIdPath ?? s.idKey) : undefined;
     ctx.out.status(`Created ${s.noun}${newId ? ` ${String(newId)}` : ""}.`);
     ctx.out.print(data && s.sanitizeCreated ? s.sanitizeCreated(data) : (data ?? {}));
   });
 
-  const update = group.command("update").argument(`<${s.idArg}>`, `${s.noun} ID`).description(`Update a ${s.noun}`);
+  const update = group.command("update").argument(`<${s.idArg}>`, `${s.noun} ID`).description(`Update ${aNoun}`);
   const updateSpec = addBodyOptions(update, s.update);
   update.action(async (id: string, opts: Opts) => {
     const body = await buildBody(ctx, opts, updateSpec, s.update, { requireSomething: true });
@@ -346,7 +350,7 @@ export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
     .command("delete")
     .alias("rm")
     .argument(`<${s.idArg}>`, `${s.noun} ID`)
-    .description(`Delete a ${s.noun}`)
+    .description(`Delete ${aNoun}`)
     .action(async (id: string) => {
       await confirmedCall(ctx, { action: `DELETE ${s.noun} ${id}`, details: { account: ctx.client.authId, note: "this cannot be undone" } }, s.delete, {
         path: { [s.idParam]: id },

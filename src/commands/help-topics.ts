@@ -46,7 +46,7 @@ With --output json, errors are printed to stderr as one JSON line:
   VOBIZ_NO_UPDATE_CHECK, CI         disable the daily version check
   VOBIZ_NO_BROWSER                  never open a browser; print the URL instead (also when CI is set or not a TTY)
   NO_COLOR, FORCE_COLOR             standard color control
-  HTTPS_PROXY, NO_PROXY             used by Node's fetch only when NODE_USE_ENV_PROXY=1
+  HTTPS_PROXY, NO_PROXY             used by Node's fetch only when NODE_USE_ENV_PROXY=1 (Node 22.21+ or 24+)
 
 Credential order: --auth-id/--auth-token flags, then VOBIZ_AUTH_ID/VOBIZ_AUTH_TOKEN, then the profile chosen by
 --profile, VOBIZ_PROFILE, the configured default, or "default".

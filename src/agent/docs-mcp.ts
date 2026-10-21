@@ -190,6 +190,7 @@ export function docsUrl(path: string | undefined): string {
   if (/^https?:\/\//.test(path)) {
     const u = new URL(path);
     if (u.host !== "www.vobiz.ai" && u.host !== "vobiz.ai" && u.host !== "docs.vobiz.ai") throw new VobizError("invalid_input", `Not a Vobiz docs URL: ${path}`);
+    u.protocol = "https:"; // never open the docs over plain http
     return u.toString();
   }
   const clean = path.replace(/^\/+/, "").replace(/^docs\//, "").replace(/\.mdx?$/, "");

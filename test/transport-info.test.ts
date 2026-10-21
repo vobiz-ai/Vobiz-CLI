@@ -30,3 +30,10 @@ describe("S2 info items (#17, #18, #19)", () => {
     expect(list.find((c) => c.check === "tls")).toMatchObject({ status: "warn" });
   });
 });
+
+describe("S2 #20 URL notes", async () => {
+  const { docsUrl } = await import("../src/agent/docs-mcp.js");
+  it("docs open upgrades an http docs URL to https", () => {
+    expect(docsUrl("http://www.vobiz.ai/docs/xml/gather")).toBe("https://www.vobiz.ai/docs/xml/gather");
+  });
+});

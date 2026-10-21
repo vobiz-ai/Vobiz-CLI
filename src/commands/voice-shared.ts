@@ -43,7 +43,7 @@ export function secondsArg(max = 86_400) {
 /** Commander collector for repeatable options. */
 export const collect = (value: string, prev: string[] = []): string[] => [...prev, value];
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]); // URL.hostname keeps the brackets on IPv6
 
 /**
  * Validates a URL that Vobiz will fetch or connect to during a call. https (or wss for audio streams) is

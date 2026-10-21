@@ -18,6 +18,8 @@ import {
   detailsFrom,
   examples,
   revealOnce,
+  addSecretOptions,
+  checkSecretFile,
   runList,
   urlHosts,
 } from "./provisioning-shared.js";
@@ -56,8 +58,10 @@ function registerAccounts(partner: Command, ctx: Ctx): void {
 
   const create = accounts.command("create").description("Create a customer account (Vobiz emails the customer)");
   const createSpec = addBodyOptions(create, CREATE_ACCOUNT);
+  addSecretOptions(create, "customer Auth Token");
   create.addHelpText("after", examples("vobiz partner accounts create --name 'Jane Doe' --email jane@example.com --phone +919876543210 --country IN   # prompts for the password"));
   create.action(async (opts: Opts) => {
+    checkSecretFile(opts);
     const body = await buildBody(ctx, opts, createSpec, CREATE_ACCOUNT);
     const data = await confirmedCall<Record<string, unknown>>(
       ctx,
@@ -65,7 +69,7 @@ function registerAccounts(partner: Command, ctx: Ctx): void {
       CREATE_ACCOUNT,
       { body },
     );
-    revealOnce(ctx, data, ["auth_token"], "Customer Auth Token");
+    revealOnce(ctx, data, ["auth_token"], "customer Auth Token", opts, body);
     ctx.out.status(`Created customer account${data?.auth_id ? ` ${String(data.auth_id)}` : ""}.`);
     ctx.out.print(data ?? {});
   });

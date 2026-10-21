@@ -86,14 +86,21 @@ describe("trunks credentials", () => {
     expect(r.out).toContain("[redacted]");
   });
 
-  it("create shows a returned password once on stderr, redacted in the record", async () => {
+  it("create shows a server-generated password only with --reveal-secret, never the one typed", async () => {
     const api = fakeFetch({ [`POST ${A}/credentials`]: reply(201, { id: "c-2", username: "pbx_02", password: "S3cret!pass" }) });
-    const r = await runCli(["trunks", "credentials", "create", "--username", "pbx_02", "--password", "S3cret!pass", "--yes", "--json"], { fetch: api.fetch });
+    const r = await runCli(["trunks", "credentials", "create", "--username", "pbx_02", "--password", "S3cret!pass", "--reveal-secret", "--yes", "--json"], { fetch: api.fetch });
     expect(r.code).toBe(0);
     expect(api.last().body).toEqual({ username: "pbx_02", password: "S3cret!pass" });
-    expect(r.out).not.toContain("S3cret!pass");
-    expect(r.err.match(/S3cret!pass/g)).toHaveLength(1);
-    expect(r.err).toContain("shown ONCE");
+    expect(r.out + r.err).not.toContain("S3cret!pass");
+
+    const gen = fakeFetch({ [`POST ${A}/credentials`]: reply(201, { id: "c-2", username: "pbx_02", password: "Gen-erated-9" }) });
+    const hidden = await runCli(["trunks", "credentials", "create", "--username", "pbx_02", "--password", "mine-12345", "--yes", "--json"], { fetch: gen.fetch });
+    expect(hidden.out + hidden.err).not.toContain("Gen-erated-9");
+    expect(hidden.err).toContain("--reveal-secret");
+    const shown = await runCli(["trunks", "credentials", "create", "--username", "pbx_02", "--password", "mine-12345", "--reveal-secret", "--yes", "--json"], { fetch: gen.fetch });
+    expect(shown.out).not.toContain("Gen-erated-9");
+    expect(shown.err.match(/Gen-erated-9/g)).toHaveLength(1);
+    expect(shown.err).toContain("shown ONCE");
   });
 
   it("create does not echo a password the API already redacted", async () => {

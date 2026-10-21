@@ -197,7 +197,7 @@ export function register(program: Command, ctx: Ctx): void {
     delete: op("delete-subaccount"),
     summaryKeys: ["name", "email", "kyc_mode", "business_type", "enabled"],
     secretPaths: ["auth_credentials.auth_token", "sub_account.auth_token"],
-    secretLabel: "Sub-account Auth Token",
+    secretLabel: "sub-account Auth Token",
     createdIdPath: "sub_account.auth_id",
     sanitizeCreated: dropSessionTokens,
     createExamples: ["vobiz sub-accounts create --name 'Acme Corp' --kyc-mode personal_use"],

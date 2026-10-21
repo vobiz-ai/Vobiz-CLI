@@ -75,13 +75,13 @@ describe("endpoints", () => {
     expect(api.last().query).toMatchObject({ username__contains: "sales", application_id__exact: "42" });
   });
 
-  it("create sends the body, prompts for nothing with --password, reveals a returned password once", async () => {
+  it("create sends the body, prompts for nothing with --password, never echoes the password the user typed", async () => {
     const api = fakeFetch({ [`POST ${A}/Endpoint/`]: reply(201, { alias: "Desk", endpoint_id: "e-1", username: "desk_01", password: "Pw-123456!" }) });
     const r = await runCli(["endpoints", "create", "--username", "desk_01", "--password", "Pw-123456!", "--alias", "Desk", "--application", "42", "--yes", "--json"], { fetch: api.fetch });
     expect(r.code).toBe(0);
     expect(api.last().body).toEqual({ username: "desk_01", password: "Pw-123456!", alias: "Desk", application: 42 });
-    expect(r.out).not.toContain("Pw-123456!");
-    expect(r.err).toContain("SIP password (shown ONCE");
+    expect(r.out + r.err).not.toContain("Pw-123456!"); // the password the user typed is never echoed back
+    expect(r.err).not.toContain("shown ONCE");
   });
 
   it("create without --password and without a terminal is a usage error", async () => {

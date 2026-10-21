@@ -20,7 +20,7 @@ describe("partner", () => {
     expect(r.out).not.toContain("tok-should-hide");
   });
 
-  it("accounts create reveals the customer Auth Token once", async () => {
+  it("accounts create shows the customer Auth Token only with --reveal-secret", async () => {
     const api = fakeFetch({ [`POST ${P}/accounts`]: reply(201, { auth_id: "MA_NEWNEWNE", auth_token: "cust-secret-token", name: "Jane" }) });
     const args = ["partner", "accounts", "create", "--name", "Jane", "--email", "j@example.com", "--phone", "+919876543210", "--password", "Pa55word!", "--country", "IN"];
     expect((await runCli(args, { fetch: api.fetch })).code).toBe(6);
@@ -28,7 +28,10 @@ describe("partner", () => {
     expect(r.code).toBe(0);
     expect(api.last().body).toEqual({ name: "Jane", email: "j@example.com", phone: "+919876543210", password: "Pa55word!", country: "IN" });
     expect(r.out).not.toContain("cust-secret-token");
-    expect(r.err.match(/cust-secret-token/g)).toHaveLength(1);
+    expect(r.err).not.toContain("cust-secret-token");
+    const shown = await runCli([...args, "--reveal-secret", "--yes"], { fetch: api.fetch });
+    expect(shown.err.match(/cust-secret-token/g)).toHaveLength(1);
+    expect(shown.out + shown.err).not.toContain("Pa55word!");
   });
 
   it("transfer-balance confirms with the amount and refuses non-TTY without --yes", async () => {

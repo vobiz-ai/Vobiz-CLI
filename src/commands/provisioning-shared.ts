@@ -10,6 +10,7 @@
  *   cover those). Date params (`*_date`) accept `today`, `7d`, `2026-10-01`, ISO timestamps.
  * - `runList` prints a default table, or the raw response body with --output json/yaml when it is one page.
  */
+import { existsSync, writeFileSync } from "node:fs";
 import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { requireConfirmation, type ConfirmSummary } from "../core/confirm.js";
@@ -240,18 +241,38 @@ export async function confirmedCall<T = unknown>(ctx: Ctx, summary: ConfirmSumma
 
 const LOOKS_REDACTED = /^(<?redacted>?|\[redacted\]|\*+|x+)$/i;
 
+/** Adds --reveal-secret and --secret-file to a create command whose response carries a secret shown only once. */
+export function addSecretOptions(cmd: Command, label: string): Command {
+  return cmd
+    .option("--reveal-secret", `print the returned ${label} once on stderr (off by default)`)
+    .option("--secret-file <path>", `write the returned ${label} to this new file (mode 0600), for CI`);
+}
+
+/** Fails before the request when --secret-file already exists, so the one-time secret is never lost after it. */
+export function checkSecretFile(opts: Opts): void {
+  const file = opts.secretFile as string | undefined;
+  if (file !== undefined && existsSync(file)) throw usage(`--secret-file ${file} already exists; pick a new path.`);
+}
+
 /**
- * Shows a secret the API returns exactly once (a new SIP password or Auth Token) on stderr, clearly marked. The
- * printed record stays redacted (only `--debug --show-secrets` lifts that).
+ * Handles a secret the API returns exactly once (a new SIP password or Auth Token). The printed record stays
+ * redacted (only `--debug --show-secrets` lifts that). The value is written to --secret-file (0600) and shown on
+ * stderr only with --reveal-secret; a value equal to one the user typed (e.g. their own --password) is never echoed.
  */
-export function revealOnce(ctx: Ctx, data: unknown, paths: string[], label: string): void {
+export function revealOnce(ctx: Ctx, data: unknown, paths: string[], label: string, opts: Opts = {}, typed: Record<string, unknown> = {}): void {
   if (ctx.flags.debug && ctx.flags.showSecrets) return; // already visible in the record
   for (const path of paths) {
     const v = getPath(data, path);
-    if (typeof v === "string" && v && !LOOKS_REDACTED.test(v)) {
-      ctx.out.warn(`${label} (shown ONCE, store it now; it is redacted everywhere else): ${v}`);
-      return;
+    if (typeof v !== "string" || !v || LOOKS_REDACTED.test(v)) continue;
+    if (Object.values(typed).includes(v)) return; // the user already knows it
+    const file = opts.secretFile as string | undefined;
+    if (file) {
+      writeFileSync(file, v + "\n", { mode: 0o600, flag: "wx" });
+      ctx.out.status(`Saved the ${label} to ${file} (mode 0600).`);
     }
+    if (opts.revealSecret) ctx.out.warn(`${label} (shown ONCE, store it now; it is redacted everywhere else): ${v}`);
+    else if (!file) ctx.out.warn(`A ${label} was returned but not shown. Pass --reveal-secret or --secret-file <path> to capture it, or read it from the Vobiz console.`);
+    return;
   }
 }
 
@@ -342,13 +363,15 @@ export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
 
   const create = group.command("create").description(`Create ${withArticle(s.noun)}`);
   const createSpec = addBodyOptions(create, s.create);
+  if (s.secretPaths) addSecretOptions(create, s.secretLabel ?? "password");
   if (s.createExamples) create.addHelpText("after", examples(...s.createExamples));
   create.action(async (opts: Opts) => {
+    if (s.secretPaths) checkSecretFile(opts);
     const body = await buildBody(ctx, opts, createSpec, s.create);
     const details = detailsFrom(body, s.summaryKeys);
     Object.assign(details, urlHosts(body));
     const data = await confirmedCall<Record<string, unknown>>(ctx, { action: `Create ${withArticle(s.noun)}`, details: { account: ctx.client.authId, ...details } }, s.create, { body });
-    if (s.secretPaths) revealOnce(ctx, data, s.secretPaths, s.secretLabel ?? "Password");
+    if (s.secretPaths) revealOnce(ctx, data, s.secretPaths, s.secretLabel ?? "password", opts, body);
     const newId = data ? getPath(data, s.createdIdPath ?? s.idKey) : undefined;
     ctx.out.status(`Created ${s.noun}${newId ? ` ${String(newId)}` : ""}.`);
     ctx.out.print(data && s.sanitizeCreated ? s.sanitizeCreated(data) : (data ?? {}));

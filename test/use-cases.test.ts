@@ -495,11 +495,11 @@ describe("agent tooling", () => {
     expect(JSON.parse(readFileSync(join(HOME, ".cursor", "mcp.json"), "utf8"))).toEqual({ mcpServers: { vobiz: { url: "https://mcp.vobiz.ai/mcp" } } });
 
     const proj = tmp("vobiz-proj-");
-    const local = await runCli(["mcp", "install", "cursor", "--project", "--dir", proj, "--local", "--yes", "--json"], { env: { HOME } });
+    const local = await runCli(["mcp", "install", "cursor", "--project", "--dir", proj, "--local", "--yes", "--json"], { env: { HOME, VOBIZ_AUTH_TOKEN: "tok_live_1a2b3c" } });
     expect(local.code, local.err).toBe(0);
     const cfg = JSON.parse(readFileSync(join(proj, ".cursor", "mcp.json"), "utf8"));
     expect(cfg.mcpServers.vobiz.command).toBe("npx");
-    expect(JSON.stringify(cfg)).not.toContain(TEST_AUTH_TOKEN.replace("YOUR_", "X_")); // no real token in the file
+    expect(JSON.stringify(cfg)).not.toContain("tok_live_1a2b3c"); // the env token is referenced, never copied
 
     const snippet = await runCli(["mcp", "config", "cursor"], { env: { HOME } });
     expect(JSON.parse(snippet.out)).toEqual({ mcpServers: { vobiz: { url: "https://mcp.vobiz.ai/mcp" } } });

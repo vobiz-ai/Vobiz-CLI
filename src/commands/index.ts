@@ -27,6 +27,7 @@ import { register as subAccounts } from "./sub-accounts.js";
 import { register as partner } from "./partner.js";
 
 // ── W4 messaging: sms ──
+import { register as sms } from "./sms/index.js";
 
 // ── W5 agent surface: xml, webhooks, mcp, skills, docs ──
 
@@ -57,6 +58,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   partner,
 
   // W4 messaging
+  sms,
 
   // W5 agent surface
 

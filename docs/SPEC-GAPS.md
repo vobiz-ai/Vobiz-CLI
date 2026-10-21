@@ -20,3 +20,25 @@ guessing. Format: `operationId` (api) — why — what is needed.
 - `list-customer-cdrs` (voice) — has `per_page` but no `page`/`offset`, so only the first page is reachable and `--all` cannot page. Needed: the paging parameter the endpoint accepts.
 - `list-trunks`, `list-credentials`, `list-ip-acls`, `list-origination-uris`, `list-subaccounts` (voice) — responses carry `meta.limit/offset/total` but no `limit`/`offset` query params are declared, so the CLI fetches one page. Needed: the paging params, if the endpoints accept them.
 - `create-credential`, `create-endpoint` (voice) — the spec examples return `password: "<redacted>"`; whether the API ever echoes the password in clear is undocumented. The CLI shows a returned password once on stderr only when it is not already redacted. Needed: document the create response.
+
+## Messaging API (`vobiz sms`, W4)
+
+All 78 sms operations have a command. Gaps and behaviour the spec does not fully describe:
+
+- `upload-recipients` (sms) — the description says the endpoint also takes JSON `{numbers, defaultCountry}`, but the
+  requestBody declares only `multipart/form-data`. `sms broadcasts recipients upload --number …` sends that JSON
+  form on the strength of the description. Needed: an `application/json` alternative in the requestBody.
+- `purchase-number` (sms) — there is no way to price one known number: `search-available-numbers` returns at most 10
+  numbers, so `sms numbers buy` re-searches (by country, plus area code for US/CA) and shows the price only when the
+  number appears; otherwise the confirmation says the price was not found. Needed: an `e164` filter on
+  `GET /numbers/available` or a quote endpoint.
+- `launch-broadcast` (sms) — no cost estimate for a broadcast; the launch confirmation shows pending recipients and
+  `estimatedSegments` from `preview-broadcast`, not a price. Needed: a cost field on preview (or a broadcast
+  cost-preview).
+- `update-brand` / `update-campaign` (sms) — full replacements, but `get-brand` returns `address` as an object while
+  the request takes a string, so a GET cannot be fed back into the PUT unchanged. The CLI asks for the whole body
+  (`--body @brand.json`) and warns that omitted fields are cleared. Needed: matching request/response shapes or a
+  PATCH.
+- `remove-campaign-numbers` (sms) — a DELETE with a JSON body. The core client sends bodies only with POST/PUT/PATCH,
+  so the sms module sends this one request itself (`deleteWithBody` in `src/commands/sms/shared.ts`). Some proxies
+  drop DELETE bodies; a POST alias (e.g. `/numbers/remove`) would be safer.

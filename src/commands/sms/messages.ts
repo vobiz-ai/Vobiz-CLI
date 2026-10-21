@@ -3,21 +3,25 @@
  *
  * `send` posts one request per recipient so every message id and status comes back (the API answers a
  * multi-recipient request with the first recipient's message only). Each request carries an idempotency key:
- * the one you pass, or a generated one that is printed so a retry can reuse it (`<key>:<n>` per recipient when
- * there are several). A send is never retried automatically.
+ * the one you pass, or a generated one that is printed so a retry can reuse it. The key sent for each recipient is
+ * `<key>:<digits of the E.164 number>`, so a retry with a reordered or extended --to list still maps every key to the
+ * same person. A send is never retried automatically, and one command sends to at most 50 recipients unless
+ * --max-fanout raises it (bulk sends belong in `sms broadcasts`).
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Option, type Command } from "commander";
-import { requireConfirmation } from "../../core/confirm.js";
+import { requireConfirmation, type ConfirmDetail } from "../../core/confirm.js";
 import type { Ctx } from "../../core/context.js";
 import { EXIT, VobizError, usage } from "../../core/errors.js";
 import { op } from "../../core/ops.js";
 import { toE164 } from "../../core/phone.js";
 import { parseRange } from "../../core/time.js";
+import { MESSAGE_TEXT_KEYS, untrustedAction } from "../../core/untrusted.js";
 import {
   collect,
   httpsUrl,
+  intArg,
   isRec,
   jsonArg,
   listCommand,
@@ -56,6 +60,14 @@ function readText(ctx: Ctx, opts: { text?: string; textFile?: string }): Promise
 }
 
 const money = (n: number) => String(Number(n.toFixed(4)));
+
+/** Recipients one `sms send` may reach without --max-fanout. */
+export const DEFAULT_MAX_RECIPIENTS = 50;
+
+/** The idempotency key sent for one recipient: tied to the number, not its position in --to. */
+export function recipientKey(key: string, e164: string): string {
+  return `${key}:${e164.replace(/\D/g, "")}`;
+}
 
 /** Cost estimate for a send from cost-preview (a read, so it also runs under --dry-run). Undefined when unknown. */
 async function estimateCost(ctx: Ctx, from: string, to: string[], text: string | undefined, channel: string): Promise<string | undefined> {
@@ -98,6 +110,7 @@ interface SendOpts {
   dltEntityId?: string;
   dltHeaderId?: string;
   dltTemplateId?: string;
+  maxFanout?: number;
 }
 
 async function waitForFinal(ctx: Ctx, messages: Rec[]): Promise<boolean> {
@@ -134,6 +147,11 @@ function registerSend(sms: Command, ctx: Ctx): void {
     .option("--tag <label>", "your label, stored on every message; filter `sms messages list --tag` by it")
     .option("--schedule-at <time>", "hold until this time: RFC 3339 (2026-11-01T09:00:00Z) or +30m, +2h, +1d")
     .option("--idempotency-key <key>", "reuse a key from an earlier attempt so a retry never sends twice (default: generated and printed)")
+    .addOption(
+      new Option("--max-fanout <n>", `allow more than ${DEFAULT_MAX_RECIPIENTS} recipients in one command (each is billed); use sms broadcasts for bulk`).argParser(
+        intArg("--max-fanout", 1, 100_000),
+      ),
+    )
     .option("--failover-to-sms", "RCS only: send the text as SMS when RCS cannot be delivered")
     .option("--rcs-suggestions <json>", "RCS only: suggestion buttons as a JSON array, @file.json or @-")
     .option("--dlt-entity-id <id>", "India (TRAI DLT): Principal Entity ID")
@@ -164,6 +182,11 @@ Examples:
       if (channel !== "rcs" && (opts.failoverToSms || opts.rcsSuggestions)) throw usage("--failover-to-sms and --rcs-suggestions apply only to --type rcs.");
       const to = [...new Set(opts.to.map(toE164))];
       if (!to.length) throw usage("Pass at least one --to recipient.");
+      const maxRecipients = opts.maxFanout ?? DEFAULT_MAX_RECIPIENTS;
+      if (to.length > maxRecipients)
+        throw usage(
+          `--to has ${to.length} distinct recipients, more than ${maxRecipients}. Each one is a separate billed message: pass --max-fanout ${to.length} to confirm the count, or use \`vobiz sms broadcasts\` for bulk sends.`,
+        );
       const from = channel === "rcs" ? opts.from.trim() : toE164(opts.from);
       let suggestions: unknown;
       if (opts.rcsSuggestions !== undefined) {
@@ -183,8 +206,8 @@ Examples:
       for (const k of Object.keys(base)) if (base[k] === undefined) delete base[k];
 
       const cost = await estimateCost(ctx, from, to, text, channel);
-      const details: Record<string, string> = { from, to: listPreview(to) };
-      if (text) details.text = textPreview(text);
+      const details: Record<string, string | ConfirmDetail> = { from, to: listPreview(to), recipients: String(to.length) };
+      if (text) details.text = { value: `${textPreview(text, 500)} (${[...text].length} characters)`, max: 540 };
       if (media.length) details.media = listPreview(media.map((u) => new URL(u).host), 3);
       if (scheduled) details["scheduled for"] = scheduled;
       details["idempotency key"] = key;
@@ -198,7 +221,7 @@ Examples:
       const messages: Rec[] = [];
       let unknownOutcome = false;
       for (const [i, recipient] of to.entries()) {
-        const body = { ...base, to: [recipient], idempotencyKey: to.length === 1 ? key : `${key}:${i + 1}` };
+        const body = { ...base, to: [recipient], idempotencyKey: recipientKey(key, recipient) };
         try {
           const res = await ctx.client.call<Rec>(SEND, { body, sideEffect: true });
           messages.push(isRec(res) ? res : { to: recipient, status: "unknown" });
@@ -268,7 +291,7 @@ function registerMessages(sms: Command, ctx: Ctx): void {
     20,
   )
     .addHelpText("after", "\nExamples:\n  vobiz sms messages list --direction in --since 7d\n  vobiz sms messages list --tag october-notice --all --output json")
-    .action(async (o: ListOpts) => {
+    .action(untrustedAction(ctx, MESSAGE_TEXT_KEYS, async (o: ListOpts) => {
       const range = parseRange(o.since, o.until, ctx.now());
       const from = o.from && /^[+\d\s()-]+$/.test(o.from) ? toE164(o.from) : o.from;
       const query = {
@@ -282,15 +305,15 @@ function registerMessages(sms: Command, ctx: Ctx): void {
         endDate: range.to?.toISOString(),
       };
       await listCommand(ctx, LIST, { query }, o, 20, 100, "messages", { columns: MESSAGE_COLUMNS, idKey: "id", empty: "No messages match." });
-    });
+    }));
 
   messages
     .command("get")
     .description("Show one message with its status history")
     .argument("<id>", "message id")
-    .action(async (id: string) => {
+    .action(untrustedAction(ctx, MESSAGE_TEXT_KEYS, async (id: string) => {
       ctx.out.print(await ctx.client.call(GET, { path: { id } }));
-    });
+    }));
 }
 
 function registerCost(sms: Command, ctx: Ctx): void {

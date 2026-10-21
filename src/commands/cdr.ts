@@ -6,6 +6,7 @@
 import { existsSync } from "node:fs";
 import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
+import { CALLER_KEYS, RESOURCE_NAME_KEYS, untrustedAction } from "../core/untrusted.js";
 import { usage } from "../core/errors.js";
 import { op } from "../core/ops.js";
 import { paginate } from "../core/pagination.js";
@@ -86,6 +87,9 @@ function printSummary(ctx: Ctx, last: unknown) {
   if (parts.length) ctx.out.status(`Summary: ${parts.join(", ")}`);
 }
 
+/** Third-party text in call records (S6 #4). */
+const CDR_UNTRUSTED = [...CALLER_KEYS, ...RESOURCE_NAME_KEYS];
+
 export function register(program: Command, ctx: Ctx): void {
   const cdr = program.command("cdr").description("Call detail records: list, search, recent, get and CSV export");
 
@@ -100,18 +104,18 @@ export function register(program: Command, ctx: Ctx): void {
         "after",
         `\nExamples:\n  vobiz cdr ${name} --from 7d --direction outbound\n  vobiz cdr ${name} --from 2026-10-01 --to 2026-10-07 --hangup-cause NO_ANSWER --all --output tsv`,
       )
-      .action(async (o: FilterOpts & ListFlags) => {
+      .action(untrustedAction(ctx, CDR_UNTRUSTED, async (o: FilterOpts & ListFlags) => {
         const page = await paginate(ctx.client, operation, { query: cdrQuery(o, ctx.now()) }, { limit: o.limit ?? 20, all: o.all, itemsKey: "data" });
         printPage(ctx, page, { itemsKey: "data", columns: COLUMNS, idKey: "uuid", empty: "No call records match." });
         printSummary(ctx, page.last);
-      });
+      }));
   }
 
   cdr
     .command("recent")
     .description("Show the most recent call records (no date range needed)")
     .option("--limit <n>", "how many records (default: 20)", intArg(1, 1000))
-    .action(async (o: { limit?: number }) => {
+    .action(untrustedAction(ctx, CDR_UNTRUSTED, async (o: { limit?: number }) => {
       const body = await ctx.client.call<Rec>(RECENT, { query: { limit: o.limit ?? 20 } });
       const mode = ctx.out.mode;
       if ((mode === "json" || mode === "yaml") && !ctx.flags.fields?.length && !ctx.flags.quiet) {
@@ -120,17 +124,17 @@ export function register(program: Command, ctx: Ctx): void {
       }
       const rows = isRec(body) && Array.isArray(body.data) ? body.data : Array.isArray(body) ? body : [];
       ctx.out.print(rows, { columns: COLUMNS, idKey: "uuid", empty: "No call records yet." });
-    });
+    }));
 
   cdr
     .command("get")
     .argument("<call-id>", "call UUID of a completed call")
     .description("Show the call record of one completed call")
-    .action(async (id: string) => {
+    .action(untrustedAction(ctx, CDR_UNTRUSTED, async (id: string) => {
       const body = await ctx.client.call<Rec>(GET, { path: { call_id: id } });
       const mode = ctx.out.mode;
       ctx.out.print((mode === "json" || mode === "yaml") && !ctx.flags.fields?.length ? body : isRec(body?.data) ? body.data : body, { idKey: "uuid" });
-    });
+    }));
 
   addFilters(cdr.command("export").description("Export call records as CSV to a file (or stdout)"))
     .option("--out <file>", "write the CSV here instead of stdout")

@@ -82,6 +82,27 @@ export function kindForStatus(status: number): ErrorKind {
   return "unexpected_response";
 }
 
+/**
+ * Statuses that, on a side-effecting request (call, message, purchase, transfer), do not prove that nothing
+ * happened: a 5xx or a gateway timeout may come after the upstream acted. They map to `outcome_unknown`.
+ */
+export function isAmbiguousWriteStatus(status: number): boolean {
+  return status === 408 || status >= 500;
+}
+
+/** What to check before retrying a write whose outcome is unknown. */
+export const CHECK_STATE_HINT =
+  "Do NOT retry blindly: check the current state first (`vobiz calls list`, `vobiz cdr recent`, `vobiz sms messages list` or `vobiz account transactions list`).";
+
+/**
+ * Error kind for an HTTP failure. Reads keep the retryable mapping; a write (`sideEffect`) answered with a 5xx or
+ * 408 becomes `outcome_unknown` (exit 7, retryable: false) because the request may have taken effect.
+ */
+export function kindForResponse(status: number, sideEffect: boolean): ErrorKind {
+  if (sideEffect && isAmbiguousWriteStatus(status)) return "outcome_unknown";
+  return kindForStatus(status);
+}
+
 const MAX_BACKEND_MESSAGE = 300;
 
 /** An HTML page (a proxy or gateway error page) is never echoed: it can repeat request headers, tokens included. */

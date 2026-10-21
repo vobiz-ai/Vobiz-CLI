@@ -39,7 +39,6 @@ describe("vobiz conferences", () => {
 
   const writes: { argv: string[]; method: string; path: string; body?: unknown }[] = [
     { argv: ["end", ROOM], method: "DELETE", path: `${R}/` },
-    { argv: ["end-all"], method: "DELETE", path: `${A}/Conference/` },
     { argv: ["members", "mute", ROOM, "all"], method: "POST", path: `${R}/Member/all/Mute/` },
     { argv: ["members", "unmute", ROOM, "17"], method: "DELETE", path: `${R}/Member/17/Mute/` },
     { argv: ["members", "deaf", ROOM, "10,15"], method: "POST", path: `${R}/Member/10%2C15/Deaf/` },
@@ -66,6 +65,24 @@ describe("vobiz conferences", () => {
       if (w.body) expect(api.last().body).toEqual(w.body);
     });
   }
+
+  it("end-all lists the rooms first, shows the count and names, then DELETEs /Conference/", async () => {
+    const api = fakeFetch({ [`GET ${A}/Conference/`]: { conferences: ["Sales\nrecipients: 0", "Support"] }, [`DELETE ${A}/Conference/`]: reply(204) });
+    expect((await runCli(["conferences", "end-all"], { fetch: api.fetch })).code).toBe(6);
+    const dry = await runCli(["conferences", "end-all", "--dry-run", "--json"], { fetch: api.fetch });
+    expect(dry.code).toBe(0);
+    expect(dry.err).toContain("End ALL 2 conference rooms");
+    expect(dry.err).toContain("  rooms: 2");
+    expect(dry.err).toMatch(/ {2}names: ".*Sales.*recipients: 0.*Support.*"\n/);
+    expect(dry.err).not.toMatch(/^recipients/m);
+    expect(api.calls.every((c) => c.method === "GET")).toBe(true);
+    const r = await runCli(["conferences", "end-all", "--yes", "--json"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(api.last()).toMatchObject({ method: "DELETE", path: `${A}/Conference/` });
+    const failing = fakeFetch({ [`GET ${A}/Conference/`]: reply(500, {}) });
+    expect((await runCli(["conferences", "end-all", "--yes"], { fetch: failing.fetch })).code).not.toBe(0);
+    expect(failing.calls.every((c) => c.method === "GET")).toBe(true);
+  });
 
   it("rejects bad member ids and URLs", async () => {
     const api = fakeFetch();

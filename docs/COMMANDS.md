@@ -461,6 +461,7 @@ vobiz api [method] [path] [options]
 | `--list` | list every operation in the spec |
 | `--tag <tag>` | with --list: only operations with this tag (case-insensitive) |
 | `--describe <operationId>` | show the parameters and body of one operation (sms:<id> or voice:<id> when ambiguous) |
+| `--max-fanout <n>` | allow more than 50 destinations in a body "to" field (API maximum 1000) |
 
 ### vobiz apps
 
@@ -572,7 +573,8 @@ vobiz calls create [options]
 
 | Option | Description |
 |---|---|
-| `--to <dest>` | destination: E.164 number or SIP URI; join several with < to fan out (max 1000) |
+| `--to <dest>` | destination: E.164 number or SIP URI; join several with < to fan out (deduplicated; at most 50 unless --max-fanout) |
+| `--max-fanout <n>` | allow this many fan-out destinations (default 50, API maximum 1000); each is a separate billed call |
 | `--from <number>` | caller ID: a Vobiz number on this account, E.164 |
 | `--answer-url <url>` | https URL that returns VobizXML when the call is answered |
 | `--answer-method <method>` | HTTP method Vobiz uses for the answer URL (one of: `GET`, `POST`) |
@@ -3362,6 +3364,7 @@ vobiz sms send [options]
 | `--tag <label>` | your label, stored on every message; filter `sms messages list --tag` by it |
 | `--schedule-at <time>` | hold until this time: RFC 3339 (2026-11-01T09:00:00Z) or +30m, +2h, +1d |
 | `--idempotency-key <key>` | reuse a key from an earlier attempt so a retry never sends twice (default: generated and printed) |
+| `--max-fanout <n>` | allow more than 50 recipients in one command (each is billed); use sms broadcasts for bulk |
 | `--failover-to-sms` | RCS only: send the text as SMS when RCS cannot be delivered |
 | `--rcs-suggestions <json>` | RCS only: suggestion buttons as a JSON array, @file.json or @- |
 | `--dlt-entity-id <id>` | India (TRAI DLT): Principal Entity ID |

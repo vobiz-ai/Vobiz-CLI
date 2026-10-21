@@ -11,7 +11,7 @@
  * - The token travels only in the `X-Auth-Token` header; logs and dry-run output never contain it.
  */
 import type { ResolvedCredentials } from "./credentials.js";
-import { VobizError, extractBackendMessage, kindForStatus } from "./errors.js";
+import { CHECK_STATE_HINT, VobizError, extractBackendMessage, kindForResponse } from "./errors.js";
 import type { Api, HttpMethod, Operation } from "../generated/operations.js";
 import { REDACTED, redact, redactForLog, redactUrl, rememberSecret, rememberSecretsIn } from "./redact.js";
 import { USER_AGENT } from "./version.js";
@@ -220,7 +220,7 @@ export class VobizClient {
       if (args.sideEffect)
         throw new VobizError(
           "outcome_unknown",
-          `${timedOut ? "The request timed out" : "The connection failed"} before Vobiz answered, so it is unknown whether the request took effect. Do NOT retry blindly; check the current state first.`,
+          `${timedOut ? "The request timed out" : "The connection failed"} before Vobiz answered, so it is unknown whether the request took effect. ${CHECK_STATE_HINT}`,
         );
       throw timedOut
         ? new VobizError("timeout", `Vobiz did not respond within ${Math.round(timeoutMs / 1000)}s.`)
@@ -234,7 +234,7 @@ export class VobizClient {
       bytes = new Uint8Array();
       if (controller.signal.aborted && res.ok) {
         clearTimeout(timer);
-        throw new VobizError(args.sideEffect ? "outcome_unknown" : "timeout", "The response was cut off by the timeout.");
+        throw new VobizError(args.sideEffect ? "outcome_unknown" : "timeout", `The response was cut off by the timeout.${args.sideEffect ? ` ${CHECK_STATE_HINT}` : ""}`);
       }
     } finally {
       clearTimeout(timer);
@@ -268,6 +268,11 @@ export class VobizClient {
 
     if (data === undefined && text) this.log("verbose", `${label}: non-JSON error body (${contentType ?? "no content type"}, ${text.length} bytes) not shown`);
     const message = extractBackendMessage(data ?? text) ?? `HTTP ${res.status}`;
-    throw new VobizError(kindForStatus(res.status), message, res.status, data === undefined ? undefined : redact(data));
+    const kind = kindForResponse(res.status, !!args.sideEffect);
+    const shown =
+      kind === "outcome_unknown"
+        ? `Vobiz answered HTTP ${res.status} (${message}), so it is unknown whether the request took effect. ${CHECK_STATE_HINT}`
+        : message;
+    throw new VobizError(kind, shown, res.status, data === undefined ? undefined : redact(data));
   }
 }

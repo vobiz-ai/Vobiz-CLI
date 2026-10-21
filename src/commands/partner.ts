@@ -82,7 +82,7 @@ function registerAccounts(partner: Command, ctx: Ctx): void {
   transfer.addHelpText("after", examples("vobiz partner accounts transfer-balance MA_XXXXXXXX --amount 500 --currency INR --description 'April recharge'"));
   transfer.action(async (customer: string, opts: Opts) => {
     const body = await buildBody(ctx, opts, transferSpec, TRANSFER);
-    if (typeof body.amount === "number" && !(body.amount > 0)) throw usage("--amount must be greater than 0.");
+    body.amount = positiveAmount(body.amount);
     const data = await confirmedCall(
       ctx,
       {
@@ -198,6 +198,16 @@ function registerKycSessions(partner: Command, ctx: Ctx): void {
       const data = await confirmedCall(ctx, { action: `Resend the KYC email for session ${id}` }, RESEND_SESSION, { path: { session_id: id } });
       ctx.out.success(`Resent the KYC email for session ${id}.`, data ?? { session_id: id, resent: true });
     });
+}
+
+/**
+ * The transfer amount as a positive finite number, whether it came from --amount or a --body string ("500",
+ * "-5", "1e3"): a string from --body must not slip past the check and reach the API as a negative transfer.
+ */
+export function positiveAmount(value: unknown): number {
+  const n = typeof value === "number" ? value : typeof value === "string" && /^\s*[0-9]+(\.[0-9]+)?\s*$/.test(value) ? Number(value) : NaN;
+  if (!Number.isFinite(n) || !(n > 0)) throw usage(`The amount must be a number greater than 0 (got ${JSON.stringify(value ?? null)}).`);
+  return n;
 }
 
 export function register(program: Command, ctx: Ctx): void {

@@ -13,15 +13,18 @@ export const HELP_TOPICS: Record<string, { summary: string; text: string }> = {
     text: `Exit codes (stable; scripts may branch on them)
 
   0  ok
-  1  server error or unexpected failure (backend_error, service_unavailable, unexpected_response, internal_error)
+  1  server error or unexpected failure (backend_error, service_unavailable, unexpected_response, internal_error);
+     a 5xx on a read is retryable, a 5xx on a write is exit 7
   2  usage error or invalid input (invalid_input, unsupported, unknown command or option)
   3  authentication: missing_credentials, auth_failed, forbidden, account_suspended
   4  not_found
   5  rate_limited or insufficient_balance
   6  confirmation_required or not_allowed (a write without --yes when stdin is not a terminal, or a declined prompt)
-  7  outcome_unknown: a side-effecting request (call, message, purchase) timed out or lost its connection.
-     It may have taken effect. Check the current state before you retry; the CLI never retries on its own.
-  8  timeout or network_error (nothing was changed, safe to retry)
+  7  outcome_unknown: a side-effecting request (call, message, purchase, transfer) timed out, lost its
+     connection, or got a 5xx/408 answer. It may have taken effect, so "retryable" is false. Check the current
+     state first (vobiz calls list, vobiz cdr recent, vobiz sms messages list, vobiz account transactions
+     list); the CLI never retries on its own.
+  8  timeout or network_error on a read (nothing was changed, safe to retry)
 130  interrupted (Ctrl-C)
 
 With --output json, errors are printed to stderr as one JSON line:
@@ -39,6 +42,7 @@ With --output json, errors are printed to stderr as one JSON line:
   VOBIZ_BASE_URL                    voice API base URL (default https://api.vobiz.ai)
   VOBIZ_SMS_BASE_URL                Messaging API base URL (default https://api.vobiz.ai/api/v1/sms)
   VOBIZ_ALLOW_INSECURE_BASE_URL=1   allow http base URLs on localhost only (base URLs must otherwise be https)
+  VOBIZ_ALLOW_ANY_BASE_URL=1        allow base URLs outside *.vobiz.ai; your token goes there (warns on every run)
   VOBIZ_TIMEOUT                     per-request timeout in seconds (default 30)
   VOBIZ_LOG=debug                   like --debug (request and response bodies, secrets redacted)
   VOBIZ_NO_BROWSER                  never open a browser (feedback, docs open, login --browser); print the URL

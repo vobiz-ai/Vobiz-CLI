@@ -4,7 +4,7 @@
  * `<Conference callbackUrl>` enter callback and may be a single id, a comma-separated list, or `all`.
  */
 import { Option, type Command } from "commander";
-import { requireConfirmation } from "../core/confirm.js";
+import { requireConfirmation, type ConfirmDetail } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
 import { op, type Operation } from "../core/ops.js";
@@ -37,7 +37,7 @@ function memberArg(member: string): string {
 
 const describeMembers = (m: string) => (m === "all" ? "every member" : m.includes(",") ? `members ${m}` : `member ${m}`);
 
-async function write(ctx: Ctx, action: string, details: Record<string, string> | undefined, run: () => Promise<unknown>, done: string, data: Rec) {
+async function write(ctx: Ctx, action: string, details: Record<string, string | ConfirmDetail> | undefined, run: () => Promise<unknown>, done: string, data: Rec) {
   await requireConfirmation(ctx, { action, details });
   const res = await run();
   ctx.out.success(done, isRec(res) ? res : { ...data, ok: true });
@@ -87,7 +87,22 @@ export function register(program: Command, ctx: Ctx): void {
     .command("end-all")
     .description("End every active conference room on the account")
     .action(async () => {
-      await write(ctx, `End ALL conference rooms on ${ctx.creds.authId}`, undefined, () => ctx.client.call(END_ALL, { sideEffect: true }), "Ended all conferences.", { ended_all: true });
+      // Show the blast radius: the rooms that would end. A read, so it runs under --dry-run too; a failed list stops here.
+      const body = await ctx.client.call<Rec>(LIST, { dryRun: false });
+      const names = Array.isArray(body?.conferences) ? (body.conferences as unknown[]).map(String) : [];
+      const shown = names.slice(0, 10).map((n) => JSON.stringify(n)).join(", ");
+      await write(
+        ctx,
+        `End ALL ${names.length} conference room${names.length === 1 ? "" : "s"} and disconnect every member`,
+        {
+          rooms: String(names.length),
+          ...(names.length ? { names: { value: names.length > 10 ? `${shown} and ${names.length - 10} more` : shown, fromApi: true, max: 400 } } : {}),
+          ...(names.length ? {} : { note: "the API reported no active rooms; any it did not list are ended too" }),
+        },
+        () => ctx.client.call(END_ALL, { sideEffect: true }),
+        "Ended all conferences.",
+        { ended_all: true },
+      );
     });
 
   const members = conf.command("members").description("Moderate conference members (id, comma-separated ids, or all)");

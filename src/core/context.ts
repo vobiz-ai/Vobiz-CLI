@@ -124,7 +124,7 @@ export class Ctx {
   /** Resolved credentials (flags > env > profile). Throws missing_credentials on first use when there are none. */
   get creds(): ResolvedCredentials {
     if (!this._creds) {
-      this._creds = resolveCredentials(this.flags, this.store, this.env);
+      this._creds = resolveCredentials(this.flags, this.store, this.env, (m) => this.log("warn", m));
       rememberSecret(this._creds.authToken);
       if (this._creds.source === "profile") {
         const problem = this.store.credentialsPermissionProblem();

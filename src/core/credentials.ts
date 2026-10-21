@@ -48,29 +48,68 @@ export function baseUrlProblem(url: string, allowLocalHttp: boolean): string | u
   return "must use https (http is allowed only for localhost with VOBIZ_ALLOW_INSECURE_BASE_URL=1)";
 }
 
+/** True for vobiz.ai and its subdomains (api.vobiz.ai, staging.vobiz.ai…). `vobiz.ai.example.com` is not. */
+export function isVobizHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return h === "vobiz.ai" || h.endsWith(".vobiz.ai");
+}
+
+/** True when a base URL may receive the token without VOBIZ_ALLOW_ANY_BASE_URL: a Vobiz host or loopback. */
+export function isTrustedBaseHost(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return isVobizHost(u.hostname) || LOCAL_HOSTS.has(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 /** Throws invalid_input unless `url` is an https base URL (or http on localhost with VOBIZ_ALLOW_INSECURE_BASE_URL=1). */
 export function assertSecureBaseUrl(url: string, label: string, env: NodeJS.ProcessEnv = process.env): string {
   const problem = baseUrlProblem(url, env.VOBIZ_ALLOW_INSECURE_BASE_URL === "1");
   if (problem) throw new VobizError("invalid_input", `${label} ${problem} (got "${url}").`);
+  // The Auth Token goes to this host on every request, so only Vobiz (and loopback, for local testing) by default.
+  if (!isTrustedBaseHost(url) && env.VOBIZ_ALLOW_ANY_BASE_URL !== "1")
+    throw new VobizError(
+      "invalid_input",
+      `${label} points at ${new URL(url).host}, which is not a Vobiz host (*.vobiz.ai). Your Auth Token would be sent there. Set VOBIZ_ALLOW_ANY_BASE_URL=1 only if you trust that host.`,
+    );
   return url;
 }
 
+/** One stderr line per run for every base URL outside *.vobiz.ai / loopback (only reachable with VOBIZ_ALLOW_ANY_BASE_URL=1). */
+export function customBaseUrlWarnings(urls: { voiceBaseUrl: string; smsBaseUrl: string }): string[] {
+  const hosts = new Set<string>();
+  for (const u of [urls.voiceBaseUrl, urls.smsBaseUrl]) if (!isTrustedBaseHost(u)) hosts.add(new URL(u).host);
+  return [...hosts].map((h) => `sending your Vobiz credentials to ${h}, which is not a Vobiz host (VOBIZ_ALLOW_ANY_BASE_URL=1).`);
+}
+
 /** Picks the voice and Messaging base URLs (flag, env, profile, default) and checks both. */
-export function resolveBaseUrls(flags: CredentialFlags, env: NodeJS.ProcessEnv, p?: Pick<Profile, "voiceBaseUrl" | "smsBaseUrl">): { voiceBaseUrl: string; smsBaseUrl: string } {
+export function resolveBaseUrls(
+  flags: CredentialFlags,
+  env: NodeJS.ProcessEnv,
+  p?: Pick<Profile, "voiceBaseUrl" | "smsBaseUrl">,
+  warn?: (message: string) => void,
+): { voiceBaseUrl: string; smsBaseUrl: string } {
   const pick = (flag: string | undefined, flagName: string, envName: string, saved: string | undefined, savedName: string, dflt: string) => {
     if (flag !== undefined) return assertSecureBaseUrl(flag, flagName, env);
     if (env[envName] !== undefined) return assertSecureBaseUrl(env[envName]!, envName, env);
     if (saved !== undefined) return assertSecureBaseUrl(saved, savedName, env);
     return dflt;
   };
-  return {
+  const urls = {
     voiceBaseUrl: pick(flags.baseUrl, "--base-url", "VOBIZ_BASE_URL", p?.voiceBaseUrl, "The profile's voiceBaseUrl", VOICE_BASE_URL),
     smsBaseUrl: pick(flags.smsBaseUrl, "--sms-base-url", "VOBIZ_SMS_BASE_URL", p?.smsBaseUrl, "The profile's smsBaseUrl", SMS_BASE_URL),
   };
+  if (warn) for (const w of customBaseUrlWarnings(urls)) warn(w);
+  return urls;
 }
 
-export function resolveCredentials(flags: CredentialFlags, store: ConfigStore, env = process.env): ResolvedCredentials {
-  const { voiceBaseUrl, smsBaseUrl } = resolveBaseUrls(flags, env);
+/** `warn` receives one line per non-Vobiz base host (see customBaseUrlWarnings). */
+export function resolveCredentials(flags: CredentialFlags, store: ConfigStore, env = process.env, warn?: (message: string) => void): ResolvedCredentials {
+  const usesProfile = !(flags.authId || flags.authToken || env.VOBIZ_AUTH_ID || env.VOBIZ_AUTH_TOKEN);
+  // Flag and env base URLs are checked up front; the profile path re-resolves with the saved URLs (and warns once there).
+  const { voiceBaseUrl, smsBaseUrl } = resolveBaseUrls(flags, env, undefined, usesProfile ? undefined : warn);
   if (flags.authId || flags.authToken) {
     if (!flags.authId || !flags.authToken) throw new VobizError("missing_credentials", "Pass both --auth-id and --auth-token, or neither.");
     return { authId: flags.authId, authToken: flags.authToken, voiceBaseUrl, smsBaseUrl, source: "flags" };
@@ -89,7 +128,7 @@ export function resolveCredentials(flags: CredentialFlags, store: ConfigStore, e
   return {
     authId: p.authId,
     authToken: p.authToken,
-    ...resolveBaseUrls(flags, env, p),
+    ...resolveBaseUrls(flags, env, p, warn),
     source: "profile",
     profile: name,
   };

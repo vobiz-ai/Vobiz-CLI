@@ -7,6 +7,7 @@
  * publicly: `--xml-only` prints the document so you can host it, and `--serve --public-url` serves it from a local
  * HTTP server that you expose with a tunnel (cloudflared, ngrok…) for the length of the call.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { Option, type Command } from "commander";
@@ -15,6 +16,7 @@ import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
 import { op } from "../core/ops.js";
 import { toE164 } from "../core/phone.js";
+import { CALLER_KEYS, RESOURCE_NAME_KEYS, untrustedAction } from "../core/untrusted.js";
 import { checkUrl, hostOf, intArg, isRec, normalizeDestinations, secondsArg, watchCall, type Rec } from "./voice-shared.js";
 
 const MAKE_CALL = op("make-call");
@@ -58,6 +60,42 @@ export function playXml(url: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  <Play>${escapeXml(url)}</Play>\n</Response>\n`;
 }
 
+// ── Fan-out guard ──
+
+/** One `--yes` should not approve hundreds of billed calls: this many destinations at most unless --max-fanout raises it. */
+export const DEFAULT_MAX_FANOUT = 50;
+/** The API's own limit for `<`-joined destinations. */
+export const API_MAX_FANOUT = 1000;
+
+/**
+ * De-duplicates destinations (keeping the first occurrence) and refuses more than `max` unless the caller raised it
+ * with `--max-fanout`, so the approved count is explicit.
+ */
+export function capFanout(destinations: string[], max: number = DEFAULT_MAX_FANOUT, what = "--to"): string[] {
+  const unique = [...new Set(destinations)];
+  if (unique.length > API_MAX_FANOUT) throw usage(`${what} has ${unique.length} destinations; the API accepts at most ${API_MAX_FANOUT} per request.`);
+  if (unique.length > max)
+    throw usage(
+      `${what} has ${unique.length} distinct destinations, more than ${max}. Each one is a separate billed call: pass --max-fanout ${unique.length} to confirm the count.`,
+    );
+  return unique;
+}
+
+/** Text shown in a confirmation in full up to `max` characters, with a note when cut. */
+export function fullText(text: string, max: number): { value: string; max: number } {
+  const chars = [...text];
+  return chars.length > max
+    ? { value: `${chars.slice(0, max).join("")}… (${chars.length} characters; the first ${max} are shown)`, max: max + 60 }
+    : { value: text, max: max + 1 };
+}
+
+/** `1.2 KB, sha256 1a2b3c4d5e6f` for a file whose content is not shown in full. */
+export function fileFingerprint(content: string): string {
+  const bytes = Buffer.byteLength(content);
+  const size = bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+  return `${size}, sha256 ${createHash("sha256").update(content).digest("hex").slice(0, 12)}`;
+}
+
 interface CreateOpts {
   to?: string;
   from?: string;
@@ -75,6 +113,7 @@ interface CreateOpts {
   allowInsecureUrl?: boolean;
   interval?: number;
   maxWait?: number;
+  maxFanout?: number;
 }
 
 /** Builds the XML document for --say/--play/--xml-file, or undefined when --answer-url is used. */
@@ -119,7 +158,8 @@ function registerCreate(calls: Command, ctx: Ctx) {
   const cmd = calls
     .command("create")
     .description("Place an outbound call (billed; asks for confirmation)")
-    .option("--to <dest>", "destination: E.164 number or SIP URI; join several with < to fan out (max 1000)")
+    .option("--to <dest>", `destination: E.164 number or SIP URI; join several with < to fan out (deduplicated; at most ${DEFAULT_MAX_FANOUT} unless --max-fanout)`)
+    .option("--max-fanout <n>", `allow this many fan-out destinations (default ${DEFAULT_MAX_FANOUT}, API maximum ${API_MAX_FANOUT}); each is a separate billed call`, intArg(1, API_MAX_FANOUT))
     .option("--from <number>", "caller ID: a Vobiz number on this account, E.164")
     .option("--answer-url <url>", "https URL that returns VobizXML when the call is answered")
     .addOption(new Option("--answer-method <method>", "HTTP method Vobiz uses for the answer URL").choices(["GET", "POST"]).default("POST"))
@@ -168,7 +208,7 @@ Examples:
       if (!o.serve && (o.publicUrl || o.port !== undefined)) throw usage("--public-url and --port apply only to --serve.");
       if (!o.to || !o.from) throw usage("--to and --from are required.");
 
-      const destinations = normalizeDestinations(o.to);
+      const destinations = capFanout(normalizeDestinations(o.to), o.maxFanout);
       const from = toE164(o.from);
       const answerUrl = checkUrl((o.serve ? o.publicUrl : o.answerUrl)!, o.serve ? "--public-url" : "--answer-url", { allowInsecure: o.allowInsecureUrl });
       const body = { from, to: destinations.join("<"), answer_url: answerUrl, answer_method: o.answerMethod };
@@ -178,10 +218,14 @@ Examples:
         action: destinations.length > 1 ? `Place ${destinations.length} calls (billed)` : `Place a call to ${destinations[0]} (billed)`,
         details: {
           to: destinations.length > 3 ? `${destinations.slice(0, 3).join(", ")} and ${destinations.length - 3} more` : destinations.join(", "),
+          ...(destinations.length > 1
+            ? { calls: `${destinations.length} separate calls, each billed per minute at your voice rate for its destination (no estimate is available before dialling)` }
+            : {}),
           "caller ID": from,
           "answer URL host": hostOf(answerUrl) + (o.serve ? ` (tunnel to local port ${o.port ?? 8787})` : ""),
-          ...(o.say !== undefined ? { says: o.say.length > 60 ? `${o.say.slice(0, 57)}…` : o.say } : {}),
+          ...(o.say !== undefined ? { says: fullText(o.say, 1000) } : {}),
           ...(o.play !== undefined ? { plays: o.play } : {}),
+          ...(o.xmlFile !== undefined && xml ? { "answer XML": `${o.xmlFile} (${fileFingerprint(xml)})` } : {}),
         },
       });
 
@@ -218,7 +262,7 @@ function registerReads(calls: Command, ctx: Ctx) {
     .option("--queued", "list queued calls (placed, not yet connected; max 20) instead of live ones")
     .option("--details", "fetch each call's details (one request per call)")
     .addHelpText("after", "\nExamples:\n  vobiz calls list\n  vobiz calls list --queued --details")
-    .action(async (o: { queued?: boolean; details?: boolean }) => {
+    .action(untrustedAction(ctx, CALL_UNTRUSTED, async (o: { queued?: boolean; details?: boolean }) => {
       const status = o.queued ? "queued" : "live";
       const body = await ctx.client.call<Rec>(o.queued ? LIST_QUEUED : LIST_LIVE, { query: { status } });
       const uuids = Array.isArray(body?.calls) ? (body.calls as unknown[]).map(String) : [];
@@ -237,17 +281,17 @@ function registerReads(calls: Command, ctx: Ctx) {
         }
       }
       ctx.out.print(rows, { columns: ["call_uuid", "call_status", "direction", "from", "to", "session_start"], idKey: "call_uuid", empty: `No ${status} calls.` });
-    });
+    }));
 
   calls
     .command("get")
     .argument("<uuid>", "call UUID (the request_uuid from calls create)")
     .description("Show a live call (or a queued one with --queued)")
     .option("--queued", "look the call up among queued calls")
-    .action(async (uuid: string, o: { queued?: boolean }) => {
+    .action(untrustedAction(ctx, CALL_UNTRUSTED, async (uuid: string, o: { queued?: boolean }) => {
       const res = await ctx.client.call(o.queued ? GET_QUEUED : GET_LIVE, { path: { call_uuid: uuid }, query: { status: o.queued ? "queued" : "live" } });
       ctx.out.print(res);
-    });
+    }));
 
   waitOptions(
     calls
@@ -256,9 +300,9 @@ function registerReads(calls: Command, ctx: Ctx) {
       .description("Follow a call until it ends (status on stderr), then print its call record"),
   )
     .addHelpText("after", "\nExample:\n  vobiz calls watch 2ded13fe-4f9b-4958-9bfb-093ea2f29f91 --interval 1")
-    .action(async (uuid: string, o: { interval?: number; maxWait?: number }) => {
+    .action(untrustedAction(ctx, CALL_UNTRUSTED, async (uuid: string, o: { interval?: number; maxWait?: number }) => {
       ctx.out.print(await watchCall(ctx, uuid, { interval: o.interval ?? 2, maxWait: o.maxWait ?? 600 }));
-    });
+    }));
 
   calls
     .command("hangup")
@@ -470,6 +514,9 @@ function registerControl(calls: Command, ctx: Ctx) {
       });
     });
 }
+
+/** Third-party text in call details (S6 #4). */
+const CALL_UNTRUSTED = [...CALLER_KEYS, ...RESOURCE_NAME_KEYS];
 
 export function register(program: Command, ctx: Ctx): void {
   const calls = program.command("calls").description("Place, list, watch, hang up and control voice calls");

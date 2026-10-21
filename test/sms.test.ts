@@ -33,19 +33,19 @@ describe("sms send", () => {
     expect(r.code).toBe(0);
     const posts = api.calls.filter((c) => c.method === "POST");
     expect(posts).toHaveLength(2);
-    expect(posts[0]).toMatchObject({ api: "sms", path: "/messages", body: { from: "+14155550100", to: ["+14155550123"], channel: "sms", text: "Hello", tag: "t1", idempotencyKey: "k1:1" } });
-    expect(posts[1].body).toMatchObject({ to: ["+14155550124"], idempotencyKey: "k1:2" });
+    expect(posts[0]).toMatchObject({ api: "sms", path: "/messages", body: { from: "+14155550100", to: ["+14155550123"], channel: "sms", text: "Hello", tag: "t1", idempotencyKey: "k1:14155550123" } });
+    expect(posts[1].body).toMatchObject({ to: ["+14155550124"], idempotencyKey: "k1:14155550124" });
     expect(api.calls.filter((c) => c.method === "GET")[0].query).toEqual({ from: "+14155550100", to: "+14155550123", text: "Hello", channel: "sms" });
     expect(r.json()).toMatchObject({ idempotencyKey: "k1", messages: [{ id: "msg_1" }, { id: "msg_2" }] });
     expect(r.err).toContain("USD 0.0158 for 2 recipients (1 segment each)");
   });
 
-  it("generates and prints an idempotency key; one recipient uses it as is", async () => {
+  it("generates and prints an idempotency key; the per-recipient key is <key>:<digits>", async () => {
     const { r, api } = await run(["sms", "send", "--from", "+14155550100", "--to", "+14155550123", "--text", "Hi"], { "GET /messages/cost-preview": preview, "POST /messages": reply(201, MSG) });
     expect(r.code).toBe(0);
-    const key = (api.last().body as { idempotencyKey: string }).idempotencyKey;
-    expect(key).toMatch(/^cli-[0-9a-f-]{36}$/);
-    expect(r.err).toContain(`Idempotency key: ${key}`);
+    const sent = (api.last().body as { idempotencyKey: string }).idempotencyKey;
+    expect(sent).toMatch(/^cli-[0-9a-f-]{36}:14155550123$/);
+    expect(r.err).toContain(`Idempotency key: ${sent.split(":")[0]}`);
   });
 
   it("sends MMS and RCS fields, DLT ids and a schedule", async () => {

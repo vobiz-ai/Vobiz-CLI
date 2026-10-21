@@ -80,15 +80,27 @@ function registerLogin(program: Command, ctx: Ctx) {
     .option("--default", "make this profile the default")
     .addHelpText(
       "after",
-      "\nExamples:\n  vobiz login\n  vobiz login --profile staging --base-url https://staging.example.com\n  printf '%s:%s' \"$VOBIZ_AUTH_ID\" \"$VOBIZ_AUTH_TOKEN\" | vobiz login --with-token",
+      "\nExamples:\n  vobiz login\n  vobiz login --profile staging\n  printf '%s:%s' \"$VOBIZ_AUTH_ID\" \"$VOBIZ_AUTH_TOKEN\" | vobiz login --with-token",
     )
     .action(async (opts: { withToken?: boolean; browser?: boolean; default?: boolean }) => {
       const name = profileName(ctx.flags, ctx.store, ctx.env);
       const pair = await collectCredentials(ctx, opts);
       const existing = ctx.store.getProfile(name);
+      if (existing) {
+        // Replacing a saved login silently would let a later write run against a different account than the one approved.
+        await requireConfirmation(ctx, {
+          action: `Replace the saved profile "${name}"`,
+          details: {
+            current: `${existing.authId}${existing.accountName ? ` (${existing.accountName})` : ""}`,
+            new: pair.authId,
+            ...(existing.authId === pair.authId ? { note: "same Auth ID; the token is replaced" } : {}),
+          },
+          account: false,
+        });
+      }
       const creds: ResolvedCredentials = {
         ...pair,
-        ...resolveBaseUrls(ctx.flags, ctx.env, existing),
+        ...resolveBaseUrls(ctx.flags, ctx.env, existing, (m) => ctx.log("warn", m)),
         source: "flags",
         profile: name,
       };
@@ -133,6 +145,12 @@ function registerLogout(program: Command, ctx: Ctx) {
     .action(async (opts: { all?: boolean }) => {
       const names = opts.all ? Object.keys(ctx.store.profiles()) : [profileName(ctx.flags, ctx.store, ctx.env)];
       if (!opts.all && !ctx.store.getProfile(names[0])) throw new VobizError("not_found", `No saved profile named "${names[0]}".`);
+      if (opts.all && names.length)
+        await requireConfirmation(ctx, {
+          action: `Remove every saved profile (${names.length})`,
+          details: { profiles: names.map((n) => `${n} (${ctx.store.getProfile(n)?.authId ?? "?"})`).join(", "), file: ctx.store.credentialsPath },
+          account: false,
+        });
       if (ctx.flags.dryRun) {
         ctx.stderr.write(`[dry-run] would remove ${names.length ? names.map((n) => `"${n}"`).join(", ") : "no profiles"}\n`);
         return;
@@ -198,9 +216,13 @@ function registerProfiles(program: Command, ctx: Ctx) {
     .argument("<name>", "profile to make the default")
     .description("Make a profile the default")
     .action((name: string) => {
-      if (!ctx.store.getProfile(name)) throw new VobizError("not_found", `No saved profile named "${name}". Run \`vobiz profiles list\`.`);
+      const p = ctx.store.getProfile(name);
+      if (!p) throw new VobizError("not_found", `No saved profile named "${name}". Run \`vobiz profiles list\`.`);
       ctx.store.patchSettings({ defaultProfile: name });
-      ctx.out.success(`"${name}" is now the default profile.`, { default_profile: name });
+      ctx.resetAuth();
+      const who = `${p.authId}${p.accountName ? ` (${p.accountName})` : ""}, ${describeAuthId(p.authId)}`;
+      ctx.out.success(`"${name}" is now the default profile: ${who}.`, { default_profile: name, auth_id: p.authId, account_name: p.accountName ?? null });
+      if (ctx.env.VOBIZ_AUTH_ID || ctx.env.VOBIZ_PROFILE) ctx.out.warn("VOBIZ_AUTH_ID or VOBIZ_PROFILE is set in this environment and takes precedence over the default profile.");
     });
 
   profiles

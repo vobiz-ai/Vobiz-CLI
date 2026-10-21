@@ -111,7 +111,9 @@ describe("whoami, logout, profiles, config", () => {
     expect(await run(["logout"], t.ctx)).toBe(0);
     expect(Object.keys(t.store.profiles())).toEqual(["other"]);
     t = loggedIn();
-    expect(await run(["logout", "--all"], t.ctx)).toBe(0);
+    expect(await run(["logout", "--all"], t.ctx)).toBe(6); // confirms (S6 #15)
+    expect(Object.keys(t.store.profiles()).length).toBe(2);
+    expect(await run(["logout", "--all", "--yes"], t.ctx)).toBe(0);
     expect(t.store.profiles()).toEqual({});
     expect(t.store.settings().defaultProfile).toBeUndefined();
   });

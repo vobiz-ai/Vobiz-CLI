@@ -2,7 +2,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { pollSettings } from "../src/commands/sms/messages.js";
+import { pollSettings, rejectionCode } from "../src/commands/sms/messages.js";
+import { VobizError } from "../src/core/errors.js";
 import { OPERATIONS } from "../src/generated/operations.js";
 import { fakeFetch, networkError, reply, runCli, textReply, type RecordedRequest } from "./helpers.js";
 
@@ -103,6 +104,19 @@ describe("sms send", () => {
     });
     expect(r.code).toBe(1);
     expect(r.json().messages[1]).toMatchObject({ to: "+14155550124", status: "not_sent", errorCode: "opted_out" });
+  });
+
+  it("labels a 422 opted_out only when the backend says so", async () => {
+    let n = 0;
+    const { r } = await run(["sms", "send", "--from", "+14155550100", "--to", "+14155550123", "--to", "+14155550124", "--text", "Hi"], {
+      "GET /messages/cost-preview": preview,
+      "POST /messages": () => (++n === 2 ? reply(422, { error: "invalid mms: mediaUrls[0] must use https" }) : reply(201, MSG)),
+    });
+    expect(r.json().messages[1]).toMatchObject({ status: "not_sent", errorCode: "rejected", errorMessage: "invalid mms: mediaUrls[0] must use https" });
+    const e = (msg: string, details?: unknown) => new VobizError("invalid_input", msg, 422, details);
+    expect(rejectionCode(e("recipient has opted out: +14155550123"))).toBe("opted_out");
+    expect(rejectionCode(e("x", { error: "x", code: "number_blocked" }))).toBe("number_blocked");
+    expect(rejectionCode(e("HTTP 422"))).toBe("opted_out");
   });
 
   it("a network failure on a send is outcome_unknown (exit 7)", async () => {

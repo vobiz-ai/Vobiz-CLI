@@ -1,0 +1,55 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`vobiz cdr > list --json keeps the API's response shape (snapshot) 1`] = `
+{
+  "account_id": "MA_XXXXXXXX",
+  "count": 3,
+  "data": [
+    {
+      "call_direction": "outbound",
+      "caller_id_number": "+918012345678",
+      "destination_number": "+919876543210",
+      "duration": 12,
+      "hangup_cause": "NORMAL_CLEARING",
+      "start_time": "2026-10-21T10:53:29Z",
+      "total_cost": 0.45,
+      "uuid": "u1",
+    },
+    {
+      "call_direction": "outbound",
+      "caller_id_number": "+918012345678",
+      "destination_number": "+919876543210",
+      "duration": 12,
+      "hangup_cause": "NORMAL_CLEARING",
+      "start_time": "2026-10-21T10:53:29Z",
+      "total_cost": 0.45,
+      "uuid": "u2",
+    },
+    {
+      "call_direction": "outbound",
+      "caller_id_number": "+918012345678",
+      "destination_number": "+919876543210",
+      "duration": 12,
+      "hangup_cause": "NORMAL_CLEARING",
+      "start_time": "2026-10-21T10:53:29Z",
+      "total_cost": 0.45,
+      "uuid": "u3",
+    },
+  ],
+  "pagination": {
+    "has_next": false,
+    "has_prev": true,
+    "page": 2,
+    "pages": 2,
+    "per_page": 2,
+    "total": 3,
+  },
+  "success": true,
+  "summary": {
+    "answeredCalls": 1,
+    "totalCalls": 3,
+    "total_billable_seconds": 42,
+    "total_cost": 1.35,
+  },
+}
+`;

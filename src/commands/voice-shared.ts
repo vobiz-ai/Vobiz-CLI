@@ -117,7 +117,10 @@ export interface ListPrint {
 export function printPage(ctx: Ctx, page: PageResult<unknown>, p: ListPrint): void {
   const mode = ctx.out.mode;
   if ((mode === "json" || mode === "yaml") && !ctx.flags.fields?.length && !ctx.flags.quiet && isRec(page.last)) {
-    ctx.out.print(setPath(page.last, p.itemsKey, page.items));
+    const body = setPath(page.last, p.itemsKey, page.items);
+    // `count` describes the rows in this body; keep it true after merging pages.
+    if (page.pages > 1 && typeof body.count === "number") body.count = page.items.length;
+    ctx.out.print(body);
     return;
   }
   ctx.out.print(page.items, { columns: p.columns, idKey: p.idKey, empty: p.empty });

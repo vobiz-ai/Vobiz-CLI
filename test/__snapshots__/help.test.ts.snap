@@ -93,6 +93,8 @@ Commands:
                                  for Claude Code, Codex and other agents
   docs                           Search the Vobiz documentation and open pages
                                  in your browser
+  setup                          Guided setups: a number for your AI voice
+                                 agent, or a number and webhook for SMS
   diagnose                       Explain why a call or message ended the way it
                                  did (read-only)
   streams                        Test and debug the WebSocket server behind

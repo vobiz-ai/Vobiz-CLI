@@ -20,6 +20,7 @@ import { parseTime, toYmd } from "../core/time.js";
 import type { CallArgs } from "../core/client.js";
 import type { Operation, Param } from "../generated/operations.js";
 import { readBody } from "./api.js";
+import { checkUrl } from "./voice-shared.js";
 
 /** "a trunk", "an application", "an IP ACL entry". */
 function withArticle(noun: string): string {
@@ -142,6 +143,7 @@ export async function buildBody(ctx: Ctx, opts: Opts, spec: BodySpec, op: Operat
     body = parsed as Record<string, unknown>;
   }
   body = { ...body, ...fromFlags };
+  checkBodyUrls(body, fromFlags, opts);
   if (!usingBody) {
     const missing: Param[] = [];
     for (const p of op.body.props) {
@@ -153,6 +155,26 @@ export async function buildBody(ctx: Ctx, opts: Opts, spec: BodySpec, op: Operat
   }
   if (o.requireSomething && !Object.keys(body).length) throw usage(`Nothing to change. Pass at least one of ${[...allowed.keys()].map((k) => `--${kebab(k)}`).join(", ")}.`);
   return body;
+}
+
+const URL_KEY = /(_url|Url)$/;
+
+/**
+ * Every URL-valued body property (`*_url`, `*Url`, from a flag or from --body) must be https, since Vobiz calls
+ * it with call or account data. http is accepted only for localhost, and only where the command offers
+ * --allow-insecure-url. An empty string (clearing the field) is left alone.
+ */
+function checkBodyUrls(body: Record<string, unknown>, fromFlags: Record<string, unknown>, opts: Opts): void {
+  for (const [key, value] of Object.entries(body)) {
+    if (!URL_KEY.test(key) || value === "" || value === null || value === undefined) continue;
+    const label = key in fromFlags ? `--${kebab(key)}` : `--body ${key}`;
+    if (typeof value !== "string") throw usage(`${label} must be a URL string.`);
+    if (opts.allowInsecureUrl === true) checkUrl(value, label, { allowInsecure: true });
+    else if (!/^https:\/\//i.test(value)) {
+      checkUrl(value, label); // invalid URL or another scheme: its message
+      throw usage(`${label} must use https:// (got "${value}").`);
+    }
+  }
 }
 
 export interface QuerySpec {

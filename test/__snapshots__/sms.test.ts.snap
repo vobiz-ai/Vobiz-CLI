@@ -1,0 +1,20 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`sms messages, cost, rcs-reachability > lists messages with filters and paging, and keeps the raw body in json 1`] = `
+{
+  "limit": 5,
+  "messages": [
+    {
+      "channel": "sms",
+      "createdAt": "2026-10-22T10:00:00Z",
+      "direction": "out",
+      "from": "+14155550100",
+      "id": "msg_1",
+      "status": "sent",
+      "to": "+14155550123",
+    },
+  ],
+  "offset": 0,
+  "total": 1,
+}
+`;

@@ -3953,6 +3953,18 @@ export const OPERATIONS: readonly Operation[] = [
           "required": true,
           "type": "string",
           "description": ""
+        },
+        {
+          "name": "hangup_url",
+          "required": false,
+          "type": "string",
+          "description": "URL Vobiz notifies when a call on this application ends. If omitted, it defaults to `answer_url`."
+        },
+        {
+          "name": "hangup_method",
+          "required": false,
+          "type": "string",
+          "description": "HTTP method used for `hangup_url`, `GET` or `POST`."
         }
       ]
     }
@@ -4027,6 +4039,30 @@ export const OPERATIONS: readonly Operation[] = [
           "required": true,
           "type": "boolean",
           "description": ""
+        },
+        {
+          "name": "answer_url",
+          "required": false,
+          "type": "string",
+          "description": "URL Vobiz fetches VobizXML from when a call reaches a number or endpoint linked to this application."
+        },
+        {
+          "name": "answer_method",
+          "required": false,
+          "type": "string",
+          "description": "HTTP method used for `answer_url`, `GET` or `POST`."
+        },
+        {
+          "name": "hangup_url",
+          "required": false,
+          "type": "string",
+          "description": "URL Vobiz notifies when a call on this application ends."
+        },
+        {
+          "name": "hangup_method",
+          "required": false,
+          "type": "string",
+          "description": "HTTP method used for `hangup_url`, `GET` or `POST`."
         }
       ]
     }
@@ -4457,6 +4493,74 @@ export const OPERATIONS: readonly Operation[] = [
         "required": true,
         "type": "string",
         "description": "The phone number to unassign, URL-encoded (use %2B instead of +)."
+      }
+    ],
+    "queryParams": [],
+    "body": {
+      "required": false,
+      "props": []
+    }
+  },
+  {
+    "id": "link-number-to-application",
+    "api": "voice",
+    "baseUrl": "https://api.vobiz.ai",
+    "method": "POST",
+    "path": "/api/v1/Account/{auth_id}/numbers/{e164}/application",
+    "tag": "Phone Numbers",
+    "summary": "Link Number to Application",
+    "description": "Link a phone number to a voice application. Once linked, inbound",
+    "deprecated": false,
+    "pathParams": [
+      {
+        "name": "auth_id",
+        "required": true,
+        "type": "string",
+        "description": "Your account Auth ID"
+      },
+      {
+        "name": "e164",
+        "required": true,
+        "type": "string",
+        "description": "The phone number, URL-encoded (use %2B instead of +)."
+      }
+    ],
+    "queryParams": [],
+    "body": {
+      "required": true,
+      "contentType": "application/json",
+      "props": [
+        {
+          "name": "application_id",
+          "required": true,
+          "type": "string",
+          "description": "The `app_id` of the application to link this number to."
+        }
+      ]
+    }
+  },
+  {
+    "id": "unlink-number-from-application",
+    "api": "voice",
+    "baseUrl": "https://api.vobiz.ai",
+    "method": "DELETE",
+    "path": "/api/v1/Account/{auth_id}/numbers/{e164}/application",
+    "tag": "Phone Numbers",
+    "summary": "Unlink Number from Application",
+    "description": "Remove the link between a phone number and its voice application.",
+    "deprecated": false,
+    "pathParams": [
+      {
+        "name": "auth_id",
+        "required": true,
+        "type": "string",
+        "description": "Your account Auth ID"
+      },
+      {
+        "name": "e164",
+        "required": true,
+        "type": "string",
+        "description": "The phone number, URL-encoded (use %2B instead of +)."
       }
     ],
     "queryParams": [],
@@ -8652,4 +8756,4 @@ export const OPERATIONS: readonly Operation[] = [
   }
 ] as const;
 
-export const SPEC_OPERATION_COUNT = 195;
+export const SPEC_OPERATION_COUNT = 197;

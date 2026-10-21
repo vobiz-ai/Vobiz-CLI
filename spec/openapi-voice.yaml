@@ -7624,6 +7624,12 @@ paths:
                   type: string
                 answer_method:
                   type: string
+                hangup_url:
+                  type: string
+                  description: URL Vobiz notifies when a call on this application ends. If omitted, it defaults to `answer_url`.
+                hangup_method:
+                  type: string
+                  description: HTTP method used for `hangup_url`, `GET` or `POST`.
               required:
                 - app_name
                 - answer_url
@@ -7996,12 +8002,28 @@ paths:
                   type: string
                 default_number_app:
                   type: boolean
+                answer_url:
+                  type: string
+                  description: URL Vobiz fetches VobizXML from when a call reaches a number or endpoint linked to this application.
+                answer_method:
+                  type: string
+                  description: HTTP method used for `answer_url`, `GET` or `POST`.
+                hangup_url:
+                  type: string
+                  description: URL Vobiz notifies when a call on this application ends.
+                hangup_method:
+                  type: string
+                  description: HTTP method used for `hangup_url`, `GET` or `POST`.
               required:
                 - app_name
                 - default_number_app
             example:
               app_name: Updated Application Name
               default_number_app: true
+              answer_url: https://example.com/answer
+              answer_method: POST
+              hangup_url: https://example.com/hangup
+              hangup_method: POST
       responses:
         "200":
           description: Application updated
@@ -8754,6 +8776,91 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Number not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/Account/{auth_id}/numbers/{e164}/application:
+    post:
+      operationId: link-number-to-application
+      summary: Link Number to Application
+      description: |
+        Link a phone number to a voice application. Once linked, inbound
+        calls to that number fetch VobizXML from the application's
+        `answer_url`. A number routes through either an application or a
+        SIP trunk, not both: unassign the number from its trunk first
+        (`DELETE /api/v1/Account/{auth_id}/numbers/{phone_number}/assign`).
+        URL-encode the phone number (use `%2B` instead of `+`).
+      tags: [ Phone Numbers ]
+      parameters:
+        - $ref: "#/components/parameters/AuthId"
+        - name: e164
+          in: path
+          required: true
+          description: The phone number, URL-encoded (use %2B instead of +).
+          schema:
+            type: string
+            example: "%2B912271264217"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ application_id ]
+              properties:
+                application_id:
+                  type: string
+                  description: The `app_id` of the application to link this number to.
+                  example: "12345678901234567"
+            example:
+              application_id: "12345678901234567"
+      responses:
+        "200":
+          description: Number linked to application
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Number or application not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The number is assigned to a SIP trunk; unassign it first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      operationId: unlink-number-from-application
+      summary: Unlink Number from Application
+      description: |
+        Remove the link between a phone number and its voice application.
+        The number stays in your account inventory but inbound calls no
+        longer fetch VobizXML from that application.
+        URL-encode the phone number (use `%2B` instead of `+`).
+      tags: [ Phone Numbers ]
+      parameters:
+        - $ref: "#/components/parameters/AuthId"
+        - name: e164
+          in: path
+          required: true
+          description: The phone number, URL-encoded (use %2B instead of +).
+          schema:
+            type: string
+            example: "%2B912271264217"
+      responses:
+        "200":
+          description: Number unlinked from application
+        "404":
+          description: Number not found or not linked to an application
           content:
             application/json:
               schema:

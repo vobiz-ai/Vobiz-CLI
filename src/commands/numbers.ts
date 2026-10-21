@@ -1,6 +1,6 @@
 /**
  * `vobiz numbers`: voice phone numbers (DIDs) on the account: list, look up, search the inventory, buy, release,
- * cancel a release, health, and routing to a SIP trunk or a sub-account. (SMS numbers live under `vobiz sms numbers`.)
+ * cancel a release, health, and routing to an application, a SIP trunk or a sub-account. (SMS numbers live under `vobiz sms numbers`.)
  *
  * Purchases and releases spend money: `buy` looks the number up in the inventory first and shows its setup and
  * monthly fee before asking; `release` explains the release fee and the 24-hour cancellable cooldown.
@@ -11,7 +11,7 @@ import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
 import { op } from "../core/ops.js";
 import { digitsOnly, toE164 } from "../core/phone.js";
-import { addListOptions, confirmedCall, examples, runList } from "./provisioning-shared.js";
+import { addListOptions, confirmedCall, examples, runList, runPlan, type Step } from "./provisioning-shared.js";
 
 const LIST = op("voice:list-numbers");
 const RELEASE = op("unrent-number");
@@ -21,6 +21,8 @@ const INVENTORY = op("list-inventory-numbers");
 const PURCHASE = op("purchase-from-inventory");
 const ASSIGN_TRUNK = op("assign-number-to-trunk");
 const UNASSIGN_TRUNK = op("unassign-number-from-trunk");
+const LINK_APP = op("link-number-to-application");
+const UNLINK_APP = op("unlink-number-from-application");
 const ASSIGN_SUB = op("assign-did-to-subaccount");
 const UNASSIGN_SUB = op("unassign-did-from-subaccount");
 
@@ -61,12 +63,46 @@ export async function findInventoryNumber(ctx: Ctx, e164: string): Promise<Numbe
   return hit;
 }
 
+/** Flags of `numbers update`. */
+export interface RoutingChange {
+  app?: string;
+  unlinkApp?: boolean;
+  trunk?: string;
+  unlinkTrunk?: boolean;
+}
+
+/**
+ * The writes that apply a routing change to an owned number, in the order the Vobiz MCP server uses: unlinks first,
+ * then links, so one command can switch. A number routes through an application or a trunk, not both, so linking an
+ * application first removes the number from its current trunk.
+ */
+export function routingSteps(e164: string, current: NumberRecord, c: RoutingChange): Step[] {
+  if (c.app && c.unlinkApp) throw usage("Pass --app or --unlink-app, not both.");
+  if (c.trunk && c.unlinkTrunk) throw usage("Pass --trunk or --unlink-trunk, not both.");
+  if (c.app && c.trunk) throw usage("A number is linked to an application or a SIP trunk, not both: pass --app or --trunk.");
+  const steps: Step[] = [];
+  const currentTrunk = current.trunk_group_id ? String(current.trunk_group_id) : undefined;
+  if (c.unlinkTrunk || (c.app && currentTrunk)) {
+    steps.push({ label: `Remove ${e164} from trunk ${currentTrunk ?? "(current)"}`, operation: UNASSIGN_TRUNK, args: { path: { phone_number: e164 } }, retry: `vobiz numbers unassign ${e164}` });
+  }
+  if (c.unlinkApp) {
+    steps.push({ label: `Unlink ${e164} from its application`, operation: UNLINK_APP, args: { path: { e164 } }, retry: `vobiz numbers update ${e164} --unlink-app` });
+  }
+  if (c.app) {
+    steps.push({ label: `Link ${e164} to application ${c.app}`, operation: LINK_APP, args: { path: { e164 }, body: { application_id: c.app } }, retry: `vobiz numbers update ${e164} --app ${c.app}` });
+  }
+  if (c.trunk) {
+    steps.push({ label: `Route ${e164} to trunk ${c.trunk}`, operation: ASSIGN_TRUNK, args: { path: { phone_number: e164 }, body: { trunk_group_id: c.trunk } }, retry: `vobiz numbers assign ${e164} --trunk ${c.trunk}` });
+  }
+  return steps;
+}
+
 const money = (currency: string | undefined, amount: unknown) => `${currency ?? ""} ${amount ?? "?"}`.trim();
 
 export function register(program: Command, ctx: Ctx): void {
   const numbers = program
     .command("numbers")
-    .description("Voice phone numbers: list, search the inventory, buy, release, route to a trunk or sub-account");
+    .description("Voice phone numbers: list, search the inventory, buy, release, route to an application, trunk or sub-account");
 
   addListOptions(
     numbers
@@ -224,6 +260,44 @@ export function register(program: Command, ctx: Ctx): void {
         path: { phone_number: e164 },
       });
       ctx.out.success(`${e164} is no longer assigned to a trunk.`, { e164, assigned: false });
+    });
+
+  numbers
+    .command("update")
+    .argument("<e164>", "number on your account, in E.164")
+    .description("Link a number to an application or a SIP trunk, or unlink either (unlinks run first, so one command can switch)")
+    .option("--app <app-id>", "application whose answer URL handles inbound calls (see `vobiz apps list`); removes the number from its trunk first")
+    .option("--unlink-app", "remove the number's application link")
+    .option("--trunk <trunk-id>", "SIP trunk that receives inbound calls (see `vobiz trunks list`)")
+    .option("--unlink-trunk", "remove the number from its SIP trunk")
+    .addHelpText(
+      "after",
+      examples(
+        "vobiz numbers update +919876543210 --app 12345678901234567",
+        "vobiz numbers update +919876543210 --unlink-app --trunk e3e55a78-1234-5678-90ab-cdef12345678",
+        "vobiz numbers update +919876543210 --unlink-trunk --dry-run",
+      ) + "\n\nA number is linked to an application or a SIP trunk, not both.",
+    )
+    .action(async (number: string, opts: RoutingChange) => {
+      const e164 = toE164(number);
+      if (!opts.app && !opts.unlinkApp && !opts.trunk && !opts.unlinkTrunk) throw usage("Nothing to change. Pass --app, --unlink-app, --trunk or --unlink-trunk.");
+      routingSteps(e164, {}, opts); // flag conflicts fail before any request
+      const current = await findOwnNumber(ctx, e164, { dryRun: false });
+      const steps = routingSteps(e164, current, opts);
+      const details: Record<string, string> = { account: ctx.client.authId };
+      if (current.application_id) details["current application"] = String(current.application_id);
+      if (current.trunk_group_id) details["current trunk"] = String(current.trunk_group_id);
+      if (opts.app) details.application = opts.app;
+      if (opts.trunk) details.trunk = opts.trunk;
+      const done = await runPlan(ctx, { action: `Change routing of ${e164} (${steps.map((s) => s.label).join(", then ")})`, details }, steps);
+      if (!done) return;
+      const result = {
+        e164,
+        application_id: opts.app ?? (opts.unlinkApp ? null : (current.application_id ?? null)),
+        trunk_group_id: opts.trunk ?? (opts.unlinkTrunk || opts.app ? null : (current.trunk_group_id ?? null)),
+        changes: steps.map((s) => s.label),
+      };
+      ctx.out.success(`Updated ${e164}: ${steps.map((s) => s.label.replace(` ${e164}`, "")).join("; ")}.`, result);
     });
 
   numbers

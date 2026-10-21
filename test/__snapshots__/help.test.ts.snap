@@ -68,8 +68,8 @@ Commands:
   cdr                            Call detail records: list, search, recent, get
                                  and CSV export
   numbers                        Voice phone numbers: list, search the
-                                 inventory, buy, release, route to a trunk or
-                                 sub-account
+                                 inventory, buy, release, route to an
+                                 application, trunk or sub-account
   trunks                         SIP trunks, their credentials, IP
                                  access-control lists and origination URIs
   apps                           Applications: the answer URL Vobiz fetches

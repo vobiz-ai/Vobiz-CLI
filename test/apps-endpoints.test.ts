@@ -62,6 +62,32 @@ describe("apps", () => {
     expect(ok.code).toBe(0);
   });
 
+  it("create and update send the answer and hangup URL fields, and the confirmation shows their hosts", async () => {
+    const api = fakeFetch({
+      [`POST ${A}/Application/`]: reply(201, { api_id: "x", app_id: "789", message: "created" }),
+      [`POST ${A}/Application/123/`]: { api_id: "y", message: "changed" },
+    });
+    const c = await runCli(
+      ["apps", "create", "--app-name", "IVR", "--answer-url", "https://example.com/answer", "--answer-method", "POST", "--hangup-url", "https://hooks.example.com/hangup", "--hangup-method", "GET", "--yes"],
+      { fetch: api.fetch },
+    );
+    expect(c.code, c.err).toBe(0);
+    expect(api.last().body).toEqual({ app_name: "IVR", answer_url: "https://example.com/answer", answer_method: "POST", hangup_url: "https://hooks.example.com/hangup", hangup_method: "GET" });
+    expect(c.err).toContain("hangup_host: hooks.example.com");
+    const u = await runCli(
+      ["apps", "update", "123", "--app-name", "IVR", "--default-number-app", "--answer-url", "https://new.example.com/answer", "--answer-method", "GET", "--hangup-url", "https://new.example.com/hangup", "--hangup-method", "POST", "--yes", "--json"],
+      { fetch: api.fetch },
+    );
+    expect(u.code, u.err).toBe(0);
+    expect(api.last()).toMatchObject({
+      method: "POST",
+      path: `${A}/Application/123/`,
+      body: { app_name: "IVR", default_number_app: true, answer_url: "https://new.example.com/answer", answer_method: "GET", hangup_url: "https://new.example.com/hangup", hangup_method: "POST" },
+    });
+    expect(u.err).toContain("answer_host: new.example.com");
+    expect(u.json()).toMatchObject({ message: "changed" });
+  });
+
   it("--dry-run create sends nothing", async () => {
     const api = fakeFetch({});
     const r = await runCli(["apps", "create", "--app-name", "a", "--answer-url", "https://e.com", "--answer-method", "GET", "--dry-run", "--json"], { fetch: api.fetch });

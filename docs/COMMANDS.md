@@ -142,6 +142,7 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
   - [`vobiz numbers search`](#vobiz-numbers-search)
   - [`vobiz numbers unassign`](#vobiz-numbers-unassign)
   - [`vobiz numbers unassign-subaccount`](#vobiz-numbers-unassign-subaccount)
+  - [`vobiz numbers update`](#vobiz-numbers-update)
 - [`vobiz partner`](#vobiz-partner)
   - [`vobiz partner accounts`](#vobiz-partner-accounts)
     - [`vobiz partner accounts cdrs`](#vobiz-partner-accounts-cdrs)
@@ -484,6 +485,8 @@ vobiz apps create [options]
 | `--app-name <value>` | app name (required) |
 | `--answer-url <value>` | answer url (required) |
 | `--answer-method <value>` | answer method (required) |
+| `--hangup-url <value>` | URL Vobiz notifies when a call on this application ends. |
+| `--hangup-method <value>` | HTTP method used for `hangup_url`, `GET` or `POST`. |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz apps delete
@@ -543,6 +546,10 @@ vobiz apps update <app-id> [options]
 |---|---|
 | `--app-name <value>` | app name (required) |
 | `--default-number-app` | default number app (required) (--no-default-number-app to set false) |
+| `--answer-url <value>` | URL Vobiz fetches VobizXML from when a call reaches a number or endpoint linked to this application. |
+| `--answer-method <value>` | HTTP method used for `answer_url`, `GET` or `POST`. |
+| `--hangup-url <value>` | URL Vobiz notifies when a call on this application ends. |
+| `--hangup-method <value>` | HTTP method used for `hangup_url`, `GET` or `POST`. |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz calls
@@ -1523,13 +1530,13 @@ vobiz mcp install <client> [options]
 
 ### vobiz numbers
 
-Voice phone numbers: list, search the inventory, buy, release, route to a trunk or sub-account
+Voice phone numbers: list, search the inventory, buy, release, route to an application, trunk or sub-account
 
 ```
 vobiz numbers <command> [options]
 ```
 
-Subcommands: [`assign`](#vobiz-numbers-assign), [`assign-subaccount`](#vobiz-numbers-assign-subaccount), [`buy`](#vobiz-numbers-buy), [`cancel-release`](#vobiz-numbers-cancel-release), [`get`](#vobiz-numbers-get), [`health`](#vobiz-numbers-health), [`list`](#vobiz-numbers-list), [`release`](#vobiz-numbers-release), [`search`](#vobiz-numbers-search), [`unassign`](#vobiz-numbers-unassign), [`unassign-subaccount`](#vobiz-numbers-unassign-subaccount)
+Subcommands: [`assign`](#vobiz-numbers-assign), [`assign-subaccount`](#vobiz-numbers-assign-subaccount), [`buy`](#vobiz-numbers-buy), [`cancel-release`](#vobiz-numbers-cancel-release), [`get`](#vobiz-numbers-get), [`health`](#vobiz-numbers-health), [`list`](#vobiz-numbers-list), [`release`](#vobiz-numbers-release), [`search`](#vobiz-numbers-search), [`unassign`](#vobiz-numbers-unassign), [`unassign-subaccount`](#vobiz-numbers-unassign-subaccount), [`update`](#vobiz-numbers-update)
 
 ### vobiz numbers assign
 
@@ -1696,6 +1703,25 @@ vobiz numbers unassign-subaccount <e164> [options]
 | Option | Description |
 |---|---|
 | `--force` | admin accounts only: bypass the 15-day cool-off (audited) |
+
+### vobiz numbers update
+
+Link a number to an application or a SIP trunk, or unlink either (unlinks run first, so one command can switch)
+
+```
+vobiz numbers update <e164> [options]
+```
+
+| Argument | Required | Description |
+|---|---|---|
+| `e164` | yes | number on your account, in E.164 |
+
+| Option | Description |
+|---|---|
+| `--app <app-id>` | application whose answer URL handles inbound calls (see `vobiz apps list`); removes the number from its trunk first |
+| `--unlink-app` | remove the number's application link |
+| `--trunk <trunk-id>` | SIP trunk that receives inbound calls (see `vobiz trunks list`) |
+| `--unlink-trunk` | remove the number from its SIP trunk |
 
 ### vobiz partner
 
@@ -2118,7 +2144,7 @@ vobiz setup sms [options]
 
 ### vobiz setup voice-agent
 
-Route a phone number (yours, or one to buy) to the SIP trunk of your AI voice agent, then print a test plan
+Route a phone number (yours, or one to buy) to your AI voice agent's SIP trunk or application, then print a test plan
 
 ```
 vobiz setup voice-agent [options]
@@ -2132,9 +2158,11 @@ vobiz setup voice-agent [options]
 | `--contains <digits>` | interactive: only offer inventory numbers containing these digits |
 | `--currency <code>` | with --buy: currency to bill in |
 | `--trunk <trunk-id>` | SIP trunk that receives the number's calls (see `vobiz trunks list`) |
-| `--answer-url <url>` | link the number to an application with this answer URL (not available yet; see below) |
-| `--stream-url <wss-url>` | link the number to a <Stream> application (not available yet; see below) |
-| `--app <app-id>` | link the number to this application (not available yet; see below) |
+| `--app <app-id>` | link the number to this existing application (see `vobiz apps list`) |
+| `--answer-url <url>` | create an application with this https answer URL and link the number to it |
+| `--app-name <name>` | with --answer-url: name of the new application (default: Voice agent <number>) |
+| `--answer-method <method>` | with --answer-url: HTTP method Vobiz uses for the answer URL (default: POST) (one of: `GET`, `POST`) |
+| `--stream-url <wss-url>` | with --answer-url: the stream server the answer URL's <Stream> points at (added to the test plan) |
 
 ### vobiz skills
 

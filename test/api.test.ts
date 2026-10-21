@@ -7,12 +7,12 @@ import { op } from "../src/core/ops.js";
 import { TEST_AUTH_ID, TEST_AUTH_TOKEN, fakeFetch, runCli } from "./helpers.js";
 
 describe("vobiz api --list / --describe", () => {
-  it("lists all 195 operations", async () => {
+  it("lists all 197 operations", async () => {
     const r = await runCli(["api", "--list", "--json"]);
     expect(r.code).toBe(0);
-    expect(r.json()).toHaveLength(195);
-    expect(SPEC_OPERATION_COUNT).toBe(195);
-    expect(OPERATIONS).toHaveLength(195);
+    expect(r.json()).toHaveLength(197);
+    expect(SPEC_OPERATION_COUNT).toBe(197);
+    expect(OPERATIONS).toHaveLength(197);
   });
 
   it("filters by tag", async () => {

@@ -3,7 +3,7 @@
 Operations the CLI does not expose yet, or API behaviour the vendored spec does not describe. Add an entry instead of
 guessing. Format: `operationId` (api) — why — what is needed.
 
-- `link-number-to-application` / `unlink-number-from-application` (voice) — `POST` and `DELETE /api/v1/Account/{auth_id}/numbers/{e164}/application` with body `{application_id}` are used in production by the Vobiz MCP server (`update_phone_number`) but are missing from `openapi.yaml`, so the CLI has no `numbers update --app` yet. Needed: add both operations (and the number tags update the same tool performs) to the docs repo's `openapi.yaml`, then `npm run spec:sync` and implement `numbers update`. There is no `update-number` operation either (checked with `op()`), so `numbers update` is not implemented, and `vobiz setup voice-agent --answer-url/--stream-url/--app` stops with this explanation (it routes numbers to a trunk with `assign-number-to-trunk` instead).
+- number tags (voice) — the Vobiz MCP server replaces a number's tags with `PATCH /api/v1/Account/{auth_id}/numbers/{e164}` (`{tags}`), but the spec has no `update-number` operation, so `vobiz numbers update` has no `--tags`. Needed: that operation in `openapi.yaml`.
 
 ### Voice (W2: account, calls, conferences, recordings, cdr)
 
@@ -49,4 +49,4 @@ All 78 sms operations have a command. Gaps and behaviour the spec does not fully
 - `remove-campaign-numbers` (sms) — a DELETE with a JSON body. The core client sends bodies only with POST/PUT/PATCH,
   so the sms module sends this one request itself (`deleteWithBody` in `src/commands/sms/shared.ts`). Some proxies
   drop DELETE bodies; a POST alias (e.g. `/numbers/remove`) would be safer.
-- `update-application` (voice) — the request body declares only `app_name` and `default_number_app`, while the live API accepts `answer_url`, `answer_method`, `hangup_url` and `hangup_method` (they appear in `retrieve-application` responses and the console edits them). `create-application` declares `answer_url`/`answer_method` but not the hangup pair. Until the docs repo's `openapi.yaml` adds them, `vobiz apps update` only exposes the two declared flags and callers must pass `--body '{"answer_url": …}'`. Found during the 2026-10-21 live test.
+- `update-application` (voice) — the description says any subset of fields can be updated, but the request schema still marks `app_name` and `default_number_app` required, so `vobiz apps update` asks for both unless `--body` is used. Needed: confirm the partial-update behaviour and drop the `required` list.

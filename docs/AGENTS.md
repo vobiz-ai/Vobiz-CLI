@@ -36,14 +36,14 @@ vobiz docs search "record a conference"  # search the docs from the terminal
 | Code | Meaning | What the agent should do |
 |---|---|---|
 | 0 | Success | Continue |
-| 1 | Server error or unknown failure | Report; retry once only for reads |
+| 1 | Server error on a read, or unknown failure | Report; retry once only for reads |
 | 2 | Usage error or invalid input | Fix the command; check `vobiz <command> --help` |
 | 3 | Auth failed, missing or forbidden | Ask the user to run `vobiz login` or check the credentials |
 | 4 | Not found | Re-list to find the right ID |
 | 5 | Rate limited or insufficient balance | Wait (rate limit) or tell the user (balance) |
 | 6 | Confirmation required or not allowed | Ask the user, then re-run with `--yes` |
-| 7 | Outcome unknown | Do not retry. Check `vobiz calls list`, `vobiz sms messages list` or the resource first |
-| 8 | Timeout or network error | Retry reads; for writes treat it like 7 |
+| 7 | Outcome unknown: a write timed out, lost its connection, or got a 5xx/408 answer (`retryable: false`) | Do not retry. Check `vobiz calls list`, `vobiz cdr recent`, `vobiz sms messages list` or `vobiz account transactions` first |
+| 8 | Timeout or network error on a read | Retry the read |
 
 **Confirmation.** Every command that spends money, contacts a person, or changes or deletes something asks for confirmation. Without a terminal it refuses with exit code 6 unless `--yes` is passed. An agent must:
 

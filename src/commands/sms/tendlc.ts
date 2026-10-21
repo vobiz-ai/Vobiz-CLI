@@ -3,7 +3,7 @@
  * anything else (nested objects, rarely used fields) goes in `--body` as JSON and flags override it.
  * Brand and campaign updates are full replacements on the API side, so the confirmation says so.
  */
-import { existsSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 import { Option, type Command } from "commander";
 import type { BytesResponse } from "../../core/client.js";
@@ -451,7 +451,8 @@ function registerDocuments(tendlc: Command, ctx: Ctx): void {
       }
       const file = o.out ?? (res.filename ? basename(res.filename) : id);
       if (!o.out && existsSync(file) && !o.force) throw usage(`${file} exists. Pass --out <file> or --force.`);
-      writeFileSync(file, res.bytes);
+      writeFileSync(file, res.bytes, { mode: 0o600 }); // registration documents can hold business identity data
+      chmodSync(file, 0o600); // also when --force replaced an existing file
       ctx.out.success(`Saved ${file} (${humanSize(res.bytes.length)}).`, { file, bytes: res.bytes.length, contentType: res.contentType ?? null });
     });
 }

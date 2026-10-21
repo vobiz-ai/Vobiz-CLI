@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -389,7 +389,11 @@ describe("sms broadcasts", () => {
     const out = join(mkdtempSync(join(tmpdir(), "vobiz-sms-")), "r.csv");
     await run(["sms", "broadcasts", "export", "b1", "--out", out], routes, []);
     expect(readFileSync(out, "utf8")).toContain("+14155550123,sent");
+    if (process.platform !== "win32") expect(statSync(out).mode & 0o777).toBe(0o600);
     expect((await run(["sms", "broadcasts", "export", "b1", "--out", out], routes, [])).r.code).toBe(2);
+    chmodSync(out, 0o644);
+    await run(["sms", "broadcasts", "export", "b1", "--out", out, "--force"], routes, []);
+    if (process.platform !== "win32") expect(statSync(out).mode & 0o777).toBe(0o600);
   });
 
   it("launch shows the recipient count and segments, refuses without --yes, and sends nothing on --dry-run", async () => {
@@ -603,6 +607,7 @@ describe("sms 10dlc", () => {
     const get = await run(["sms", "10dlc", "documents", "get", "doc1", "--out", out], routes);
     expect(get.r.code).toBe(0);
     expect(readFileSync(out, "utf8")).toBe("%PDF-fake");
+    if (process.platform !== "win32") expect(statSync(out).mode & 0o777).toBe(0o600);
     expect((await run(["sms", "10dlc", "documents", "get", "doc1", "--out", out], routes)).r.code).toBe(2);
   });
 });

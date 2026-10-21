@@ -3,7 +3,7 @@
  * plain list of numbers), preview, then launch. Launch sends real, billed messages to every pending recipient,
  * so it shows the recipient count and estimated segments first.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { Option, type Command } from "commander";
 import { requireConfirmation } from "../../core/confirm.js";
 import type { Ctx } from "../../core/context.js";
@@ -223,7 +223,8 @@ export function registerBroadcasts(sms: Command, ctx: Ctx): void {
       if (o.out && existsSync(o.out) && !o.force) throw usage(`${o.out} exists. Pass --force to overwrite it.`);
       const csv = await ctx.client.call<string>(EXPORT, { path: { id }, responseType: "text" });
       if (o.out) {
-        writeFileSync(o.out, csv);
+        writeFileSync(o.out, csv, { mode: 0o600 }); // recipients' numbers and message results
+        chmodSync(o.out, 0o600); // also when --force replaced an existing file
         ctx.out.status(`Wrote ${o.out}.`);
       } else ctx.stdout.write(csv.endsWith("\n") || !csv ? csv : csv + "\n");
     });

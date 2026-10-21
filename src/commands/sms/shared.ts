@@ -13,6 +13,7 @@ import type { Ctx } from "../../core/context.js";
 import { VobizError, usage } from "../../core/errors.js";
 import type { Operation } from "../../core/ops.js";
 import { toE164 } from "../../core/phone.js";
+import { assertRealIsoDate, relativeMs } from "../../core/time.js";
 import { extractItems, paginate, type PaginateOptions } from "../../core/pagination.js";
 import type { PrintOptions } from "../../core/output.js";
 import { readBody } from "../api.js";
@@ -100,11 +101,14 @@ export function scheduleAt(value: string, now: Date): string {
   const v = value.trim();
   const rel = /^\+(\d+)\s*([mhd])$/i.exec(v);
   if (rel) {
-    const ms = Number(rel[1]) * { m: 60_000, h: 3_600_000, d: 86_400_000 }[rel[2].toLowerCase() as "m" | "h" | "d"];
-    return new Date(now.getTime() + ms).toISOString();
+    const ms = relativeMs(rel[1], { m: 60_000, h: 3_600_000, d: 86_400_000 }[rel[2].toLowerCase() as "m" | "h" | "d"], value);
+    const d = new Date(now.getTime() + ms);
+    if (!Number.isFinite(d.getTime())) throw usage(`--schedule-at is outside the range of usable dates: "${value}".`);
+    return d.toISOString();
   }
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i.test(v))
     throw usage(`--schedule-at must be an RFC 3339 timestamp with a timezone (e.g. 2026-11-01T09:00:00Z) or +30m, +2h, +1d (got "${value}").`);
+  assertRealIsoDate(v, "--schedule-at");
   const t = Date.parse(v);
   if (Number.isNaN(t)) throw usage(`--schedule-at is not a valid time: "${value}".`);
   return new Date(t).toISOString();

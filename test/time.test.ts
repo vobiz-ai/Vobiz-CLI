@@ -54,3 +54,30 @@ describe("toE164 strictness (S3 #8)", () => {
     expect(toE164("+91.98765.43210")).toBe("+919876543210");
   });
 });
+
+describe("time parsing bounds (S3 #13)", () => {
+  const now = new Date("2026-10-22T12:00:00Z");
+  it("rejects absurd relative offsets instead of sending NaN", () => {
+    expect(() => parseTime("99999999999999d", now)).toThrow(/too far/);
+    expect(() => parseTime("36501d", now)).toThrow(/too far/);
+    expect(parseTime("36500d", now).getTime()).toBe(now.getTime() - 36_500 * 86_400_000);
+  });
+  it("rejects ISO timestamps on days that do not exist", () => {
+    expect(() => parseTime("2026-02-31T00:00:00Z", now)).toThrow(/real calendar date/);
+    expect(() => parseTime("2026-13-01T00:00:00Z", now)).toThrow(/real calendar date/);
+    expect(parseTime("2028-02-29T00:00:00Z", now).toISOString()).toBe("2028-02-29T00:00:00.000Z");
+  });
+  it("--schedule-at gets the same checks", async () => {
+    const { scheduleAt } = await import("../src/commands/sms/shared.js");
+    expect(() => scheduleAt("+99999999999d", now)).toThrow(/too far/);
+    expect(() => scheduleAt("2026-02-31T09:00:00Z", now)).toThrow(/real calendar date/);
+    expect(scheduleAt("+1d", now)).toBe("2026-10-23T12:00:00.000Z");
+  });
+  it("cdr list --from 99999999999999d is a usage error, not a request", async () => {
+    const { runCli, fakeFetch } = await import("./helpers.js");
+    const api = fakeFetch();
+    const r = await runCli(["cdr", "list", "--from", "99999999999999d"], { fetch: api.fetch });
+    expect(r.code).toBe(2);
+    expect(api.calls).toHaveLength(0);
+  });
+});

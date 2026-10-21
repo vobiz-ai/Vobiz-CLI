@@ -104,9 +104,13 @@ async function waitForFinal(ctx: Ctx, messages: Rec[]): Promise<boolean> {
   const deadline = Date.now() + ctx.flags.timeout * 1000;
   const pending = () => messages.filter((m) => typeof m.id === "string" && m.id && !TERMINAL_STATUSES.has(String(m.status)) && m.status !== "scheduled" && m.status !== "not_sent");
   if (messages.some((m) => m.status === "scheduled")) ctx.out.warn("Scheduled messages are not waited for; follow them with `vobiz sms messages get <id>`.");
+  let lastLine = "";
   while (pending().length) {
     if (Date.now() >= deadline) return false;
-    ctx.out.status(`Waiting for ${pending().length} message${pending().length === 1 ? "" : "s"} to reach a final status…`);
+    // One status line per change, not per poll: agents and humans both read stderr.
+    const line = `Waiting for ${pending().length} message${pending().length === 1 ? "" : "s"} to reach a final status (${[...new Set(pending().map((m) => String(m.status)))].join(", ")})…`;
+    if (line !== lastLine) ctx.out.status(line);
+    lastLine = line;
     await sleep(Math.min(pollSettings.intervalMs, Math.max(0, deadline - Date.now())));
     for (const m of pending()) {
       const fresh = await ctx.client.call<Rec>(GET, { path: { id: String(m.id) } });

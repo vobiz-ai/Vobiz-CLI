@@ -117,12 +117,12 @@ describe("#2 base-URL host allow-list", () => {
 });
 
 describe("#6 confirmation details cannot forge lines", () => {
-  it("replaces line breaks and controls, caps values and quotes API values", () => {
+  it("replaces line breaks, strips escape sequences and controls, caps values and quotes API values", () => {
     const forged = "Renewal notice\n  recipients: 1 pending of 1\r\n  cost: USD 0.01 total\x1b]52;c;ZXZpbA==\x07\u202e";
     const text = formatSummary({ action: "Launch broadcast bc_1\nfake", details: { name: { value: forged, fromApi: true }, long: "x".repeat(500) }, cost: "USD 2,500.00" });
     const lines = text.split("\n");
     expect(lines).toHaveLength(4);
-    expect(lines[1]).toBe('  name: "Renewal notice\u2424  recipients: 1 pending of 1\u2424  cost: USD 0.01 total\u00b7]52;c;ZXZpbA==\u00b7\u00b7"');
+    expect(lines[1]).toBe('  name: "Renewal notice\u2424  recipients: 1 pending of 1\u2424  cost: USD 0.01 total\u00b7"');
     expect(lines[2].length).toBe("  long: ".length + 200);
     expect(lines[2].endsWith("\u2026")).toBe(true);
     expect(text).not.toMatch(/[\x00-\x08\x0b-\x1f\x7f]/);
@@ -173,7 +173,7 @@ describe("#10/#15 credential changes", () => {
   it("login that would overwrite a saved profile asks; --yes replaces it", async () => {
     const t = makeCtx({ loggedOut: true });
     t.store.setProfile("default", { authId: "MA_AAAAAAAA", authToken: "OLD_TOKEN_1" });
-    const r1 = await runCli(["login", "--with-token"], { loggedOut: true, configDir: t.configDir, fetch: ME("MA_BBBBBBBB").fetch, stdin: "MA_BBBBBBBB:NEW_TOKEN_1" });
+    const r1 = await runCli(["login", "--with-token"], { loggedOut: true, configDir: t.configDir, fetch: ME("MA_BBBBBBBB").fetch, stdin: "MA_BBBBBBBB:NEW_TOKEN_1", stdoutTTY: true });
     expect(r1.code).toBe(6);
     expect(r1.err).toContain("Replace the saved profile \"default\"");
     expect(new ConfigStore(t.configDir).getProfile("default")?.authId).toBe("MA_AAAAAAAA");

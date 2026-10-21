@@ -99,7 +99,7 @@ describe("vobiz setup voice-agent", () => {
       const r = await runCli(["setup", "voice-agent", "--number", NUM, ...flags, "--yes"], { fetch: api.fetch });
       expect(r.code, flags.join(" ")).toBe(2);
     }
-    const s = await runCli(["setup", "voice-agent", "--number", NUM, "--stream-url", "wss://agent.example.com/media", "--yes"], { fetch: api.fetch });
+    const s = await runCli(["setup", "voice-agent", "--number", NUM, "--stream-url", "wss://agent.example.com/media", "--yes"], { fetch: api.fetch, stdoutTTY: true });
     expect(s.code).toBe(2);
     expect(s.err).toContain("--stream-url needs --answer-url");
     expect(s.err).toContain('<Stream bidirectional="true" keepCallAlive="true">wss://agent.example.com/media</Stream>');

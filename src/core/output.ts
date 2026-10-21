@@ -14,7 +14,7 @@
  */
 import pc from "picocolors";
 import YAML from "yaml";
-import { VobizError, isRetryable, type ErrorKind } from "./errors.js";
+import { CHECK_STATE_HINT, VobizError, isRetryable, type ErrorKind } from "./errors.js";
 import { isUnsafeKey } from "./keys.js";
 import { redact, scrubSecrets } from "./redact.js";
 import { cleanCell, cleanMessage, tsvCell } from "./sanitize.js";
@@ -59,7 +59,7 @@ const HINTS: Partial<Record<ErrorKind, string>> = {
   service_unavailable: "Vobiz is temporarily unavailable. Try again shortly.",
   timeout: "Raise --timeout, or run `vobiz doctor` to check connectivity.",
   network_error: "Run `vobiz doctor` to check connectivity and proxy settings.",
-  outcome_unknown: "Do not retry blindly: check the current state (for example `vobiz calls list`) before trying again.",
+  outcome_unknown: CHECK_STATE_HINT,
   confirmation_required: "Re-run with --yes to confirm, or --dry-run to preview.",
   invalid_input: "Run the command with --help for usage.",
   internal_error: "Run again with --verbose for details, and report it at https://github.com/vobiz-ai/Vobiz-CLI/issues.",
@@ -223,6 +223,15 @@ export class Printer {
     return !!f.json || f.output === "json" || f.output === "jsonl" || (!f.output && (env === "json" || env === "jsonl"));
   }
 
+  /**
+   * Errors are printed as one JSON line when a program reads the output: a machine mode (json, jsonl, yaml, which
+   * includes the json default off a TTY) or stdout that is not a terminal.
+   */
+  get jsonErrors(): boolean {
+    const m = this.mode;
+    return m === "json" || m === "jsonl" || m === "yaml" || !this.host.stdout.isTTY;
+  }
+
   /** Colors for one stream: off with --no-color or NO_COLOR, forced by FORCE_COLOR, otherwise only on a TTY. */
   private colorsFor(stream: Stream) {
     const env = this.host.env;
@@ -350,11 +359,11 @@ export class Printer {
     else if (!this.host.flags.quiet) this.host.stderr.write(`${this.colors.green("✓")} ${cleanMessage(message)}\n`);
   }
 
-  /** Prints an error to stderr as `vobiz: <kind>: <message>` plus a hint, or as JSON when --output json. */
+  /** Prints an error to stderr as `vobiz: <kind>: <message>` plus a hint, or as one JSON line (see jsonErrors). */
   printError(err: unknown): void {
     const e = toVobizError(err);
     const message = scrubSecrets(e.message);
-    if (this.explicitJson) {
+    if (this.jsonErrors) {
       const body = { error: e.kind, message, status: e.status ?? null, retryable: isRetryable(e.kind), hint: hintFor(e.kind) ?? null };
       this.host.stderr.write(JSON.stringify(this.safe(body)) + "\n");
       return;

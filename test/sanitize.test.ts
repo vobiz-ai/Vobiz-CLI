@@ -65,7 +65,7 @@ describe("human output is sanitised; json stays verbatim", () => {
     p.success(`ok${ESC}[2J`);
     expect(stderr.text).not.toContain(ESC);
     const api = fakeFetch({ "GET /api/v1/auth/me": reply(400, { message: `bad${ESC}]0;pwned title\x07 input` }) });
-    const r = await runCli(["api", "GET", "/api/v1/auth/me"], { fetch: api.fetch });
+    const r = await runCli(["api", "GET", "/api/v1/auth/me"], { fetch: api.fetch, stdoutTTY: true });
     expect(r.code).toBe(2);
     expect(r.err).toContain("bad input");
     expect(r.err).not.toContain(ESC);

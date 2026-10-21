@@ -40,7 +40,7 @@ describe("prototype safety (S3 #6, #11)", () => {
     }
     const r = await runCli(["profiles", "remove", "toString", "--yes"], { loggedOut: true });
     expect(r.code).toBe(4);
-    const c = await runCli(["config", "set", "toString", "x"]);
+    const c = await runCli(["config", "set", "toString", "x"], { stdoutTTY: true });
     expect(c.code).toBe(2);
     expect(c.err).toContain('Unknown setting "toString"');
   });

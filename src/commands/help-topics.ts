@@ -27,7 +27,7 @@ export const HELP_TOPICS: Record<string, { summary: string; text: string }> = {
   8  timeout or network_error on a read (nothing was changed, safe to retry)
 130  interrupted (Ctrl-C)
 
-With --output json, errors are printed to stderr as one JSON line:
+With --output json, jsonl or yaml, or whenever stdout is not a terminal, errors are printed to stderr as one JSON line:
   {"error":"<kind>","message":"…","status":<http status or null>,"retryable":<bool>,"hint":"…"}
 `,
   },

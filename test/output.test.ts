@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import YAML from "yaml";
 import { Printer, flatten, parseQuery, project, queryPath, type PrinterHost } from "../src/core/output.js";
-import { VobizError } from "../src/core/errors.js";
+import { CHECK_STATE_HINT, VobizError } from "../src/core/errors.js";
 import { redact } from "../src/core/redact.js";
 import { renderTable } from "../src/core/table.js";
 import { capture } from "./helpers.js";
@@ -137,15 +137,26 @@ describe("output modes", () => {
   });
 
   it("printError formats text and JSON", () => {
-    let t = printer({});
+    let t = printer({}, { tty: true });
     t.p.printError(new VobizError("rate_limited", "slow down", 429));
     expect(t.stderr.text).toBe("vobiz: rate_limited: slow down\nWait a moment and try again.\n");
     t = printer({ json: true });
     t.p.printError(new VobizError("rate_limited", "slow down", 429));
     expect(JSON.parse(t.stderr.text)).toMatchObject({ error: "rate_limited", message: "slow down", status: 429, retryable: true });
-    t = printer({});
+    t = printer({}, { tty: true });
     t.p.printError(new Error("boom"));
     expect(t.stderr.text).toContain("vobiz: internal_error: boom");
+  });
+
+  it("printError prints JSON for json, jsonl and yaml and whenever stdout is not a terminal (S6 #20)", () => {
+    for (const [flags, tty] of [[{ output: "yaml" }, true], [{ output: "jsonl" }, true], [{ output: "table" }, false], [{}, false]] as const) {
+      const t = printer(flags, { tty });
+      t.p.printError(new VobizError("outcome_unknown", "maybe", 502));
+      expect(JSON.parse(t.stderr.text)).toMatchObject({ error: "outcome_unknown", message: "maybe", retryable: false, hint: CHECK_STATE_HINT });
+    }
+    const t = printer({ output: "table" }, { tty: true });
+    t.p.printError(new VobizError("outcome_unknown", "maybe", 502));
+    expect(t.stderr.text).toBe(`vobiz: outcome_unknown: maybe\n${CHECK_STATE_HINT}\n`);
   });
 });
 

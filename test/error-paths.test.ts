@@ -7,7 +7,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { EXIT, VobizError, isRetryable, type ErrorKind } from "../src/core/errors.js";
+import { CHECK_STATE_HINT, EXIT, VobizError, isRetryable, type ErrorKind } from "../src/core/errors.js";
 import { hintFor } from "../src/core/output.js";
 import { TEST_AUTH_ID, TEST_AUTH_TOKEN, fakeFetch, hang, networkError, reply, runCli, textReply } from "./helpers.js";
 import { specFake } from "./spec-fake.js";
@@ -94,7 +94,7 @@ describe("API errors become the right kind, message and JSON shape", () => {
       it(`${status} on \`${c.argv.join(" ")}\` -> ${kind} (exit ${code})`, async () => {
         const body = { message: `backend says ${status}` };
         const fetch = specFake({ answer: () => reply(status, body) }).fetch;
-        const text = await runCli(c.argv, { fetch });
+        const text = await runCli(c.argv, { fetch, stdoutTTY: true });
         expect(text.code).toBe(code);
         expect(text.out).toBe("");
         expect(text.err).toContain(`vobiz: ${kind}: backend says ${status}`);
@@ -214,7 +214,7 @@ describe("transport failures", () => {
       expect(r.code, r.err).toBe(7);
       const err = JSON.parse(r.err.trim().split("\n").pop()!);
       expect(err).toMatchObject({ error: "outcome_unknown", retryable: false });
-      expect(err.hint).toContain("Do not retry blindly");
+      expect(err.hint).toBe(CHECK_STATE_HINT);
     });
   }
 
@@ -279,7 +279,7 @@ describe("input validation (exit 2, nothing sent)", () => {
   for (const [name, argv] of cases) {
     it(name, async () => {
       const api = specFake();
-      const r = await runCli([...argv, "--yes"], { fetch: api.fetch, env: { HOME: mkdtempSync(join(tmpdir(), "vobiz-home-")) } });
+      const r = await runCli([...argv, "--yes"], { fetch: api.fetch, env: { HOME: mkdtempSync(join(tmpdir(), "vobiz-home-")) }, stdoutTTY: true });
       expect(r.code, r.err).toBe(2);
       expect(api.calls.filter((c) => c.method !== "GET")).toHaveLength(0);
       expect(r.out).toBe("");

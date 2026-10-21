@@ -10,7 +10,7 @@
  * line breaks and control characters become visible markers and long values are capped, so a value that came
  * from the API (a broadcast or trunk name) cannot forge a "cost:" or "recipients:" line.
  */
-import { cleanMessage } from "./sanitize.js";
+import { cleanMessage, stripTerminalControls } from "./sanitize.js";
 import type { Ctx } from "./context.js";
 import { VobizError } from "./errors.js";
 
@@ -37,14 +37,12 @@ export interface ConfirmSummary {
 export const DETAIL_MAX = 200;
 
 /**
- * One visible line: CR/LF become "␤", every other C0/C1 control, DEL and the bidi override/isolate code points
- * become "·", and the result is capped at `max` characters with "…".
+ * One visible line: CR/LF become "␤", escape sequences and every other C0/C1 control and DEL are removed by the
+ * shared terminal sanitiser (core/sanitize.ts), the bidi override/isolate code points become "·", and the result is
+ * capped at `max` characters with "…".
  */
 export function oneLine(value: string, max = DETAIL_MAX): string {
-  const s = value
-    .replace(/\r\n|\r|\n|\u2028|\u2029/g, "\u2424")
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "\u00b7");
+  const s = stripTerminalControls(value.replace(/\r\n|\r|\n|\u2028|\u2029/g, "\u2424")).replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "\u00b7");
   const chars = [...s];
   return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : s;
 }

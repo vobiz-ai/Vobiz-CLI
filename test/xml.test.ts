@@ -69,7 +69,7 @@ describe("xml build", () => {
     [[], "at least one element"],
     [["--pause", "1.5"], "whole number"],
   ])("rejects %j", async (args, message) => {
-    const r = await runCli(["xml", "build", ...args]);
+    const r = await runCli(["xml", "build", ...args], { stdoutTTY: true });
     expect(r.code).toBe(2);
     expect(r.err).toContain(message);
   });

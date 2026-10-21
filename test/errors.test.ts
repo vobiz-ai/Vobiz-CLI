@@ -61,7 +61,7 @@ describe("exit codes from run()", () => {
   ];
   for (const [name, value, code, kind] of cases) {
     it(`${name} -> exit ${code}`, async () => {
-      const r = await runCli(["api", "GET", "/api/v1/auth/me"], { fetch: fakeFetch({ [me]: value }).fetch });
+      const r = await runCli(["api", "GET", "/api/v1/auth/me"], { fetch: fakeFetch({ [me]: value }).fetch, stdoutTTY: true });
       expect(r.code).toBe(code);
       expect(r.err).toContain(`vobiz: ${kind}:`);
       expect(r.out).toBe("");

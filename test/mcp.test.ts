@@ -166,7 +166,7 @@ describe("mcp install", () => {
     [["mcp", "install", "notepad"], 'Unknown client "notepad"'],
     [["mcp", "install", "cursor", "--name", "a b"], "--name"],
   ])("usage error %j", async (argv, message) => {
-    const r = await runCli(argv, { env: { HOME: tempHome() } });
+    const r = await runCli(argv, { env: { HOME: tempHome() }, stdoutTTY: true });
     expect(r.code).toBe(2);
     expect(r.err).toContain(message);
   });

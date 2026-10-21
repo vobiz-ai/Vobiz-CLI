@@ -21,6 +21,7 @@ import { register as update } from "./update.js";
 import { register as xml } from "./xml.js";
 import { register as webhooks } from "./webhooks.js";
 import { register as mcp } from "./mcp.js";
+import { register as skills } from "./skills.js";
 
 // ── W1 core (kept last in help): api, completion, help topics ──
 import { register as api } from "./api.js";
@@ -43,6 +44,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   xml,
   webhooks,
   mcp,
+  skills,
 
   api,
   completion,

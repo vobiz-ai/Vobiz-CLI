@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { fakeFetch, runCli } from "./helpers.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ConfigStore } from "../src/core/config.js";
+import { Ctx, openUrlGuarded } from "../src/core/context.js";
+import { capture, fakeFetch, runCli } from "./helpers.js";
 
 describe("vobiz feedback", () => {
   it("prints a prefilled issue URL without any request when stdout is not a terminal", async () => {
@@ -32,5 +37,39 @@ describe("vobiz feedback", () => {
     expect(r.json().url).toContain("labels=feedback");
     r = await runCli(["feedback", "-m", "  "]);
     expect(r.code).toBe(2);
+  });
+});
+
+describe("default openUrl (openUrlGuarded)", () => {
+  const url = "https://github.com/vobiz-ai/Vobiz-CLI/issues/new";
+  const run = async (env: NodeJS.ProcessEnv, stdoutTTY: boolean) => {
+    const spawned: string[] = [];
+    const fakeSpawn = ((cmd: string) => {
+      spawned.push(cmd);
+      return { on() {}, unref() {} };
+    }) as unknown as typeof import("node:child_process").spawn;
+    const stderr = capture();
+    await openUrlGuarded(url, { env, stdout: capture(stdoutTTY), stderr }, fakeSpawn);
+    return { spawned, err: stderr.text };
+  };
+
+  it("never spawns a browser when stdout is not a terminal, CI is set or VOBIZ_NO_BROWSER is set", async () => {
+    for (const [env, tty] of [[{}, false], [{ CI: "1" }, true], [{ VOBIZ_NO_BROWSER: "1" }, true]] as const) {
+      const r = await run(env, tty);
+      expect(r.spawned).toEqual([]);
+      expect(r.err).toBe(`Open: ${url}\n`);
+    }
+  });
+
+  it("spawns the platform opener only on an interactive terminal", async () => {
+    const r = await run({}, true);
+    expect(r.spawned).toHaveLength(1);
+    expect(r.err).toBe("");
+  });
+
+  it("is the Ctx default", () => {
+    const stderr = capture();
+    const ctx = new Ctx({ env: {}, stdout: capture(false), stderr, store: new ConfigStore(mkdtempSync(join(tmpdir(), "vobiz-open-"))) });
+    return ctx.openUrl(url).then(() => expect(stderr.text).toBe(`Open: ${url}\n`));
   });
 });

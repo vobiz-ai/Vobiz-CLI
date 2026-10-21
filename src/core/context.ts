@@ -93,7 +93,7 @@ export class Ctx {
     this.fetch = o.fetch ?? globalThis.fetch;
     this.prompts = o.prompts ?? inquirerPrompts();
     this.now = o.now ?? (() => new Date());
-    this.openUrl = o.openUrl ?? openInBrowser;
+    this.openUrl = o.openUrl ?? ((url: string) => openUrlGuarded(url, { env: this.env, stdout: this.stdout, stderr: this.stderr }));
     this.flags = { ...defaultFlags(), ...o.flags };
     const ctx = this;
     this.out = new Printer({
@@ -180,12 +180,30 @@ function inquirerPrompts(): Prompts {
   };
 }
 
-async function openInBrowser(url: string): Promise<void> {
+type SpawnFn = typeof spawn;
+
+/**
+ * The default `openUrl`: spawns the platform opener only for an interactive session. With VOBIZ_NO_BROWSER or CI
+ * set, or stdout not a terminal (pipes, tests, agents), it prints "Open: <url>" to stderr instead.
+ */
+export async function openUrlGuarded(
+  url: string,
+  o: { env: NodeJS.ProcessEnv; stdout: Stream; stderr: Stream },
+  spawnFn: SpawnFn = spawn,
+): Promise<void> {
+  if (o.env.VOBIZ_NO_BROWSER || o.env.CI || !o.stdout.isTTY) {
+    o.stderr.write(`Open: ${url}\n`);
+    return;
+  }
+  await openInBrowser(url, spawnFn);
+}
+
+async function openInBrowser(url: string, spawnFn: SpawnFn = spawn): Promise<void> {
   const [cmd, args] =
     process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
   await new Promise<void>((resolve) => {
     try {
-      const child = spawn(cmd, args as string[], { stdio: "ignore", detached: true });
+      const child = spawnFn(cmd, args as string[], { stdio: "ignore", detached: true });
       child.on("error", () => resolve());
       child.unref();
       resolve();

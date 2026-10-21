@@ -40,6 +40,7 @@ With --output json, errors are printed to stderr as one JSON line:
   VOBIZ_SMS_BASE_URL                Messaging API base URL (default https://api.vobiz.ai/api/v1/sms)
   VOBIZ_TIMEOUT                     per-request timeout in seconds (default 30)
   VOBIZ_LOG=debug                   like --debug (request and response bodies, secrets redacted)
+  VOBIZ_NO_BROWSER                  never open a browser (feedback, docs open, login --browser); print the URL
   VOBIZ_CONFIG_DIR                  config directory (default $XDG_CONFIG_HOME/vobiz or ~/.config/vobiz)
   VOBIZ_NO_UPDATE_CHECK, CI         disable the daily version check
   NO_COLOR, FORCE_COLOR             standard color control

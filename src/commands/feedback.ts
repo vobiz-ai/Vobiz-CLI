@@ -53,7 +53,7 @@ The issue body includes the CLI version, Node version and platform. Never paste 
       else ctx.stdout.write(url + "\n");
       if (open) {
         await ctx.openUrl(url);
-        ctx.out.status("Opened a new GitHub issue in your browser. It is filed only when you submit it.");
+        ctx.out.status("The issue is filed only when you submit it on GitHub.");
       }
     });
 }

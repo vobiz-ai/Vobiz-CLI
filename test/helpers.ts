@@ -214,6 +214,7 @@ export function makeCtx(o: MakeCtxOptions = {}): TestCtx {
   const configDir = o.configDir ?? mkdtempSync(join(tmpdir(), "vobiz-test-"));
   const env: NodeJS.ProcessEnv = {
     CI: "1",
+    VOBIZ_NO_BROWSER: "1",
     VOBIZ_CONFIG_DIR: configDir,
     ...(o.loggedOut ? {} : { VOBIZ_AUTH_ID: TEST_AUTH_ID, VOBIZ_AUTH_TOKEN: TEST_AUTH_TOKEN }),
     ...o.env,

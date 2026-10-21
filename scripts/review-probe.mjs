@@ -18,6 +18,7 @@ import { join } from "node:path";
 const base = mkdtempSync(join(tmpdir(), "vobiz-probe-"));
 writeFileSync(join(base, "f.csv"), "to,text\n+14155550123,hi\n");
 process.env.HOME = base;
+process.chdir(base); // commands that write project files (skills install, xml) land in the temp dir
 // POSTs that are reads (the public docs search); allowed without --yes, but never under --dry-run.
 const READ_POST = /^POST https:\/\/www\.vobiz\.ai\/docs\/mcp/;
 const SKIP = /^(webhooks listen|xml serve|update|calls watch)$/

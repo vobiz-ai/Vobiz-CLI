@@ -95,3 +95,26 @@ describe("skills update", () => {
     expect(r.code).toBe(4);
   });
 });
+
+describe("skills install hardening (S3 #17)", async () => {
+  const fs = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const { plan } = await import("../src/commands/skills.js");
+  const fakeBundle = (name: string) => {
+    const root = fs.mkdtempSync(path.join(tmpdir(), "vobiz-bundle-"));
+    fs.mkdirSync(path.join(root, "good"));
+    fs.writeFileSync(path.join(root, "good", "SKILL.md"), `---\nname: ${name}\ndescription: x\n---\n`);
+    return root;
+  };
+
+  it("rejects a bundled skill whose front-matter name is not a plain folder name", () => {
+    expect(() => bundledSkills(fakeBundle("../../x"))).toThrow(/invalid name/);
+    expect(() => bundledSkills(fakeBundle("Bad_Name"))).toThrow(/invalid name/);
+    expect(bundledSkills(fakeBundle("good")).map((s) => s.name)).toEqual(["good"]);
+  });
+
+  it("never plans a write outside --dir", () => {
+    expect(() => plan([{ name: "../x", version: "", description: "", path: "/tmp" }], "/tmp/skills", "install")).toThrow(/outside/);
+  });
+});

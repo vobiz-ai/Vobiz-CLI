@@ -4,8 +4,8 @@
  * agents load them. Needs no credentials.
  */
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { cpSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import type { Command } from "commander";
 import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
@@ -35,13 +35,19 @@ function frontMatter(text: string): Record<string, string> {
   return out;
 }
 
+const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
 export function bundledSkills(dir = bundledSkillsDir()): SkillInfo[] {
   if (!existsSync(dir)) throw new VobizError("internal_error", `The bundled skills folder is missing (${dir}). Reinstall the Vobiz CLI.`);
   return readdirSync(dir, { withFileTypes: true })
     .filter((d) => d.isDirectory() && existsSync(join(dir, d.name, "SKILL.md")))
     .map((d) => {
       const fm = frontMatter(readFileSync(join(dir, d.name, "SKILL.md"), "utf8"));
-      return { name: fm.name || d.name, version: fm["metadata.version"] ?? "", description: fm.description ?? "", path: join(dir, d.name) };
+      const name = fm.name || d.name;
+      // The name becomes a folder that is deleted and rewritten: a tampered package must not reach outside --dir.
+      if (!SKILL_NAME.test(name) || !SKILL_NAME.test(d.name))
+        throw new VobizError("internal_error", `The bundled skill folder "${d.name}" has an invalid name "${name}". Reinstall the Vobiz CLI.`);
+      return { name, version: fm["metadata.version"] ?? "", description: fm.description ?? "", path: join(dir, d.name) };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -78,6 +84,7 @@ interface PlanRow {
 export function plan(skills: SkillInfo[], dir: string, verb: "install" | "update"): PlanRow[] {
   return skills.map((s) => {
     const target = join(dir, s.name);
+    if (!SKILL_NAME.test(s.name) || dirname(resolve(target)) !== resolve(dir)) throw new VobizError("internal_error", `Refusing to write the skill "${s.name}" outside ${dir}.`);
     if (!existsSync(target)) return { skill: s.name, status: verb === "install" ? "install" : "not installed", path: target };
     if (!statSync(target).isDirectory()) throw new VobizError("invalid_input", `${target} exists and is not a folder.`);
     if (treeHash(target) === treeHash(s.path)) return { skill: s.name, status: "up to date", path: target };
@@ -102,7 +109,8 @@ async function apply(ctx: Ctx, verb: "install" | "update", opts: { dir?: string;
       for (const r of todo) {
         const src = all.find((s) => s.name === r.skill)!.path;
         rmSync(r.path, { recursive: true, force: true });
-        cpSync(src, r.path, { recursive: true });
+        // Copy regular files and folders only: a symlink in the bundle is skipped, never followed or recreated.
+        cpSync(src, r.path, { recursive: true, dereference: false, verbatimSymlinks: true, filter: (from) => !lstatSync(from).isSymbolicLink() });
       }
     }
   }

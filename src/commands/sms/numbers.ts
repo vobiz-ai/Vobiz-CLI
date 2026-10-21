@@ -24,6 +24,21 @@ const country = (v: string): string => {
   return v.trim().toUpperCase();
 };
 
+/**
+ * The purchasable offer (price, numberKey) for one number, from a fresh search by country (and area code for US/CA).
+ * A read the purchase depends on, so it runs even with --dry-run; undefined when the number is not found.
+ */
+export async function findSmsOffer(ctx: Ctx, e164: string, country: string): Promise<Rec | undefined> {
+  try {
+    const areaCode = (country === "US" || country === "CA") && digitsOnly(e164).startsWith("1") ? digitsOnly(e164).slice(1, 4) : undefined;
+    const found = await ctx.client.call<Rec>(SEARCH, { query: { country, areaCode, limit: 100 }, dryRun: false });
+    const list = isRec(found) && Array.isArray(found.numbers) ? (found.numbers as Rec[]) : [];
+    return list.find((n) => typeof n.e164 === "string" && digitsOnly(n.e164) === digitsOnly(e164));
+  } catch {
+    return undefined;
+  }
+}
+
 function registerNumbers(sms: Command, ctx: Ctx): void {
   const numbers = sms.command("numbers").description("Messaging numbers: list yours, search and buy new ones, release");
 
@@ -76,15 +91,7 @@ function registerNumbers(sms: Command, ctx: Ctx): void {
     )
     .action(async (num: string, o: { country: string; numberKey?: string }) => {
       const e164 = toE164(num);
-      let price: Rec | undefined;
-      try {
-        const areaCode = (o.country === "US" || o.country === "CA") && digitsOnly(e164).startsWith("1") ? digitsOnly(e164).slice(1, 4) : undefined;
-        const found = await ctx.client.call<Rec>(SEARCH, { query: { country: o.country, areaCode, limit: 100 }, dryRun: false });
-        const list = isRec(found) && Array.isArray(found.numbers) ? (found.numbers as Rec[]) : [];
-        price = list.find((n) => typeof n.e164 === "string" && digitsOnly(n.e164) === digitsOnly(e164));
-      } catch {
-        price = undefined;
-      }
+      const price = await findSmsOffer(ctx, e164, o.country);
       const numberKey = o.numberKey ?? (typeof price?.numberKey === "string" && price.numberKey ? price.numberKey : undefined);
       const cost = price
         ? `${price.currency ?? ""} ${price.setupPrice ?? "?"} setup + ${price.monthlyPrice ?? "?"}/month, debited now; renews monthly until released`.trim()

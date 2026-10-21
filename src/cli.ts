@@ -10,7 +10,7 @@ import { COMMAND_GROUPS } from "./commands/index.js";
 import { DryRunSignal } from "./core/client.js";
 import type { Ctx, GlobalFlags } from "./core/context.js";
 import { EXIT, VobizError } from "./core/errors.js";
-import { OUTPUT_MODES, toVobizError, type OutputMode } from "./core/output.js";
+import { OUTPUT_MODES, parseQuery, toVobizError, type OutputMode } from "./core/output.js";
 import { startUpdateCheck } from "./core/update.js";
 import { CLI_VERSION } from "./core/version.js";
 
@@ -25,6 +25,8 @@ interface RawGlobals {
   output?: OutputMode;
   json?: boolean;
   fields?: string;
+  /** Collected so a command with its own --query (`vobiz api`) can take every value; see the preAction hook. */
+  query?: string[];
   quiet?: boolean;
   yes?: boolean;
   dryRun?: boolean;
@@ -48,6 +50,7 @@ function addGlobalOptions(program: Command): void {
     .addOption(new Option("-o, --output <format>", "output format (env: VOBIZ_OUTPUT; default: table on a terminal, json when piped)").choices(OUTPUT_MODES))
     .option("--json", "shorthand for --output json")
     .option("--fields <paths>", "comma-separated fields to show (dot paths, e.g. id,meta.total)")
+    .option("--query <path>", "print only this path of the output, after --fields (e.g. data[0].uuid, items[*].e164)", (v: string, prev: string[] = []) => [...prev, v])
     .option("-q, --quiet", "print only ids, one per line")
     .option("-y, --yes", "skip confirmation prompts; required for writes when stdin is not a terminal (env: VOBIZ_YES)")
     .option("--dry-run", "show the request (secrets redacted) and exit without sending")
@@ -78,6 +81,9 @@ export function resolveGlobalFlags(raw: RawGlobals, env: NodeJS.ProcessEnv): Glo
     const local = u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]";
     if (u.protocol !== "https:" && !(local && u.protocol === "http:")) throw new VobizError("invalid_input", `${flag} must use https (http is allowed only for localhost).`);
   }
+  if (raw.query && raw.query.length > 1) throw new VobizError("invalid_input", "--query can be given only once.");
+  const query = raw.query?.[0];
+  if (query !== undefined) parseQuery(query);
   return {
     profile: raw.profile,
     authId: raw.authId,
@@ -85,6 +91,7 @@ export function resolveGlobalFlags(raw: RawGlobals, env: NodeJS.ProcessEnv): Glo
     output: raw.output,
     json: raw.json,
     fields: raw.fields ? raw.fields.split(",").map((f) => f.trim()).filter(Boolean) : undefined,
+    query,
     quiet: raw.quiet,
     yes: raw.yes,
     dryRun: raw.dryRun,
@@ -122,8 +129,15 @@ export function buildProgram(ctx: Ctx): Command {
     "\nRun `vobiz help exit-codes`, `vobiz help env` or `vobiz help output` for scripting details.\nDocs: https://www.vobiz.ai/docs",
   );
 
-  program.hook("preAction", () => {
-    ctx.flags = resolveGlobalFlags(program.opts<RawGlobals>(), ctx.env);
+  program.hook("preAction", (_root, action) => {
+    let raw = program.opts<RawGlobals>();
+    // Global options are parsed anywhere on the line, so a command's own --query (`vobiz api --query k=v`) lands
+    // here. Hand those values to the command instead of treating them as an output filter.
+    if (raw.query && action.options.some((o) => o.long === "--query")) {
+      action.setOptionValue("query", [...raw.query]);
+      raw = { ...raw, query: undefined };
+    }
+    ctx.flags = resolveGlobalFlags(raw, ctx.env);
     ctx.resetAuth();
     if (ctx.flags.authToken) ctx.log("warn", "--auth-token is saved in your shell history. Prefer `vobiz login` or VOBIZ_AUTH_TOKEN.");
     if (ctx.flags.showSecrets && !ctx.flags.debug) ctx.log("warn", "--show-secrets has no effect without --debug.");

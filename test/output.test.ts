@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import YAML from "yaml";
-import { Printer, flatten, project, type PrinterHost } from "../src/core/output.js";
+import { Printer, flatten, parseQuery, project, queryPath, type PrinterHost } from "../src/core/output.js";
 import { VobizError } from "../src/core/errors.js";
 import { redact } from "../src/core/redact.js";
 import { renderTable } from "../src/core/table.js";
@@ -156,5 +156,68 @@ describe("helpers", () => {
   });
   it("renderTable pads columns", () => {
     expect(renderTable(["A", "B"], [["xx", "y"]])).toBe("A   B\nxx  y\n");
+  });
+});
+
+describe("--output jsonl and --query", () => {
+  const body = { items: [{ e164: "+919876543210", meta: { n: 1 } }, { e164: "+14155550100", meta: { n: 2 } }], total: 2 };
+
+  it("jsonl prints one compact JSON line per row, or the single record", () => {
+    let t = printer({ output: "jsonl" });
+    t.p.print(body.items);
+    expect(t.stdout.text).toBe('{"e164":"+919876543210","meta":{"n":1}}\n{"e164":"+14155550100","meta":{"n":2}}\n');
+    t = printer({ output: "jsonl" });
+    t.p.print({ a: 1 });
+    expect(t.stdout.text).toBe('{"a":1}\n');
+    t = printer({ output: "jsonl" });
+    t.p.print([]);
+    expect(t.stdout.text).toBe("");
+  });
+
+  it("jsonl counts as explicit JSON for errors and prints success data", () => {
+    const t = printer({ output: "jsonl" });
+    expect(t.p.explicitJson).toBe(true);
+    t.p.success("done", { ok: true });
+    expect(t.stdout.text).toBe('{"ok":true}\n');
+  });
+
+  it("parses dot paths with [n], [-1] and [*]", () => {
+    expect(parseQuery("items[*].e164")).toEqual([{ kind: "key", key: "items" }, { kind: "all" }, { kind: "key", key: "e164" }]);
+    expect(parseQuery("[0].a")).toEqual([{ kind: "index", index: 0 }, { kind: "key", key: "a" }]);
+    expect(parseQuery("a[-1][2]")).toEqual([{ kind: "key", key: "a" }, { kind: "index", index: -1 }, { kind: "index", index: 2 }]);
+    for (const bad of ["", ".a", "a.", "a..b", "a[x]", "a[", "a]b", "a[0]b"]) expect(() => parseQuery(bad), bad).toThrow(VobizError);
+  });
+
+  it("evaluates paths, projecting over [*] and flattening nested wildcards", () => {
+    expect(queryPath(body, "items[*].e164")).toEqual(["+919876543210", "+14155550100"]);
+    expect(queryPath(body, "items[-1].meta.n")).toBe(2);
+    expect(queryPath(body, "items.0.e164")).toBe("+919876543210");
+    expect(queryPath(body, "missing.path")).toBeUndefined();
+    expect(queryPath({ a: [{ b: [1, 2] }, { b: [3] }, { c: 1 }] }, "a[*].b[*]")).toEqual([1, 2, 3]);
+    expect(queryPath({ x: { p: { v: 1 }, q: { v: 2 } } }, "x[*].v")).toEqual([1, 2]);
+  });
+
+  it("applies after --fields in every mode; scalars print bare in human modes", () => {
+    let t = printer({ output: "json", query: "items[*].e164" });
+    t.p.print(body);
+    expect(JSON.parse(t.stdout.text)).toEqual(["+919876543210", "+14155550100"]);
+    t = printer({ output: "plain", query: "total" });
+    t.p.print(body);
+    expect(t.stdout.text).toBe("2\n");
+    t = printer({ output: "jsonl", query: "items[*].e164" });
+    t.p.print(body);
+    expect(t.stdout.text).toBe('"+919876543210"\n"+14155550100"\n');
+    t = printer({ output: "json", fields: ["e164"], query: "[1].e164" });
+    t.p.print(body.items);
+    expect(JSON.parse(t.stdout.text)).toBe("+14155550100");
+    t = printer({ output: "json", query: "nope" });
+    t.p.print(body);
+    expect(t.stdout.text).toBe("null\n");
+  });
+
+  it("keeps secrets redacted when a query selects them", () => {
+    const t = printer({ output: "json", query: "nested.password" });
+    t.p.print(ME);
+    expect(t.stdout.text).toContain("[redacted]");
   });
 });

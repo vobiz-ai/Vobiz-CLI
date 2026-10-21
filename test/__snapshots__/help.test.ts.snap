@@ -14,10 +14,13 @@ Options:
                                  (env: VOBIZ_AUTH_TOKEN)
   -o, --output <format>          output format (env: VOBIZ_OUTPUT; default:
                                  table on a terminal, json when piped) (choices:
-                                 "table", "json", "yaml", "tsv", "plain")
+                                 "table", "json", "yaml", "tsv", "plain",
+                                 "jsonl")
   --json                         shorthand for --output json
   --fields <paths>               comma-separated fields to show (dot paths, e.g.
                                  id,meta.total)
+  --query <path>                 print only this path of the output, after
+                                 --fields (e.g. data[0].uuid, items[*].e164)
   -q, --quiet                    print only ids, one per line
   -y, --yes                      skip confirmation prompts; required for writes
                                  when stdin is not a terminal (env: VOBIZ_YES)

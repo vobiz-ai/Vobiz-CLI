@@ -19,6 +19,8 @@ export interface GlobalFlags {
   output?: OutputMode;
   json?: boolean;
   fields?: string[];
+  /** --query path applied to printed data after --fields (see parseQuery in output.ts). */
+  query?: string;
   quiet?: boolean;
   yes?: boolean;
   dryRun?: boolean;

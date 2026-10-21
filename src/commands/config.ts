@@ -47,8 +47,8 @@ const RESERVED: Record<string, string> = {
 };
 
 function keyOf(name: string): Key {
-  if (name in RESERVED) throw new VobizError("unsupported", RESERVED[name]);
-  if (!(name in CONFIG_KEYS)) throw new VobizError("invalid_input", `Unknown setting "${name}". Known settings: ${Object.keys(CONFIG_KEYS).join(", ")}.`);
+  if (Object.hasOwn(RESERVED, name)) throw new VobizError("unsupported", RESERVED[name]);
+  if (!Object.hasOwn(CONFIG_KEYS, name)) throw new VobizError("invalid_input", `Unknown setting "${name}". Known settings: ${Object.keys(CONFIG_KEYS).join(", ")}.`);
   return name as Key;
 }
 

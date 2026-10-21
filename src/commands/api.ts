@@ -8,6 +8,7 @@ import type { Command } from "commander";
 import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
+import { isUnsafeKey } from "../core/keys.js";
 import { findOp } from "../core/ops.js";
 import { OPERATIONS, type HttpMethod, type Operation } from "../generated/operations.js";
 
@@ -21,7 +22,8 @@ export function parseQueryPairs(pairs: string[]): Record<string, string | string
     if (i <= 0) throw new VobizError("invalid_input", `--param expects key=value (got "${p}").`);
     const k = p.slice(0, i);
     const v = p.slice(i + 1);
-    const prev = out[k];
+    if (isUnsafeKey(k)) throw new VobizError("invalid_input", `--param cannot use the name "${k}".`);
+    const prev = Object.hasOwn(out, k) ? out[k] : undefined;
     out[k] = prev === undefined ? v : ([] as string[]).concat(prev, v);
   }
   return out;

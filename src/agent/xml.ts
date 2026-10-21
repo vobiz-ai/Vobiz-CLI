@@ -12,6 +12,7 @@
  * choices are warnings.
  */
 import { z } from "zod";
+import { isUnsafeKey } from "../core/keys.js";
 import { VobizError } from "../core/errors.js";
 
 // ───────────────────────────── builder (port of the MCP server's model) ─────────────────────────────
@@ -262,7 +263,8 @@ export function applyAttr(action: Record<string, unknown> & { type: XmlAction["t
   const key = pair.slice(0, eq).trim();
   const value = pair.slice(eq + 1);
   const table = ATTR_FIELDS[action.type];
-  const entry = table[key] ?? Object.values(table).find(([field]) => field === key);
+  if (isUnsafeKey(key)) throw new VobizError("invalid_input", `--attr cannot use the name "${key}".`);
+  const entry = (Object.hasOwn(table, key) ? table[key] : undefined) ?? Object.values(table).find(([field]) => field === key);
   if (!entry) {
     throw new VobizError("invalid_input", `<${tagFor(action.type)}> has no attribute "${key}" here. Use one of: ${Object.keys(table).join(", ")}.`);
   }

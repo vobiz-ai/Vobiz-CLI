@@ -15,6 +15,7 @@
 import pc from "picocolors";
 import YAML from "yaml";
 import { VobizError, isRetryable, type ErrorKind } from "./errors.js";
+import { isUnsafeKey } from "./keys.js";
 import { redact } from "./redact.js";
 import { cleanCell, cleanMessage, tsvCell } from "./sanitize.js";
 import { renderTable } from "./table.js";
@@ -66,12 +67,23 @@ const HINTS: Partial<Record<ErrorKind, string>> = {
 
 export const hintFor = (kind: ErrorKind): string | undefined => HINTS[kind];
 
-/** Reads a dot path (`a.b.0.c`) out of a value. */
+/** Own property `key` of `obj`, never an inherited one; `__proto__`, `constructor` and `prototype` read as missing. */
+function ownValue(obj: unknown, key: string): unknown {
+  if (obj === null || obj === undefined || typeof obj !== "object" || isUnsafeKey(key)) return undefined;
+  return Object.hasOwn(obj, key) ? (obj as Record<string, unknown>)[key] : undefined;
+}
+
+/** Sets `key` as an own data property, even for "__proto__" (plain assignment would change the prototype). */
+function setOwn(obj: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
+/** Reads a dot path (`a.b.0.c`) out of a value (own properties only). */
 export function getPath(obj: unknown, path: string): unknown {
   let cur: unknown = obj;
   for (const part of path.split(".")) {
     if (cur === null || cur === undefined || typeof cur !== "object") return undefined;
-    cur = (cur as Record<string, unknown>)[part];
+    cur = ownValue(cur, part);
   }
   return cur;
 }
@@ -85,8 +97,11 @@ export function project(obj: unknown, paths: string[]): unknown {
     if (v === undefined) continue;
     const parts = path.split(".");
     let cur = out;
-    for (const p of parts.slice(0, -1)) cur = (cur[p] ??= {}) as Record<string, unknown>;
-    cur[parts[parts.length - 1]] = v;
+    for (const p of parts.slice(0, -1)) {
+      if (!Object.hasOwn(cur, p) || !cur[p] || typeof cur[p] !== "object") setOwn(cur, p, {});
+      cur = cur[p] as Record<string, unknown>;
+    }
+    setOwn(cur, parts[parts.length - 1], v);
   }
   return out;
 }
@@ -156,7 +171,7 @@ function runQuery(value: unknown, steps: QueryStep[], at: number): unknown {
   }
   if (value === null || value === undefined || typeof value !== "object") return undefined;
   if (Array.isArray(value)) return /^\d+$/.test(step.key) ? runQuery(value[Number(step.key)], steps, at + 1) : undefined;
-  return runQuery((value as Record<string, unknown>)[step.key], steps, at + 1);
+  return runQuery(ownValue(value, step.key), steps, at + 1);
 }
 
 /** Evaluates a `--query` path (see parseQuery). Missing paths give undefined; `[*]` drops elements without a match. */
@@ -171,11 +186,11 @@ export function flatten(obj: unknown, prefix = "", out: Record<string, unknown> 
     return out;
   }
   const entries = Object.entries(obj as Record<string, unknown>);
-  if (!entries.length && prefix) out[prefix] = {};
+  if (!entries.length && prefix) setOwn(out, prefix, {});
   for (const [k, v] of entries) {
     const key = prefix ? `${prefix}.${k}` : k;
     if (v && typeof v === "object" && !Array.isArray(v)) flatten(v, key, out);
-    else out[key] = v;
+    else setOwn(out, key, v);
   }
   return out;
 }
@@ -273,7 +288,7 @@ export class Printer {
       }
       const flat = rows.map((r) => flatten(r));
       const columns = fields ?? opts.columns ?? unionKeys(flat);
-      const grid = flat.map((r, i) => columns.map((c) => cell(c in r ? r[c] : getPath(rows[i], c))));
+      const grid = flat.map((r, i) => columns.map((c) => cell(Object.hasOwn(r, c) ? r[c] : getPath(rows[i], c))));
       if (mode === "tsv") {
         out.write([columns, ...grid].map((r) => r.map(tsvCell).join("\t")).join("\n") + "\n");
       } else if (mode === "plain") {

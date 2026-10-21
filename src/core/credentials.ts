@@ -4,7 +4,7 @@
  *   2. VOBIZ_AUTH_ID + VOBIZ_AUTH_TOKEN environment variables (CI)
  *   3. the profile named by --profile / VOBIZ_PROFILE / the configured default / "default"
  */
-import { ConfigStore, type Profile, SMS_BASE_URL, VOICE_BASE_URL } from "./config.js";
+import { ConfigStore, type Profile, SMS_BASE_URL, VOICE_BASE_URL, assertProfileName } from "./config.js";
 import { VobizError } from "./errors.js";
 
 export interface ResolvedCredentials {
@@ -25,7 +25,7 @@ export interface CredentialFlags {
 }
 
 export function profileName(flags: CredentialFlags, store: ConfigStore, env = process.env): string {
-  return flags.profile ?? env.VOBIZ_PROFILE ?? store.settings().defaultProfile ?? "default";
+  return assertProfileName(flags.profile ?? env.VOBIZ_PROFILE ?? store.settings().defaultProfile ?? "default");
 }
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);

@@ -33,6 +33,7 @@
     "build:assets": "npm run completions:gen && npm run man:gen",
     "build:sea": "node scripts/build-sea.mjs",
     "prepack": "npm run build:assets",
+    "skills:sync": "node scripts/sync-skills.mjs",
     "prepublishOnly": "npm run check"
   },
   "dependencies": {

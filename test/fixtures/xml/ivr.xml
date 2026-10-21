@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A two-option IVR menu -->
+<Response>
+    <Gather action="https://example.com/menu" method="POST" inputType="dtmf speech" numDigits="1" executionTimeout="10" finishOnKey="none" speechModel="phone_call">
+        <Speak voice="WOMAN" language="en-IN">Press 1 for sales or 2 for support.</Speak>
+        <Play loop="1">https://example.com/audio/menu.mp3</Play>
+    </Gather>
+    <PreAnswer><Speak>Please hold</Speak></PreAnswer>
+    <Dial callerId="+918000000000" timeout="30" action="https://example.com/dial-status">
+        <Number sendDigits="ww12">+919876543210</Number>
+        <User>sip:alice@example.com</User>
+    </Dial>
+    <Record action="https://example.com/rec" redirect="false" maxLength="120" fileFormat="wav"/>
+    <Stream bidirectional="true" keepCallAlive="true" contentType="audio/x-l16;rate=16000">wss://ai.example.com/stream</Stream>
+    <Conference startConferenceOnEnter="true">room-42</Conference>
+    <DTMF async="true">12w3#</DTMF>
+    <Wait length="5" silence="true" minSilence="2000"/>
+    <Speak><![CDATA[Goodbye & thanks]]></Speak>
+    <Hangup reason="busy"/>
+</Response>

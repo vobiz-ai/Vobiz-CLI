@@ -307,3 +307,16 @@ describe("#7 vobiz api writes", () => {
     expect(ok.err).toContain("(60 destinations)");
   });
 });
+
+describe("#14 transfer-balance amount", () => {
+  const P = "POST /api/v1/partner/accounts/MA_YYYYYYYY/transfer-balance";
+  it("validates --body amounts given as strings", async () => {
+    const api = fakeFetch({ [P]: { status: "completed" } });
+    for (const amount of ["-5", "0", "abc", "1e3", "", null, -1])
+      expect((await runCli(["partner", "accounts", "transfer-balance", "MA_YYYYYYYY", "--body", JSON.stringify({ amount, currency: "INR" }), "--yes"], { fetch: api.fetch })).code, String(amount)).toBe(2);
+    expect(api.calls).toHaveLength(0);
+    const r = await runCli(["partner", "accounts", "transfer-balance", "MA_YYYYYYYY", "--body", JSON.stringify({ amount: "500", currency: "INR" }), "--yes", "--json"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(api.last().body).toMatchObject({ amount: 500, currency: "INR" });
+  });
+});

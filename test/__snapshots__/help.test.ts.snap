@@ -54,6 +54,9 @@ Commands:
                                  settings
   update [options]               Check for a newer CLI version and show how to
                                  upgrade
+  numbers                        Voice phone numbers: list, search the
+                                 inventory, buy, release, route to a trunk or
+                                 sub-account
   api [options] [method] [path]  Send a raw request to the Vobiz API, or list
                                  and describe every operation in the spec
   completion <shell>             Print a shell completion script (bash, zsh,

@@ -14,6 +14,7 @@ import { register as update } from "./update.js";
 // ── W2 voice: account, calls, conferences, recordings, cdr ──
 
 // ── W3 provisioning: numbers, trunks, apps, endpoints, sub-accounts, partner ──
+import { register as numbers } from "./numbers.js";
 
 // ── W4 messaging: sms ──
 
@@ -33,6 +34,7 @@ export const COMMAND_GROUPS: RegisterFn[] = [
   // W2 voice
 
   // W3 provisioning
+  numbers,
 
   // W4 messaging
 

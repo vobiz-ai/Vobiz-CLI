@@ -84,7 +84,7 @@ const MAX_BACKEND_MESSAGE = 300;
 
 /** Pulls a human message out of a Vobiz error body without echoing the whole payload. */
 export function extractBackendMessage(body: unknown): string | undefined {
-  if (!body || typeof body !== "object") return typeof body === "string" ? body.slice(0, MAX_BACKEND_MESSAGE) : undefined;
+  if (!body || typeof body !== "object") return typeof body === "string" && body.trim() ? body.trim().slice(0, MAX_BACKEND_MESSAGE) : undefined;
   const b = body as Record<string, unknown>;
   const cands = [b.message, b.error, b.detail, b.error_description, (b.error as Record<string, unknown> | undefined)?.message];
   for (const c of cands) if (typeof c === "string" && c.trim()) return c.trim().slice(0, MAX_BACKEND_MESSAGE);

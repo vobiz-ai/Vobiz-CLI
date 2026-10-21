@@ -128,7 +128,7 @@ export function buildProgram(ctx: Ctx): Command {
     "\nRun `vobiz help exit-codes`, `vobiz help env` or `vobiz help output` for scripting details.\nDocs: https://www.vobiz.ai/docs",
   );
 
-  program.hook("preAction", (_root, action) => {
+  program.hook("preAction", () => {
     const raw = program.opts<RawGlobals>();
     ctx.flags = resolveGlobalFlags(raw, ctx.env);
     ctx.resetAuth();

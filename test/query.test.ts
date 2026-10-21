@@ -32,11 +32,14 @@ describe("global --output jsonl and --query", () => {
     expect(api.calls).toHaveLength(0);
   });
 
-  it("leaves `vobiz api --query k=v` (a command's own --query) working", async () => {
+  it("sends `vobiz api --param k=v` as query-string parameters and applies the global --query to the result", async () => {
     const api = fakeFetch({ [`GET /api/v1/Account/${TEST_AUTH_ID}/Call/`]: (req) => ({ echo: req.query }) });
-    const r = await runCli(["api", "GET", "/api/v1/Account/{auth_id}/Call/", "--query", "status=live", "--query", "limit=2", "--json"], { fetch: api.fetch });
+    const r = await runCli(["api", "GET", "/api/v1/Account/{auth_id}/Call/", "--param", "status=live", "--param", "limit=2", "--json"], { fetch: api.fetch });
     expect(r.code).toBe(0);
     expect(api.last().query).toEqual({ status: "live", limit: "2" });
     expect(r.json()).toEqual({ echo: { status: "live", limit: "2" } });
+    const filtered = await runCli(["api", "GET", "/api/v1/Account/{auth_id}/Call/", "--param", "status=live", "--json", "--query", "echo.status"], { fetch: api.fetch });
+    expect(filtered.code).toBe(0);
+    expect(filtered.json()).toEqual("live");
   });
 });

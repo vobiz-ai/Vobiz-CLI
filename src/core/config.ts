@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { permissionProblem, writeFileAtomic } from "./atomic.js";
+import { permissionProblem, writeFileAtomicExclusive } from "./fsafe.js";
 import { baseUrlProblem } from "./credentials.js";
 import { VobizError } from "./errors.js";
 import { isUnsafeKey } from "./keys.js";
@@ -71,9 +71,9 @@ function readJson<T>(file: string, schema: z.ZodType<T>, empty: T): T {
   return parsed.data;
 }
 
-/** Exclusive random temp file + rename; the config dir is kept 0700 (see atomic.ts). */
+/** Exclusive random temp file + rename; the config dir is kept 0700 (see fsafe.ts). */
 function writeJsonAtomic(file: string, data: unknown, mode: number): void {
-  writeFileAtomic(file, JSON.stringify(data, null, 2) + "\n", { mode, privateDir: true });
+  writeFileAtomicExclusive(file, JSON.stringify(data, null, 2) + "\n", { mode, overwrite: true, privateDir: true });
 }
 
 export class ConfigStore {

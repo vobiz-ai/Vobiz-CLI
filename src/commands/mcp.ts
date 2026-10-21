@@ -21,12 +21,11 @@ import {
   type MergeResult,
   type Mode,
 } from "../agent/mcp-clients.js";
-import { writeFileAtomic } from "../core/atomic.js";
 import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
 import { REDACTED } from "../core/redact.js";
-import { assertInsideDir, assertNotSymlink, sameContent } from "../core/fsafe.js";
+import { assertInsideDir, assertNotSymlink, backupFile, sameContent, writeFileAtomicExclusive } from "../core/fsafe.js";
 import { isUnsafeKey } from "../core/keys.js";
 
 interface ModeOpts {
@@ -76,7 +75,7 @@ export function literalTokens(text: string): string[] {
 }
 
 /**
- * Writes atomically (exclusive random temp file, no symlink at the destination; see core/atomic.ts), keeping the
+ * Writes atomically (exclusive random temp file, no symlink at the destination; see core/fsafe.ts), keeping the
  * original file's permissions (0600 when the file holds a token). The previous file is kept as <file>.bak, but a
  * token the new file no longer carries is replaced by YOUR_AUTH_TOKEN in the backup, so moving to env-based
  * credentials does not leave the token behind in a stale copy.
@@ -95,10 +94,13 @@ function writeConfig(file: string, text: string, hasSecret: boolean): { backup?:
       scrubbed = true;
     }
     backup = `${file}.bak`;
-    writeFileAtomic(backup, backupText, { mode: literalTokens(backupText).length ? 0o600 : oldMode });
+    const backupMode = literalTokens(backupText).length ? 0o600 : oldMode;
+    // A plain copy keeps the bytes (COPYFILE_EXCL to a random name, then rename); a scrubbed one is written fresh.
+    if (scrubbed) writeFileAtomicExclusive(backup, backupText, { mode: backupMode, overwrite: true });
+    else backupFile(file, backup, backupMode);
     mode = hasSecret ? 0o600 : oldMode;
   }
-  writeFileAtomic(file, text, { mode });
+  writeFileAtomicExclusive(file, text, { mode, overwrite: true, createDir: true });
   return { backup, scrubbed };
 }
 

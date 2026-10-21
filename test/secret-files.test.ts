@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CLIENT_SPECS } from "../src/agent/mcp-clients.js";
-import { writeFileAtomic } from "../src/core/atomic.js";
+import { writeFileAtomicExclusive } from "../src/core/fsafe.js";
 import { ConfigStore } from "../src/core/config.js";
 import { literalTokens } from "../src/commands/mcp.js";
 import { runCli, TEST_AUTH_ID } from "./helpers.js";
@@ -116,7 +116,7 @@ describe.skipIf(!posix)("atomic secret-file writes (S1 #6)", () => {
     symlinkSync(loot, join(dir, "credentials.json"));
     expect(() => new ConfigStore(dir).setProfile("default", { authId: TEST_AUTH_ID, authToken: SECRET })).toThrow(/symbolic link/);
     expect(readFileSync(loot, "utf8")).toBe(empty);
-    expect(() => writeFileAtomic(join(dir, "credentials.json"), "x", { mode: 0o600 })).toThrow(/symbolic link/);
+    expect(() => writeFileAtomicExclusive(join(dir, "credentials.json"), "x", { mode: 0o600, overwrite: true })).toThrow(/symbolic link/);
   });
 
   it("tightens an existing config dir to 0700 on write", () => {

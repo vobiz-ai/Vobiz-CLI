@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: nothing by default, each job asks for what it needs.
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # --ignore-scripts: dependency lifecycle scripts never run in CI (the build runs explicitly below).
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run build
+      # Mocked tests only: no Vobiz credentials are available (or wanted) in CI.
+      - run: npx vitest run
+      - name: Operations are up to date with spec/ (spec drift)
+        run: npm run gen && git diff --exit-code src/generated
+      - name: docs/COMMANDS.md is up to date with the command tree
+        run: |
+          npm run docs:commands
+          git diff --exit-code docs/COMMANDS.md
+          test -z "$(git status --porcelain docs/COMMANDS.md)" || { echo "docs/COMMANDS.md is not committed: run npm run docs:commands"; exit 1; }
+      - name: Completions and man page generate
+        run: npm run build:assets
+      - name: End-to-end smoke (no network, no credentials)
+        env:
+          VOBIZ_NO_UPDATE_CHECK: "1"
+          VOBIZ_CONFIG_DIR: ${{ runner.temp }}/vobiz-config
+        run: |
+          node dist/index.js --version
+          node dist/index.js --help >/dev/null
+          node dist/index.js doctor --offline
+          node dist/index.js api --list >/dev/null
+      - name: Package contents
+        run: npm pack --dry-run
+      - name: Install the packed tarball and run it
+        env:
+          VOBIZ_NO_UPDATE_CHECK: "1"
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          npm install --global --ignore-scripts --prefix "$RUNNER_TEMP/global" "$RUNNER_TEMP"/vobiz-cli-*.tgz
+          "$RUNNER_TEMP/global/bin/vobiz" --version
+      - run: npm audit --omit=dev --audit-level=high
+
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image
+        run: docker build --build-arg VERSION=ci -t vobiz-cli:ci .
+      - name: Run it
+        run: |
+          V=$(node -p "require('./package.json').version")
+          docker run --rm vobiz-cli:ci --version | grep -q "$V"
+          docker run --rm vobiz-cli:ci --help >/dev/null
+          test "$(docker run --rm --entrypoint id vobiz-cli:ci -un)" = node
+          ! docker run --rm --entrypoint sh vobiz-cli:ci -c 'command -v npm'
+
+  sea:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build && npm run build:assets
+      - name: Build the single executable (linux-x64)
+        run: npm run build:sea
+      - name: Run it
+        env:
+          VOBIZ_NO_UPDATE_CHECK: "1"
+        run: |
+          V=$(node -p "require('./package.json').version")
+          "./bin/vobiz-$V-linux-x64" --version | grep -q "$V"
+          "./bin/vobiz-$V-linux-x64" --help >/dev/null
+          (cd bin && sha256sum -c SHA256SUMS)
+
+  # Single, stable status check for the branch ruleset: require "ci" instead of every matrix leg by name.
+  ci:
+    if: always()
+    needs: [test, docker, sea]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: All CI jobs passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needs: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done

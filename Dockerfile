@@ -14,8 +14,8 @@ COPY package.json package-lock.json ./
 # --ignore-scripts: dependency lifecycle scripts never run; the build below is explicit.
 RUN npm ci --ignore-scripts
 COPY . .
-# The optional directories (skills/, completions/, man/) may not exist yet; create them so the runtime COPY succeeds.
-RUN npm run build && npm prune --omit=dev && mkdir -p skills completions man
+# build:assets generates completions/ and man/ from dist/cli.js. skills/ is optional; mkdir keeps the runtime COPY valid.
+RUN npm run build && npm run build:assets && npm prune --omit=dev && mkdir -p skills completions man
 
 FROM node:24-alpine@sha256:6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d
 ARG VERSION=dev

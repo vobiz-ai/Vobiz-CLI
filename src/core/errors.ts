@@ -90,7 +90,7 @@ export function isAmbiguousWriteStatus(status: number): boolean {
 
 /** What to check before retrying a write whose outcome is unknown. */
 export const CHECK_STATE_HINT =
-  "Do NOT retry blindly: check the current state first (`vobiz calls list`, `vobiz cdr recent`, `vobiz sms messages list` or `vobiz account transactions`).";
+  "Do NOT retry blindly: check the current state first (`vobiz calls list`, `vobiz cdr recent`, `vobiz sms messages list` or `vobiz account transactions list`).";
 
 /**
  * Error kind for an HTTP failure. Reads keep the retryable mapping; a write (`sideEffect`) answered with a 5xx or

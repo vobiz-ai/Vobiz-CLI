@@ -142,7 +142,7 @@ Agents should:
 
 - pass `--output json` and read data from stdout; progress and hints go to stderr
 - branch on the [exit code](#exit-codes) and the JSON error `{"error","message","status","retryable"}`
-- never retry exit code `7` (outcome unknown) blindly: check `vobiz calls list`, `vobiz cdr recent`, `vobiz sms messages list` or `vobiz account transactions` first. A 5xx answer to a write is exit `7` too, with `"retryable": false`
+- never retry exit code `7` (outcome unknown) blindly: check `vobiz calls list`, `vobiz cdr recent`, `vobiz sms messages list` or `vobiz account transactions list` first. A 5xx answer to a write is exit `7` too, with `"retryable": false`
 - never repeat `calls create` to "make sure": voice calls have no idempotency key, so check `vobiz calls list --queued` and `vobiz cdr recent` before any retry
 - ask the user before any command that would prompt for confirmation, then re-run it with `--yes`
 

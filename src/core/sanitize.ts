@@ -35,6 +35,16 @@ export function stripTerminalControls(s: string, o: StripOptions = {}): string {
 /** One table or plain-mode cell: line breaks become spaces, then controls are stripped. */
 export const cleanCell = (s: string): string => stripTerminalControls(s.replace(/\r\n|[\r\n\u2028\u2029]/g, " "));
 
+/**
+ * Remote-originated text (request paths, form fields, event names, close reasons, peer error text) for one log
+ * line: line breaks become spaces, escape sequences and controls are removed, and the result is capped at `max`
+ * characters with "…". Used by the local servers (`xml serve`, `webhooks listen`, `streams`, `calls --serve`).
+ */
+export function cleanLogText(value: unknown, max = 200): string {
+  const s = [...cleanCell(String(value ?? ""))];
+  return s.length > max ? `${s.slice(0, Math.max(0, max - 1)).join("")}…` : s.join("");
+}
+
 /** A message line for stderr: newlines kept, everything else stripped. */
 export const cleanMessage = (s: string): string => stripTerminalControls(s.replace(/\r\n/g, "\n"), { keepNewlines: true });
 

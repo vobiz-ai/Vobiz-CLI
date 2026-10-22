@@ -17,8 +17,10 @@
 import { randomUUID } from "node:crypto";
 import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
+import { tryParseIntStrict } from "../core/parse.js";
+import { cleanLogText } from "../core/sanitize.js";
 import { VobizError, usage } from "../core/errors.js";
-import { checkBindHost, checkToken, newToken, parsePort, pathHasToken, requestPath, safeLogText, startServer, untilInterrupted, type LocalServer } from "../agent/http.js";
+import { checkBindHost, checkToken, newToken, parsePort, pathHasToken, requestPath, startServer, untilInterrupted, type LocalServer } from "../agent/http.js";
 import {
   MAX_MESSAGE_BYTES,
   WS_IDLE_TIMEOUT_MS,
@@ -100,10 +102,10 @@ export function checkAppMessage(text: string, streamId: string): Check {
   if (!isRec(msg) || typeof msg.event !== "string") return { errors: ['a JSON object with an "event" string is required'], warnings };
   const event = msg.event;
   if (event === "media" || event === "start") return { event, errors, warnings, message: msg };
-  if (!APP_EVENTS.has(event)) return { event, errors: [`unknown event "${safeLogText(event, 40)}" (Vobiz accepts playAudio, checkpoint, clearAudio and stop)`], warnings, message: msg };
+  if (!APP_EVENTS.has(event)) return { event, errors: [`unknown event "${cleanLogText(event, 40)}" (Vobiz accepts playAudio, checkpoint, clearAudio and stop)`], warnings, message: msg };
   let bytes: number | undefined;
   if (typeof msg.streamId !== "string" || !msg.streamId) errors.push(`${event}: "streamId" is required (use start.streamId)`);
-  else if (msg.streamId !== streamId) errors.push(`${event}: streamId ${safeLogText(msg.streamId, 60)} does not match the stream's ${streamId}`);
+  else if (msg.streamId !== streamId) errors.push(`${event}: streamId ${cleanLogText(msg.streamId, 60)} does not match the stream's ${streamId}`);
   if (event === "checkpoint" && (typeof msg.name !== "string" || !msg.name)) errors.push('checkpoint: "name" is required');
   if (event === "playAudio") {
     const media = msg.media;
@@ -220,7 +222,7 @@ export async function runStreamTest(ctx: Ctx, url: string, o: TestOptions): Prom
   let resolveClosed!: () => void;
   const closedP = new Promise<void>((r) => (resolveClosed = r));
   const count = (name: string) => {
-    let key = safeLogText(name, 40);
+    let key = cleanLogText(name, 40);
     if (!(key in report.events) && Object.keys(report.events).length >= MAX_REPORT_ITEMS) key = "(other)";
     report.events[key] = (report.events[key] ?? 0) + 1;
   };
@@ -274,7 +276,7 @@ export async function runStreamTest(ctx: Ctx, url: string, o: TestOptions): Prom
     if (!closed) report.closed_by = "server";
     closed = true;
     report.close_code = code;
-    if (reason) report.close_reason = safeLogText(reason, 123);
+    if (reason) report.close_reason = cleanLogText(reason, 123);
     resolveClosed();
   });
 
@@ -346,12 +348,12 @@ export function summarize(data: string | Buffer, isBinary: boolean, o: { logSens
     return { line: `text ${data.length} chars (not JSON)` };
   }
   if (!isRec(msg)) return { line: "JSON without an event" };
-  const ev = safeLogText(msg.event ?? "?", 40);
+  const ev = cleanLogText(msg.event ?? "?", 40);
   const media = isRec(msg.media) ? msg.media : undefined;
   const payload = media && typeof media.payload === "string" ? media.payload : "";
   // Decoded size without decoding: 3 bytes per 4 base64 characters, minus padding.
   const bytes = payload ? Math.max(0, Math.floor((payload.length * 3) / 4) - (payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0)) : 0;
-  const str = (v: unknown, max = 60) => safeLogText(v ?? "?", max);
+  const str = (v: unknown, max = 60) => cleanLogText(v ?? "?", max);
   switch (ev) {
     case "start": {
       const s = isRec(msg.start) ? msg.start : {};
@@ -404,7 +406,7 @@ export async function startForwarder(ctx: Ctx, o: ForwardOptions): Promise<Local
   let next = 0;
   const log = (conn: number, dir: string, line: string) => {
     const t = ctx.now().toISOString().slice(11, 23);
-    ctx.stderr.write(`${t} [${conn}] ${dir} ${safeLogText(line, 300)}\n`);
+    ctx.stderr.write(`${t} [${conn}] ${dir} ${cleanLogText(line, 300)}\n`);
   };
   const maxMessageBytes = o.maxMessageBytes ?? MAX_MESSAGE_BYTES;
   const idleTimeoutMs = o.idleTimeoutMs ?? WS_IDLE_TIMEOUT_MS;
@@ -565,7 +567,8 @@ Frame reference: ${STREAM_DOCS}`,
     )
     .action(async (raw: string, opts: { codec: Codec; sampleRate: string; seconds?: number; linger?: number; streamId?: string; callId?: string; allowInsecureUrl?: boolean }) => {
       const url = checkUrl(raw, "<wss-url>", { websocket: true, allowInsecure: opts.allowInsecureUrl });
-      const sampleRate = Number(opts.sampleRate);
+      const sampleRate = tryParseIntStrict(opts.sampleRate, { min: 8000, max: 16000 });
+      if (sampleRate === undefined) throw usage(`--sample-rate must be 8000 or 16000 (got "${opts.sampleRate}").`);
       if (opts.codec === "mulaw" && sampleRate !== 8000) throw usage("μ-law streams are 8000 Hz only; use --codec l16 for 16000.");
       const o: TestOptions = {
         codec: opts.codec,

@@ -13,7 +13,6 @@ import {
   readBody,
   rejectMethod,
   requestPath,
-  safeLogText,
   startServer,
   tunnelHint,
   untilInterrupted,
@@ -21,8 +20,10 @@ import {
 } from "../agent/http.js";
 import { NonceCache, isBodySignature, verifyBody, verifyCallback, verifyRequest, type CallbackVersion, type VerifyResult } from "../agent/webhooks.js";
 import type { Ctx } from "../core/context.js";
+import { cleanLogText } from "../core/sanitize.js";
 import { VobizError } from "../core/errors.js";
 import { rememberSecret } from "../core/redact.js";
+import { WEBHOOK_KEYS, markUntrusted } from "../core/untrusted.js";
 import { checkForwardUrl } from "./voice-shared.js";
 
 function secretFrom(ctx: Ctx, flag: string | undefined, required: boolean): string | undefined {
@@ -126,11 +127,11 @@ export async function startWebhookListener(ctx: Ctx, o: ListenOptions): Promise<
       req.resume();
       res.writeHead(400, { "content-type": "text/plain", connection: "close" });
       res.end("bad request target\n");
-      ctx.out.warn(`refused a request with request-target ${safeLogText(req.url, 80)}`);
+      ctx.out.warn(`refused a request with request-target ${cleanLogText(req.url, 80)}`);
       return;
     }
     if (rejectMethod(req, res)) {
-      ctx.out.warn(`refused a ${safeLogText(req.method, 10)} request (only GET and POST are accepted)`);
+      ctx.out.warn(`refused a ${cleanLogText(req.method, 10)} request (only GET and POST are accepted)`);
       return;
     }
     // DNS-rebinding guard: with --public-url, the Host must be the tunnel's or a loopback name.
@@ -140,7 +141,7 @@ export async function startWebhookListener(ctx: Ctx, o: ListenOptions): Promise<
       req.resume();
       res.writeHead(421, { "content-type": "text/plain", connection: "close" });
       res.end("misdirected request\n");
-      ctx.out.warn(`refused a request for host ${safeLogText(hostHeader, 80)}`);
+      ctx.out.warn(`refused a request for host ${cleanLogText(hostHeader, 80)}`);
       return;
     }
     const raw = await readBody(req);
@@ -160,7 +161,7 @@ export async function startWebhookListener(ctx: Ctx, o: ListenOptions): Promise<
       const sig = verifyRequest(req.headers, signedUrl, raw, o.secret, { scheme: o.scheme, nonces });
       event.signature = sig;
       verified = sig.valid;
-    }
+    } else event.signature = "not_checked"; // no --secret: anyone who knows the URL could have sent this
     let status = 200;
     let reply: Buffer | string = "";
     let replyType = "text/plain";
@@ -168,7 +169,7 @@ export async function startWebhookListener(ctx: Ctx, o: ListenOptions): Promise<
       status = 401;
       reply = "invalid signature\n";
       if (o.forward) event.forwarded = { skipped: "signature not valid" };
-      ctx.out.warn(`refused ${req.method} ${safeLogText(path, 80)}: ${safeLogText((event.signature as VerifyResult).reason ?? "invalid signature")}`);
+      ctx.out.warn(`refused ${req.method} ${cleanLogText(path, 80)}: ${cleanLogText((event.signature as VerifyResult).reason ?? "invalid signature")}`);
     } else if (o.forward) {
       const target = new URL(o.forward);
       u.searchParams.forEach((v, k) => target.searchParams.append(k, v));
@@ -190,21 +191,22 @@ export async function startWebhookListener(ctx: Ctx, o: ListenOptions): Promise<
           // Error pages and redirects stay local: the caller gets the status and a generic body.
           reply = `upstream answered ${status}\n`;
           const text = body === undefined ? `(more than ${MAX_RELAY_BYTES} bytes)` : body.toString("utf8");
-          ctx.out.warn(`your app answered ${status}${text ? `: ${safeLogText(text, 500)}` : ""}`);
+          ctx.out.warn(`your app answered ${status}${text ? `: ${cleanLogText(text, 500)}` : ""}`);
         }
       } catch (e) {
         const timedOut = (e as Error)?.name === "TimeoutError" || (e as Error)?.name === "AbortError";
         status = timedOut ? 504 : 502;
         reply = timedOut ? "forward timed out\n" : "forward failed\n";
         event.forwarded = { url: target.toString(), error: timedOut ? `no answer within ${(o.forwardTimeoutMs ?? FORWARD_TIMEOUT_MS) / 1000}s` : (e as Error).message };
-        ctx.out.warn(`could not forward to ${target.origin}: ${safeLogText(timedOut ? "timed out" : (e as Error).message)}`);
+        ctx.out.warn(`could not forward to ${target.origin}: ${cleanLogText(timedOut ? "timed out" : (e as Error).message)}`);
       }
     }
-    ctx.stdout.write(JSON.stringify(event, null, 2) + "\n");
+    // Everything in the request came from the network: name those keys so an agent reading stdout treats them as data.
+    ctx.stdout.write(JSON.stringify(markUntrusted(event, WEBHOOK_KEYS), null, 2) + "\n");
     res.writeHead(status, { "content-type": replyType, "x-content-type-options": "nosniff" });
     res.end(reply);
   };
-  return startServer(handler, { port: o.port, host: o.host, onError: (e) => ctx.out.warn(`webhooks listen: ${safeLogText((e as Error)?.message ?? e)}`) });
+  return startServer(handler, { port: o.port, host: o.host, onError: (e) => ctx.out.warn(`webhooks listen: ${cleanLogText((e as Error)?.message ?? e)}`) });
 }
 
 export function register(program: Command, ctx: Ctx): void {

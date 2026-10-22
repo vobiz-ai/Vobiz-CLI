@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Printer } from "../src/core/output.js";
-import { cleanCell, stripTerminalControls, tsvCell } from "../src/core/sanitize.js";
+import { cleanCell, cleanLogText, stripTerminalControls, tsvCell } from "../src/core/sanitize.js";
 import { renderTable } from "../src/core/table.js";
 import { capture, fakeFetch, reply, runCli } from "./helpers.js";
 
@@ -69,6 +69,14 @@ describe("human output is sanitised; json stays verbatim", () => {
     expect(r.code).toBe(2);
     expect(r.err).toContain("bad input");
     expect(r.err).not.toContain(ESC);
+  });
+});
+
+describe("cleanLogText for the local servers (S5 #8)", () => {
+  it("removes sequences and line breaks and caps the length", () => {
+    expect(cleanLogText(`GET /x${ESC}]0;pwned${ESC}\\\r\nforged: line`)).toBe("GET /x forged: line");
+    expect(cleanLogText("a".repeat(50), 10)).toBe(`${"a".repeat(9)}…`);
+    expect(cleanLogText(undefined)).toBe("");
   });
 });
 

@@ -9,11 +9,12 @@
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { logPath, newToken, notFound, rejectMethod, requestPath, safeLogText, startServer, type LocalServer } from "../agent/http.js";
+import { logPath, newToken, notFound, rejectMethod, requestPath, startServer, type LocalServer } from "../agent/http.js";
 import { Option, type Command } from "commander";
 import { escapeXml as escapeXmlText } from "../agent/xml.js";
 import { requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
+import { cleanLogText } from "../core/sanitize.js";
 import { VobizError, usage } from "../core/errors.js";
 import { op } from "../core/ops.js";
 import { toE164 } from "../core/phone.js";
@@ -148,7 +149,7 @@ async function serveXml(ctx: Ctx, xml: string, port: number, o: { path?: string;
   return startServer(
     (req, res) => {
       const path = requestPath(req.url)?.replace(/\/+$/, "");
-      const shown = `${safeLogText(req.method, 10)} ${logPath(req.url, o.token)} from ${safeLogText(req.socket.remoteAddress ?? "?", 60)}`;
+      const shown = `${cleanLogText(req.method, 10)} ${logPath(req.url, o.token)} from ${cleanLogText(req.socket.remoteAddress ?? "?", 60)}`;
       if (path === undefined || (want !== undefined && path !== want)) {
         ctx.out.status(`answer server: ${shown} → 404`);
         return notFound(req, res);
@@ -159,7 +160,7 @@ async function serveXml(ctx: Ctx, xml: string, port: number, o: { path?: string;
       res.writeHead(200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
       res.end(xml);
     },
-    { port, host: "127.0.0.1", onError: (e) => ctx.out.warn(`answer server: ${safeLogText((e as Error)?.message ?? e)}`) },
+    { port, host: "127.0.0.1", onError: (e) => ctx.out.warn(`answer server: ${cleanLogText((e as Error)?.message ?? e)}`) },
   );
 }
 

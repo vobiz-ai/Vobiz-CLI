@@ -1,7 +1,7 @@
 /**
  * Small helpers for the local development servers (`xml serve`, `webhooks listen`, `streams forward`,
  * `calls create --serve`): start a node:http server with connection caps and timeouts, read request bodies, decode
- * form/JSON payloads, guard the bind address and URL path tokens, sanitise remote text before it reaches a terminal,
+ * form/JSON payloads, guard the bind address and URL path tokens, sanitise remote text before it reaches a terminal (core/sanitize.ts),
  * and wait for Ctrl-C.
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -10,6 +10,7 @@ import type { AddressInfo } from "node:net";
 import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
 import { tryParseIntStrict } from "../core/parse.js";
+import { cleanLogText } from "../core/sanitize.js";
 
 export interface LocalServer {
   server: Server;
@@ -27,23 +28,6 @@ export const MAX_BODY_BYTES = 256 * 1024;
 export const MAX_CONNECTIONS = 64;
 /** Default idle timeout for a local server's sockets. */
 export const IDLE_TIMEOUT_MS = 30_000;
-
-/**
- * Makes remote-originated text safe to print to a terminal: removes ANSI/OSC escape sequences, replaces every other
- * C0/C1 control character and DEL with `?`, and caps the length. Use it for anything a caller sent (paths, form
- * fields, event names, close reasons) before it goes to stderr or a table.
- */
-export function safeLogText(value: unknown, max = 200): string {
-  let s = String(value ?? "");
-  s = s
-    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g, "") // OSC … BEL / ST
-    .replace(/\x1b[P^_][^\x1b]*(?:\x1b\\)?/g, "") // DCS, PM, APC … ST
-    .replace(/\x1b\[[0-?]*[ -/]*[@-~]?/g, "") // CSI
-    .replace(/\x9b[0-?]*[ -/]*[@-~]?/g, "") // 8-bit CSI
-    .replace(/\x1b[ -/]*[0-~]?/g, "") // other ESC sequences
-    .replace(/[\x00-\x1f\x7f-\x9f]/g, "?");
-  return s.length > max ? `${s.slice(0, Math.max(0, max - 1))}…` : s;
-}
 
 const LOOPBACK_NAMES = new Set(["localhost", "::1", "[::1]", "ip6-localhost"]);
 /** True for a loopback bind address or Host name (127.0.0.0/8, ::1, localhost). */
@@ -95,13 +79,13 @@ export function pathHasToken(path: string | undefined, token: string): boolean {
 export function logPath(target: string | undefined, token?: string): string {
   let t = target ?? "";
   if (token) t = t.split(token).join("…");
-  return safeLogText(t, 120);
+  return cleanLogText(t, 120);
 }
 
 /** Masks a value from a caller (DTMF digits, speech, phone numbers) for logs, keeping only a hint of its shape. */
 export function maskSensitive(key: string, value: unknown): string {
   const v = String(value ?? "");
-  if (/^(from|to|caller|callee|forwardedfrom|number)$/i.test(key)) return v.length > 4 ? `${"*".repeat(Math.min(v.length - 4, 12))}${safeLogText(v.slice(-4), 4)}` : "****";
+  if (/^(from|to|caller|callee|forwardedfrom|number)$/i.test(key)) return v.length > 4 ? `${"*".repeat(Math.min(v.length - 4, 12))}${cleanLogText(v.slice(-4), 4)}` : "****";
   return `<${v.length} chars hidden>`;
 }
 

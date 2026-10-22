@@ -18,7 +18,6 @@ import {
   readBody,
   rejectMethod,
   requestPath,
-  safeLogText,
   startServer,
   tunnelHint,
   untilInterrupted,
@@ -26,6 +25,7 @@ import {
 } from "../agent/http.js";
 import { applyAttr, attrNamesFor, buildResponseXml, validateXml, type XmlAction, type XmlIssue } from "../agent/xml.js";
 import type { Ctx } from "../core/context.js";
+import { cleanLogText } from "../core/sanitize.js";
 import { EXIT, VobizError } from "../core/errors.js";
 
 type Draft = Record<string, unknown> & { type: XmlAction["type"] };
@@ -101,11 +101,11 @@ export async function startXmlServer(ctx: Ctx, file: string, opts: XmlServeOptio
     const shown = logPath(req.url, opts.token);
     const path = requestPath(req.url);
     if (!path || (opts.token && !pathHasToken(path, opts.token))) {
-      ctx.out.status(`${safeLogText(req.method, 10)} ${shown}  → 404 (${opts.token ? "missing or wrong path token" : "not a path"})`);
+      ctx.out.status(`${cleanLogText(req.method, 10)} ${shown}  → 404 (${opts.token ? "missing or wrong path token" : "not a path"})`);
       return notFound(req, res);
     }
     if (rejectMethod(req, res)) {
-      ctx.out.status(`${safeLogText(req.method, 10)} ${shown}  → 405`);
+      ctx.out.status(`${cleanLogText(req.method, 10)} ${shown}  → 405`);
       return;
     }
     const raw = await readBody(req);
@@ -113,7 +113,7 @@ export async function startXmlServer(ctx: Ctx, file: string, opts: XmlServeOptio
     const query = Object.fromEntries(new URL(req.url ?? "/", "http://localhost").searchParams);
     const fields: Record<string, unknown> = { ...query, ...(params && typeof params === "object" ? (params as Record<string, unknown>) : {}) };
     const keys = LOGGED_FIELDS.filter((k) => fields[k]);
-    const show = (k: string) => (SENSITIVE_FIELDS.has(k) && !opts.logSensitive ? maskSensitive(k, fields[k]) : safeLogText(fields[k], 80));
+    const show = (k: string) => (SENSITIVE_FIELDS.has(k) && !opts.logSensitive ? maskSensitive(k, fields[k]) : cleanLogText(fields[k], 80));
     ctx.out.status(`${req.method} ${shown}${keys.length ? "  " + keys.map((k) => `${k}=${show(k)}`).join(" ") : ""}`);
     let xml: string;
     try {
@@ -129,7 +129,7 @@ export async function startXmlServer(ctx: Ctx, file: string, opts: XmlServeOptio
     res.writeHead(200, { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
     res.end(xml);
   };
-  const server = await startServer(handler, { port: opts.port, host: opts.host, onError: (e) => ctx.out.warn(`xml serve: ${safeLogText((e as Error)?.message ?? e)}`) });
+  const server = await startServer(handler, { port: opts.port, host: opts.host, onError: (e) => ctx.out.warn(`xml serve: ${cleanLogText((e as Error)?.message ?? e)}`) });
   return opts.token ? { ...server, url: `${server.url}/${opts.token}` } : server;
 }
 

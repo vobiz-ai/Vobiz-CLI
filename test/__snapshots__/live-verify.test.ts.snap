@@ -1,0 +1,131 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`live-verify planner > --dry-run prints a stable plan with no forbidden command 1`] = `
+"identity     read   vobiz whoami --check
+identity     read   vobiz doctor
+identity     read   vobiz config list
+account      read   vobiz account show
+account      read   vobiz account balance
+account      read   vobiz account concurrency
+account      read   vobiz account transactions list --limit 3
+account      read   vobiz account transactions types
+account      read   vobiz account channel-pricing --type cps --quantity 1
+partner      read   vobiz partner me   [expect exit 3]
+partner      read   vobiz partner dashboard   [expect exit 3]
+numbers      read   vobiz numbers list --all
+numbers      read   vobiz numbers get <number>
+numbers      read   vobiz numbers health <number>
+numbers      read   vobiz numbers search --country US --limit 3
+numbers      read   vobiz numbers update <number> --unlink-app --dry-run
+numbers      write  vobiz numbers update <number> --unlink-app --yes
+numbers      read   vobiz numbers get <number>
+numbers      write  vobiz numbers update <number> --app <number-app> --yes
+numbers      read   vobiz numbers get <number>
+apps         sweep  vobiz apps list --all   [then deletes matches]
+apps         read   vobiz apps list --limit 5
+apps         read   vobiz apps get <existing-app>
+apps         write  vobiz apps create --app-name cli-verify-app --answer-url https://example.com/cli-verify/answer --answer-method POST --hangup-url https://example.com/cli-verify/hangup --hangup-method POST --yes   [undo: app]
+apps         read   vobiz apps get <app>
+apps         write  vobiz apps update <app> --app-name cli-verify-app-2 --no-default-number-app --answer-url https://example.com/cli-verify/answer2 --answer-method GET --hangup-url https://example.com/cli-verify/hangup2 --hangup-method GET --yes
+apps         write  vobiz apps update <app> --body {"answer_url":"https://example.com/cli-verify/answer3"} --yes
+apps         read   vobiz apps update <app> --answer-url https://example.com/cli-verify/answer4 --yes   [expect exit 2]
+apps         write  vobiz apps delete <app> --yes
+apps         read   vobiz apps get <app>   [expect exit 4]
+trunks       sweep  vobiz trunks list --all   [then deletes matches]
+trunks       sweep  vobiz trunks origination-uris list --all   [then deletes matches]
+trunks       sweep  vobiz trunks credentials list --all   [then deletes matches]
+trunks       read   vobiz trunks list --limit 5
+trunks       read   vobiz trunks get <existing-trunk>
+trunks       read   vobiz trunks credentials list
+trunks       read   vobiz trunks ip-acl list
+trunks       read   vobiz trunks origination-uris list
+trunks       write  vobiz trunks credentials create --username cliverify01 --password @$TMP/pw1 --yes   [undo: cred]
+trunks       write  vobiz trunks credentials update <cred> --password @$TMP/pw2 --yes
+trunks       write  vobiz trunks create --name cli-verify-trunk --trunk-direction outbound --trunk-status enabled --transport udp --credential-uuid <cred> --yes   [undo: trunk]
+trunks       write  vobiz trunks update <trunk> --name cli-verify-trunk-2 --description cli-verify-2 --trunk-status disabled --cps-limit 2 --yes
+trunks       read   vobiz trunks get <trunk>
+trunks       write  vobiz trunks update <trunk> --body {"description":"cli-verify-3"} --yes
+trunks       write  vobiz trunks delete <trunk> --yes
+trunks       read   vobiz trunks get <trunk>   [expect exit 4]
+trunks       write  vobiz trunks credentials delete <cred> --yes
+trunks       write  vobiz trunks ip-acl create --name cli-verify-acl --ip-address 203.0.113.10/32 --yes   [expect exit 2, undo: acl]
+trunks       write  vobiz trunks origination-uris create --name cli-verify-uri --sip-uri sip:cli-verify.example.com --priority 1 --yes   [undo: uri]
+trunks       write  vobiz trunks origination-uris update <uri> --name cli-verify-uri --priority 3 --body {"uri":"sip:cli-verify.example.com","description":"cli-verify-uri"} --yes
+trunks       write  vobiz trunks origination-uris delete <uri> --yes
+endpoints    sweep  vobiz endpoints list --all   [then deletes matches]
+endpoints    sweep  vobiz apps list --all   [then deletes matches]
+endpoints    read   vobiz endpoints list --limit 5
+endpoints    write  vobiz apps create --app-name cli-verify-ep-app --answer-url https://example.com/cli-verify/answer --answer-method POST --yes   [undo: epApp]
+endpoints    write  vobiz endpoints create --username cliverifyep01 --password @$TMP/ep-pw --alias cli-verify-endpoint --body {"application":"<ep-app>"} --yes   [undo: ep]
+endpoints    read   vobiz endpoints get <ep>
+endpoints    write  vobiz endpoints update <ep> --alias cli-verify-endpoint-2 --password @$TMP/ep-pw --body {"app_id":"<ep-app>"} --yes
+endpoints    write  vobiz endpoints delete <ep> --yes
+endpoints    read   vobiz endpoints get <ep>   [expect exit 4]
+endpoints    write  vobiz apps delete <ep-app> --yes
+sub-accounts sweep  vobiz sub-accounts list --all   [then deletes matches]
+sub-accounts read   vobiz sub-accounts list --limit 5
+sub-accounts read   vobiz sub-accounts get <existing-sa>
+sub-accounts write  vobiz sub-accounts create --name cli-verify-sub --kyc-mode customer_use --email cli-verify@example.com --business-type private_limited --yes   [undo: sa]
+sub-accounts write  vobiz sub-accounts update <sa> --name cli-verify-sub-2 --yes
+sub-accounts read   vobiz sub-accounts update <sa> --no-enabled --dry-run
+sub-accounts read   vobiz sub-accounts kyc status <sa>
+sub-accounts write  vobiz sub-accounts kyc --test verify-pan <sa> --pan TESTSUCCESS0001 --yes   [expect exit 4]
+sub-accounts write  vobiz sub-accounts delete <sa> --yes
+sub-accounts read   vobiz sub-accounts get <sa>   [expect exit 4]
+calls        read   vobiz calls list
+calls        read   vobiz calls list --queued
+calls        read   vobiz conferences list
+calls        read   vobiz recordings list --limit 3
+calls        read   vobiz recordings get <rec>
+calls        read   vobiz recordings download <rec> --out $TMP/r.wav
+calls        read   vobiz cdr list --limit 2
+calls        read   vobiz cdr recent --limit 2
+calls        read   vobiz cdr get <cdr>
+calls        read   vobiz cdr search --from 7d --direction inbound --limit 2
+calls        read   vobiz cdr export --from yesterday --out $TMP/cdr.csv
+calls        read   vobiz diagnose call <cdr>
+sms          sweep  vobiz sms webhooks list   [then deletes matches]
+sms          sweep  vobiz sms broadcasts list --all   [then deletes matches]
+sms          sweep  vobiz sms opt-outs list --all   [then deletes matches]
+sms          read   vobiz sms numbers list
+sms          read   vobiz sms numbers countries
+sms          read   vobiz sms numbers search --country US --limit 2
+sms          read   vobiz sms coverage list
+sms          read   vobiz sms coverage get GB
+sms          read   vobiz sms messages list --limit 2
+sms          read   vobiz sms messages get <msg>
+sms          read   vobiz diagnose message <msg>
+sms          read   vobiz sms conversations list --limit 2
+sms          read   vobiz sms conversations unread-count
+sms          read   vobiz sms opt-outs list
+sms          read   vobiz sms opt-outs check <sms-number>
+sms          write  vobiz sms opt-outs add <sms-number> --reason cli-verify --yes   [undo: optout]
+sms          read   vobiz sms opt-outs check <sms-number>
+sms          write  vobiz sms opt-outs remove <sms-number> --yes
+sms          read   vobiz sms opt-outs check <sms-number>
+sms          read   vobiz sms webhooks list
+sms          write  vobiz sms webhooks create --url https://example.com/cli-verify --secret @$TMP/wh-secret --yes   [undo: wh]
+sms          write  vobiz sms webhooks update <wh> --no-active --url https://example.com/cli-verify/2 --event message.failed --yes
+sms          read   vobiz sms webhooks get <wh>
+sms          write  vobiz sms webhooks delete <wh> --yes
+sms          read   vobiz sms broadcasts list --limit 5
+sms          read   vobiz sms broadcasts get <existing-bc>
+sms          write  vobiz sms broadcasts create --name cli-verify-broadcast --from <sms-number> --template cli-verify draft, never launched --rate 1 --tag cli-verify --yes   [undo: bc]
+sms          write  vobiz sms broadcasts update <bc> --name cli-verify-broadcast-2 --schedule-at +1d --yes
+sms          write  vobiz sms broadcasts update <bc> --clear-schedule --yes
+sms          read   vobiz sms broadcasts preview <bc>
+sms          write  vobiz sms broadcasts delete <bc> --yes
+sms          read   vobiz sms broadcasts get <bc>   [expect exit 4]
+sms          read   vobiz sms senders list
+sms          read   vobiz sms 10dlc brands list
+sms          read   vobiz sms 10dlc campaigns list
+sms          read   vobiz sms 10dlc campaigns priorities
+local        read   vobiz api --list --tag Trunks
+local        read   vobiz api --describe make-call
+local        read   vobiz api GET /api/v1/auth/me
+local        read   vobiz xml build --say cli-verify --hangup
+local        read   vobiz completion bash
+local        read   vobiz skills list
+local        read   vobiz docs search gather speech input --limit 3
+local        read   vobiz mcp config cursor"
+`;

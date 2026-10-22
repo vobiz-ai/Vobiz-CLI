@@ -110,10 +110,77 @@ jobs:
           "./bin/vobiz-$V-linux-x64" --help >/dev/null
           (cd bin && sha256sum -c SHA256SUMS)
 
+  # Windows 11 users run the npm package (Node 24) or the SEA binary; both are built and run here. The release
+  # workflow builds the same binary on windows-2022, so a failure here would also break a release.
+  windows:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      VOBIZ_NO_UPDATE_CHECK: "1"
+    steps:
+      # LF checkout: snapshots, spec/*.yaml and skills/** are compared byte for byte, and the repo has no .gitattributes.
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      # Mocked tests only, as on Linux; POSIX-only checks (file modes, symlinks) skip themselves on win32.
+      - run: npx vitest run
+      - name: End-to-end smoke (no network, no credentials)
+        env:
+          VOBIZ_CONFIG_DIR: ${{ runner.temp }}\vobiz-config
+        run: |
+          node dist/index.js --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node dist/index.js doctor --offline
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node dist/index.js --help | Out-Null
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          # A usage error must surface as exit code 2 in PowerShell too.
+          node dist/index.js numbers lst 2>$null
+          if ($LASTEXITCODE -ne 2) { Write-Error "expected exit code 2, got $LASTEXITCODE"; exit 1 }
+          exit 0
+      - name: Completions and man page generate
+        run: npm run build:assets
+      # Parse (never run) the generated completion script and the installer in PowerShell 7 and Windows PowerShell 5.1.
+      - name: PowerShell scripts parse (pwsh 7)
+        run: |
+          [scriptblock]::Create((Get-Content -Raw completions/vobiz.ps1)) | Out-Null
+          [scriptblock]::Create((Get-Content -Raw install.ps1)) | Out-Null
+          [scriptblock]::Create((node dist/index.js completion powershell | Out-String)) | Out-Null
+      - name: PowerShell scripts parse (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [scriptblock]::Create((Get-Content -Raw completions/vobiz.ps1)) | Out-Null
+          [scriptblock]::Create((Get-Content -Raw install.ps1)) | Out-Null
+      - name: Build the single executable (win-x64)
+        run: npm run build:sea
+      - name: Run it
+        run: |
+          $V = node -p "require('./package.json').version"
+          $exe = ".\bin\vobiz-$V-win-x64.exe"
+          $out = & $exe --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ("$out" -notlike "*$V*") { Write-Error "unexpected --version output: $out"; exit 1 }
+          & $exe --help | Out-Null
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if (-not (Test-Path ".\bin\vobiz-$V-win-x64.zip")) { Write-Error "missing the release zip"; exit 1 }
+
   # Single, stable status check for the branch ruleset: require "ci" instead of every matrix leg by name.
   ci:
     if: always()
-    needs: [test, docker, sea]
+    needs: [test, docker, sea, windows]
     runs-on: ubuntu-latest
     permissions: {}
     steps:

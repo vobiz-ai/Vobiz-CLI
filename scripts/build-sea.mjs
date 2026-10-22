@@ -196,7 +196,12 @@ function toolBin(pkgName, expected, binName) {
 }
 /** Runs a pinned tool's JS entry with this node (no shell, so no quoting issues on Windows). */
 function tool(bin, argv) {
-  execFileSync(process.execPath, [bin, ...argv], { stdio: "inherit", cwd: root });
+  // esbuild's postinstall replaces its JS shim with the native executable (unless npm ran with --ignore-scripts),
+  // so look at the file: a script starts with "#!" or plain text and runs under node; a native binary runs directly.
+  const head = readFileSync(bin).subarray(0, 2);
+  const isScript = head.toString("latin1") === "#!" || (head[0] < 0x80 && head[1] < 0x80);
+  if (isScript) execFileSync(process.execPath, [bin, ...argv], { stdio: "inherit", cwd: root });
+  else execFileSync(bin, argv, { stdio: "inherit", cwd: root });
 }
 function hasCommand(cmd) {
   try {

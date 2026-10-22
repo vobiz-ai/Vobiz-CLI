@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { bundledSkills } from "../src/commands/skills.js";
 import { bundledSkillsDir } from "../src/core/bundled.js";
@@ -68,6 +68,16 @@ describe("skills install", () => {
     expect(dry.code).toBe(0);
     expect(dry.err).toContain("[dry-run] Install 15 Vobiz skills");
     expect(existsSync(dir)).toBe(false);
+  });
+
+  it("expands a leading ~ in --dir, which cmd.exe and Windows PowerShell 5.1 pass through literally", async () => {
+    const { resolveSkillsDir } = await import("../src/commands/skills.js");
+    const { homedir } = await import("node:os");
+    expect(resolveSkillsDir("~/.claude/skills")).toBe(join(homedir(), ".claude", "skills"));
+    expect(resolveSkillsDir("~\\.claude\\skills")).toBe(process.platform === "win32" ? join(homedir(), ".claude", "skills") : join(homedir(), "\\.claude\\skills"));
+    expect(resolveSkillsDir("~")).toBe(homedir());
+    expect(resolveSkillsDir("~user/skills")).toBe(resolve("~user/skills"));
+    expect(resolveSkillsDir("a/~/b")).toBe(resolve("a/~/b"));
   });
 
   it("rejects unknown skill names", async () => {

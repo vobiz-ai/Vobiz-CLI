@@ -5,6 +5,7 @@
  */
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import type { Command } from "commander";
 import { requireConfirmation } from "../core/confirm.js";
@@ -14,6 +15,14 @@ import { VobizError } from "../core/errors.js";
 /** The skills/ folder shipped with the package, or the unpacked assets inside a single-executable build. */
 import { bundledSkillsDir } from "../core/bundled.js";
 export const DEFAULT_SKILLS_DIR = ".claude/skills";
+
+/**
+ * Resolves --dir, expanding a leading `~` to the home directory: cmd.exe and Windows PowerShell 5.1 pass `~` through
+ * literally, so `--dir ~/.claude/skills` would otherwise create a folder named `~` in the current directory.
+ */
+export function resolveSkillsDir(dir: string): string {
+  return resolve(/^~(?=$|[\\/])/.test(dir) ? join(homedir(), dir.slice(1)) : dir);
+}
 
 export interface SkillInfo {
   name: string;
@@ -93,7 +102,7 @@ export function plan(skills: SkillInfo[], dir: string, verb: "install" | "update
 }
 
 async function apply(ctx: Ctx, verb: "install" | "update", opts: { dir?: string; only?: string[] }): Promise<void> {
-  const dir = resolve(opts.dir ?? DEFAULT_SKILLS_DIR);
+  const dir = resolveSkillsDir(opts.dir ?? DEFAULT_SKILLS_DIR);
   const all = bundledSkills();
   const rows = plan(selected(all, opts.only), dir, verb);
   const todo = rows.filter((r) => r.status === "install" || r.status === "update");
@@ -135,7 +144,7 @@ export function register(program: Command, ctx: Ctx): void {
       const rows = all.map((s) => {
         const row: Record<string, string> = { name: s.name, version: s.version, description: s.description };
         if (opts.dir) {
-          const st = plan([s], resolve(opts.dir), "update")[0].status;
+          const st = plan([s], resolveSkillsDir(opts.dir), "update")[0].status;
           row.installed = st === "not installed" ? "no" : st === "up to date" ? "yes" : "outdated";
         }
         return row;

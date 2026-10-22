@@ -71,12 +71,26 @@
     Write-Host 'vobiz-install: checksum verified'
 
     # Build provenance: optional with `gh`, mandatory with VOBIZ_REQUIRE_ATTESTATION=1.
+    # Windows PowerShell 5.1 turns a native command's redirected stderr into an error record, which
+    # $ErrorActionPreference = 'Stop' makes terminating (`gh auth status` always writes to stderr). Run gh with
+    # 'Continue' and judge it by its exit code only.
     $gh = Get-Command gh -ErrorAction SilentlyContinue
     $ghReady = $false
-    if ($gh) { & gh auth status *> $null; $ghReady = ($LASTEXITCODE -eq 0) }
+    $verified = 1
+    if ($gh) {
+      $eap = $ErrorActionPreference
+      $ErrorActionPreference = 'Continue'
+      try {
+        & gh auth status *> $null
+        $ghReady = ($LASTEXITCODE -eq 0)
+        if ($ghReady) {
+          & gh attestation verify (Join-Path $tmp $asset) --repo $Repo --signer-workflow "$Repo/.github/workflows/release.yml" --source-ref "refs/tags/v$version" --deny-self-hosted-runners *> $null
+          $verified = $LASTEXITCODE
+        }
+      } finally { $ErrorActionPreference = $eap }
+    }
     if ($ghReady) {
-      & gh attestation verify (Join-Path $tmp $asset) --repo $Repo --signer-workflow "$Repo/.github/workflows/release.yml" --source-ref "refs/tags/v$version" --deny-self-hosted-runners *> $null
-      if ($LASTEXITCODE -ne 0) { Fail "gh attestation verify failed for ${asset}: it was not built by ${Repo}'s release workflow from v$version" }
+      if ($verified -ne 0) { Fail "gh attestation verify failed for ${asset}: it was not built by ${Repo}'s release workflow from v$version" }
       Write-Host 'vobiz-install: build provenance verified (gh attestation)'
     } elseif ($env:VOBIZ_REQUIRE_ATTESTATION -eq '1') {
       Fail 'VOBIZ_REQUIRE_ATTESTATION=1 needs the GitHub CLI (gh), signed in, to verify the build provenance'

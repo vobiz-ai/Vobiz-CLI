@@ -327,7 +327,9 @@ Register-ArgumentCompleter -Native -CommandName 'vobiz', 'vobiz.exe' -ScriptBloc
     }
 }
 `;
-  writeFileSync(join(outDir, "vobiz.ps1"), ps);
+  // UTF-8 with a BOM: Windows PowerShell 5.1 reads a BOM-less script in the ANSI code page, which garbles the
+  // non-ASCII descriptions (and can turn a UTF-8 byte into a quote character). PowerShell 7 accepts either.
+  writeFileSync(join(outDir, "vobiz.ps1"), "\uFEFF" + ps);
 }
 
 process.stderr.write(`wrote completions for ${nodes.length} commands to completions/\n`);

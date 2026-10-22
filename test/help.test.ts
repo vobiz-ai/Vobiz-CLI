@@ -54,5 +54,11 @@ describe("completion", () => {
     expect(r.code).toBe(0);
     expect(r.out.startsWith("#compdef vobiz")).toBe(true);
     expect((await runCli(["completion", "tcsh"])).code).toBe(2);
+    // Windows PowerShell 5.1 decodes piped output in the console code page: keep the script ASCII, and never
+    // suggest `>> $PROFILE`, which appends UTF-16 to a UTF-8 profile in 5.1.
+    const ps = completionScript("powershell", program);
+    expect(ps).toMatch(/^[\x00-\x7f]*$/);
+    expect(ps).not.toContain(">> $PROFILE");
+    expect((await runCli(["completion", "--help"])).out).toContain("| Out-String | Invoke-Expression");
   });
 });

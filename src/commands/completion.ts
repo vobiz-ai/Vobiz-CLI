@@ -137,7 +137,7 @@ export function powershellScript(root: CommandNode): string {
   const table = all
     .map((e) => `  ${psq(e.key)} = @(${[...e.subs.map((s) => s.name), ...e.flags.map((f) => f.name)].map(psq).join(", ")})`)
     .join("\n");
-  return `# PowerShell completion for vobiz. Install: vobiz completion powershell >> $PROFILE
+  return `# PowerShell completion for vobiz. Load it: vobiz completion powershell | Out-String | Invoke-Expression (add that line to $PROFILE to keep it)
 $__vobizTree = @{
 ${table}
 }
@@ -180,7 +180,7 @@ export function register(program: Command, ctx: Ctx): void {
     .argument("<shell>", SHELLS.join(" | "))
     .addHelpText(
       "after",
-      "\nInstall:\n  bash        vobiz completion bash > ~/.local/share/bash-completion/completions/vobiz\n  zsh         vobiz completion zsh > \"${fpath[1]}/_vobiz\"\n  fish        vobiz completion fish > ~/.config/fish/completions/vobiz.fish\n  powershell  vobiz completion powershell >> $PROFILE",
+      "\nInstall:\n  bash        vobiz completion bash > ~/.local/share/bash-completion/completions/vobiz\n  zsh         vobiz completion zsh > \"${fpath[1]}/_vobiz\"\n  fish        vobiz completion fish > ~/.config/fish/completions/vobiz.fish\n  powershell  vobiz completion powershell | Out-String | Invoke-Expression   (add this line to $PROFILE)",
     )
     .action((shell: string) => {
       if (!(SHELLS as readonly string[]).includes(shell)) throw new VobizError("invalid_input", `Unsupported shell "${shell}". Use ${SHELLS.join(", ")}.`);

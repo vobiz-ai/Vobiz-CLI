@@ -6,7 +6,13 @@
 import type { Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { op } from "../core/ops.js";
-import { crud, examples } from "./provisioning-shared.js";
+import { crud, examples, type FlagAlias } from "./provisioning-shared.js";
+
+/** The API reads `uri` and `description`; `sip_uri` and `name` are accepted with 200 but ignored (live 2026-10-22). */
+const ORIGINATION_URI_ALIASES: FlagAlias[] = [
+  { flag: "sip-uri", to: "uri", deprecated: true, description: "SIP URI of the destination." },
+  { flag: "name", to: "description", deprecated: true, description: "Label for the origination URI." },
+];
 
 export function register(program: Command, ctx: Ctx): void {
   const trunks = program.command("trunks").description("SIP trunks, their credentials, IP access-control lists and origination URIs");
@@ -16,8 +22,12 @@ export function register(program: Command, ctx: Ctx): void {
       "vobiz trunks list",
       "vobiz trunks credentials create --username pbx_01 --password @pbx_01.pass   # or --password @- to read stdin",
       "vobiz trunks create --name 'Office PBX' --trunk-direction outbound --credential-uuid <credential-id>",
-      "vobiz trunks origination-uris create --name primary --sip-uri sip:pbx.example.com --priority 1",
+      "vobiz trunks origination-uris create --uri sip:pbx.example.com --description primary --priority 1",
     ),
+  );
+  trunks.addHelpText(
+    "after",
+    "\nTrunk status: --trunk-status takes enabled or disabled; list and get report them as active and suspended.",
   );
 
   crud(trunks, ctx, {
@@ -68,7 +78,8 @@ export function register(program: Command, ctx: Ctx): void {
     update: op("update-ip-acl"),
     delete: op("delete-ip-acl"),
     summaryKeys: ["name", "ip_address"],
-    createExamples: ["vobiz trunks ip-acl create --name office --ip-address 203.0.113.0/24"],
+    // The API refuses documentation-only ranges such as 203.0.113.0/24: use your SBC's public address.
+    createExamples: ["vobiz trunks ip-acl create --name office --ip-address <your-public-ip>/32   # the label comes back as description"],
   });
 
   const uris = trunks.command("origination-uris").description("Origination URIs: the SIP destinations inbound trunk calls are sent to");
@@ -82,7 +93,9 @@ export function register(program: Command, ctx: Ctx): void {
     create: op("create-origination-uri"),
     update: op("update-origination-uri"),
     delete: op("delete-origination-uri"),
-    summaryKeys: ["name", "sip_uri", "priority"],
-    createExamples: ["vobiz trunks origination-uris create --name primary --sip-uri sip:pbx.example.com:5060 --priority 1"],
+    summaryKeys: ["uri", "description", "priority"],
+    aliases: ORIGINATION_URI_ALIASES,
+    createExamples: ["vobiz trunks origination-uris create --uri sip:pbx.example.com:5060 --description primary --priority 1"],
+    updateExamples: ["vobiz trunks origination-uris update <uri-id> --priority 2", "vobiz trunks origination-uris update <uri-id> --uri sip:pbx2.example.com --description backup"],
   });
 }

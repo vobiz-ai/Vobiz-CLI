@@ -179,7 +179,7 @@ export function register(program: Command, ctx: Ctx): void {
       examples(
         "vobiz sub-accounts list",
         "vobiz sub-accounts create --name 'Acme Corp' --kyc-mode customer_use --email owner@example.com",
-        "vobiz sub-accounts update SA_XXXXXXXX --no-enabled",
+        "vobiz sub-accounts update SA_XXXXXXXX --name 'Acme Ltd'",
         "vobiz sub-accounts kyc status SA_XXXXXXXX",
       ),
     );
@@ -195,7 +195,16 @@ export function register(program: Command, ctx: Ctx): void {
     create: op("create-subaccount"),
     update: op("update-subaccount"),
     delete: op("delete-subaccount"),
-    summaryKeys: ["name", "email", "kyc_mode", "business_type", "enabled"],
+    summaryKeys: ["name", "email", "kyc_mode", "business_type", "is_active"],
+    // The API ignores `enabled`; `is_active` is the field it honours (live 2026-10-22).
+    aliases: [
+      { flag: "active", to: "is_active", boolean: true, description: "activate or deactivate the sub-account" },
+      { flag: "enabled", to: "is_active", boolean: true, deprecated: true, use: "active", description: "the API ignores enabled, so this sets is_active" },
+    ],
+    updateWarning: (body) =>
+      body.is_active === false
+        ? "a deactivated sub-account disappears from list, get, update and delete (they answer 404), so it cannot be reactivated through the API"
+        : undefined,
     secretPaths: ["auth_credentials.auth_token", "sub_account.auth_token"],
     secretLabel: "sub-account Auth Token",
     createdIdPath: "sub_account.auth_id",

@@ -16,7 +16,8 @@ export function register(program: Command, ctx: Ctx): void {
       examples(
         "vobiz apps list",
         "vobiz apps create --app-name 'IVR' --answer-url https://example.com/answer --answer-method POST",
-        "vobiz apps update <app-id> --app-name 'IVR v2' --no-default-number-app --answer-url https://example.com/v2/answer",
+        "vobiz apps update <app-id> --answer-url https://example.com/v2/answer   # fields you leave out stay unchanged",
+        "vobiz apps update <app-id> --app-name 'IVR v2' --no-default-number-app",
         "vobiz numbers update +919876543210 --app <app-id>",
       ),
     );

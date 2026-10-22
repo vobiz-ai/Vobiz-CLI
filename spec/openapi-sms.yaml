@@ -1445,7 +1445,7 @@ components:
           type: string
           format: date-time
           example: '2026-10-18T07:22:11Z'
-          description: When the subscription was created (ISO 8601). Read it from `GET /webhooks/{id}` or `GET /webhooks`.
+          description: When the subscription was created (ISO 8601). The create response can return the zero value `0001-01-01T00:00:00Z`; read the stored time from `GET /webhooks/{id}` or `GET /webhooks`.
       description: 'A webhook subscription: the URL Vobiz delivers your chosen events to, and the secret used to sign them.'
     BroadcastStats:
       type: object
@@ -7278,7 +7278,7 @@ paths:
               - message.failed
       responses:
         '201':
-          description: The subscription, active immediately.
+          description: The subscription, active immediately. `createdAt` can be the zero value `0001-01-01T00:00:00Z` in this response; `GET /webhooks/{id}` returns the stored time.
           content:
             application/json:
               schema:

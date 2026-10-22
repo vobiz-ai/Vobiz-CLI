@@ -545,8 +545,8 @@ vobiz apps update <app-id> [options]
 
 | Option | Description |
 |---|---|
-| `--app-name <value>` | app name (required) |
-| `--default-number-app` | default number app (required) (--no-default-number-app to set false) |
+| `--app-name <value>` | app name |
+| `--default-number-app` | default number app (--no-default-number-app to set false) |
 | `--answer-url <value>` | URL Vobiz fetches VobizXML from when a call reaches a number or endpoint linked to this application. |
 | `--answer-method <value>` | HTTP method used for `answer_url`, `GET` or `POST`. |
 | `--hangup-url <value>` | URL Vobiz notifies when a call on this application ends. |
@@ -1368,7 +1368,8 @@ vobiz endpoints create [options]
 | `--username <value>` | username (required) |
 | `--password <value>` | password (@file or @- for stdin keeps it out of shell history) (required) |
 | `--alias <value>` | alias (required) |
-| `--application <n>` | application (required) |
+| `--app-id <value>` | ID of the application that handles this endpoint's calls (sent as a string). |
+| `--application <value>` | deprecated: use --app-id. ID of the application (sent as app_id). |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 | `--reveal-secret` | print the returned SIP password once on stderr (off by default) |
 | `--secret-file <path>` | write the returned SIP password to this new file (mode 0600), for CI |
@@ -1438,6 +1439,8 @@ vobiz endpoints update <endpoint-id> [options]
 |---|---|
 | `--alias <value>` | alias (required) |
 | `--password <value>` | password (@file or @- for stdin keeps it out of shell history) (required) |
+| `--app-id <value>` | ID of the application that handles this endpoint's calls (sent as a string). |
+| `--application <value>` | deprecated: use --app-id. ID of the application (sent as app_id). |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz feedback
@@ -3991,8 +3994,10 @@ vobiz sub-accounts update <sub-auth-id> [options]
 | Option | Description |
 |---|---|
 | `--name <value>` | name |
-| `--enabled` | enabled (--no-enabled to set false) |
+| `--is-active` | Set to `false` to deactivate the sub-account. (--no-is-active to set false) |
 | `--kyc-mode <value>` | Change the verification mode. (one of: `personal_use`, `customer_use`) |
+| `--active` | activate or deactivate the sub-account (--no-active to set false) |
+| `--enabled` | deprecated: use --active. the API ignores enabled, so this sets is_active (--no-enabled to set false) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz trunks
@@ -4017,7 +4022,7 @@ vobiz trunks create [options]
 |---|---|
 | `--name <value>` | Trunk name. (required) |
 | `--trunk-direction <value>` | Direction of the trunk - `inbound` or `outbound` only (a trunk is one direction, not both). (one of: `inbound`, `outbound`) |
-| `--trunk-status <value>` | Trunk status - `enabled` or `disabled` (note: not `active`). (one of: `enabled`, `disabled`) |
+| `--trunk-status <value>` | Trunk status to set - `enabled` or `disabled`. (one of: `enabled`, `disabled`) |
 | `--secure` | secure (--no-secure to set false) |
 | `--trunk-domain <value>` | SIP domain. |
 | `--transport <value>` | transport (one of: `udp`, `tcp`, `tls`) |
@@ -4245,9 +4250,11 @@ vobiz trunks origination-uris create [options]
 
 | Option | Description |
 |---|---|
-| `--name <value>` | name (required) |
-| `--sip-uri <value>` | sip uri (required) |
-| `--priority <n>` | priority (required) |
+| `--uri <value>` | SIP URI of your inbound destination, for example `sip:sbc.example.com`. (required) |
+| `--description <value>` | Label for the origination URI. |
+| `--priority <n>` | Routing priority. (required) |
+| `--sip-uri <value>` | deprecated: use --uri. SIP URI of the destination. |
+| `--name <value>` | deprecated: use --description. Label for the origination URI. |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz trunks origination-uris delete
@@ -4293,8 +4300,11 @@ vobiz trunks origination-uris update <uri-id> [options]
 
 | Option | Description |
 |---|---|
-| `--name <value>` | name (required) |
-| `--priority <n>` | priority (required) |
+| `--uri <value>` | SIP URI of your inbound destination. |
+| `--description <value>` | Label for the origination URI. |
+| `--priority <n>` | Routing priority. |
+| `--sip-uri <value>` | deprecated: use --uri. SIP URI of the destination. |
+| `--name <value>` | deprecated: use --description. Label for the origination URI. |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz trunks update
@@ -4313,7 +4323,7 @@ vobiz trunks update <trunk-id> [options]
 |---|---|
 | `--name <value>` | name |
 | `--trunk-direction <value>` | Direction of the trunk - `inbound` or `outbound` only. (one of: `inbound`, `outbound`) |
-| `--trunk-status <value>` | trunk status (one of: `enabled`, `disabled`) |
+| `--trunk-status <value>` | Trunk status to set - `enabled` or `disabled`. (one of: `enabled`, `disabled`) |
 | `--secure` | secure (--no-secure to set false) |
 | `--trunk-domain <value>` | trunk domain |
 | `--transport <value>` | transport (one of: `udp`, `tcp`, `tls`) |

@@ -6,6 +6,8 @@
  *   `--body '{json}' | @file.json | @-` passes an arbitrary body; explicit flags are merged on top of it.
  *   Without `--body`, required properties are enforced (a missing required `password` is prompted for, hidden,
  *   when stdin is a terminal). With `--body`, the body is sent as given.
+ * - Flag aliases (`FlagAlias`) map a friendlier or older flag onto a spec field (`--sip-uri` -> `uri`). A spec
+ *   property whose flag an alias takes over gets no generated flag of its own.
  * - Query flags are generated the same way from `op.queryParams` (pagination params excluded; `--limit/--all`
  *   cover those). Date params (`*_date`) accept `today`, `7d`, `2026-10-01`, ISO timestamps.
  * - `runList` prints a default table, or with --output json/yaml the response body with every page's items merged.
@@ -88,6 +90,7 @@ function addParamOptions(cmd: Command, params: Param[], extraDescription?: (p: P
     let desc = shortDescription(p);
     if (SECRET_FIELDS.has(p.name)) desc += " (@file or @- for stdin keeps it out of shell history)";
     if (p.required) desc += " (required)";
+    if (p.deprecated && !/^deprecated\b/i.test(desc)) desc += " (deprecated)";
     if (extraDescription) desc += extraDescription(p);
     if (p.default !== undefined && p.type !== "boolean") desc += ` (default: ${String(p.default)})`;
     let opt: Option;
@@ -114,20 +117,52 @@ function addParamOptions(cmd: Command, params: Param[], extraDescription?: (p: P
 /** Body fields whose flag takes a secret: `@file` / `@-` are read, and a literal value warns about shell history. */
 const SECRET_FIELDS = new Set(["password", "secret"]);
 
+/**
+ * A flag that sets another body field: a friendlier name (`--active` -> `is_active`) or an older one kept so
+ * existing scripts work (`--sip-uri` -> `uri`). Deprecated aliases print a warning naming the new flag.
+ */
+export interface FlagAlias {
+  /** Flag name without dashes (`sip-uri`). A spec property with the same kebab name gets no flag of its own. */
+  flag: string;
+  /** Body field the value is sent as (`uri`). */
+  to: string;
+  description: string;
+  boolean?: boolean;
+  deprecated?: boolean;
+  /** Flag a deprecated alias points users to (default: the target field's own flag). */
+  use?: string;
+  /** Validates and converts the value (string flags only). */
+  parse?: (v: string) => unknown;
+}
+
 export interface BodySpec {
   fields: FieldSpec[];
+  aliases: FlagAlias[];
 }
 
 /**
  * Adds a flag for every body property of `ops` (the union, so a command that switches between a live and a test
- * operation offers both sets) plus `--body`.
+ * operation offers both sets), the `aliases` whose target one of `ops` accepts, and `--body`.
  */
-export function addBodyOptions(cmd: Command, ops: Operation | Operation[], skip: string[] = []): BodySpec {
+export function addBodyOptions(cmd: Command, ops: Operation | Operation[], skip: string[] = [], aliases: FlagAlias[] = []): BodySpec {
   const list = Array.isArray(ops) ? ops : [ops];
-  const props = list.flatMap((o) => o.body.props).filter((p) => !skip.includes(p.name));
+  const usable = aliases.filter((a) => list.some((o) => o.body.props.some((p) => p.name === a.to)));
+  const taken = new Set(usable.map((a) => a.flag));
+  const props = list.flatMap((o) => o.body.props).filter((p) => !skip.includes(p.name) && !taken.has(kebab(p.name)));
   const fields = addParamOptions(cmd, props);
+  for (const a of usable) {
+    const desc = a.deprecated ? `deprecated: use --${a.use ?? kebab(a.to)}. ${a.description}` : a.description;
+    if (a.boolean) {
+      cmd.addOption(new Option(`--${a.flag}`, `${desc} (--no-${a.flag} to set false)`));
+      cmd.addOption(new Option(`--no-${a.flag}`, `set ${a.to} to false`).hideHelp());
+    } else {
+      const opt = new Option(`--${a.flag} <value>`, desc);
+      if (a.parse) opt.argParser(a.parse);
+      cmd.addOption(opt);
+    }
+  }
   cmd.option("--body <json>", "full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed");
-  return { fields };
+  return { fields, aliases: usable };
 }
 
 /**
@@ -142,6 +177,17 @@ export async function buildBody(ctx: Ctx, opts: Opts, spec: BodySpec, op: Operat
     if (v === undefined) continue;
     if (!allowed.has(f.name)) throw usage(`--${f.flag} is not accepted here (${op.id} takes: ${[...allowed.keys()].join(", ") || "no body"}).`);
     fromFlags[f.name] = SECRET_FIELDS.has(f.name) && typeof v === "string" ? await readSecretArg(ctx, v, `--${f.flag}`) : v;
+  }
+  const aliasOf = new Map<string, string>();
+  for (const a of spec.aliases) {
+    const v = opts[camel(a.flag)];
+    if (v === undefined) continue;
+    if (!allowed.has(a.to)) throw usage(`--${a.flag} is not accepted here (${op.id} takes: ${[...allowed.keys()].join(", ") || "no body"}).`);
+    const other = aliasOf.get(a.to) ?? (a.to in fromFlags ? `--${kebab(a.to)}` : undefined);
+    if (other) throw usage(`--${a.flag} and ${other} both set ${a.to}; pass one.`);
+    if (a.deprecated) ctx.out.warn(`--${a.flag} is deprecated; use --${a.use ?? kebab(a.to)} (sent as ${a.to}).`);
+    aliasOf.set(a.to, `--${a.flag}`);
+    fromFlags[a.to] = v;
   }
   let body: Record<string, unknown> = {};
   const usingBody = opts.body !== undefined;
@@ -435,6 +481,12 @@ export interface CrudSpec {
   createdIdPath?: string;
   /** Applied to a create response before it is printed (e.g. to drop session tokens). */
   sanitizeCreated?: (data: Record<string, unknown>) => unknown;
+  /** Extra flags for create and update that set another body field (see FlagAlias). */
+  aliases?: FlagAlias[];
+  /** Extra confirmation line for an update body (e.g. a change the API cannot undo). */
+  updateWarning?: (body: Record<string, unknown>) => string | undefined;
+  /** More --help examples for update. */
+  updateExamples?: string[];
 }
 
 /** "a trunk", "an application", "an IP ACL entry". */
@@ -462,7 +514,7 @@ export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
   }
 
   const create = group.command("create").description(`Create ${aNoun}`);
-  const createSpec = addBodyOptions(create, s.create);
+  const createSpec = addBodyOptions(create, s.create, [], s.aliases);
   if (s.secretPaths) addSecretOptions(create, s.secretLabel ?? "password");
   if (s.createExamples) create.addHelpText("after", examples(...s.createExamples));
   create.action(async (opts: Opts) => {
@@ -481,12 +533,15 @@ export function crud(group: Command, ctx: Ctx, s: CrudSpec): void {
   });
 
   const update = group.command("update").argument(`<${s.idArg}>`, `${s.noun} ID`).description(`Update ${aNoun}`);
-  const updateSpec = addBodyOptions(update, s.update);
+  const updateSpec = addBodyOptions(update, s.update, [], s.aliases);
+  if (s.updateExamples) update.addHelpText("after", examples(...s.updateExamples));
   update.action(async (id: string, opts: Opts) => {
     const body = await buildBody(ctx, opts, updateSpec, s.update, { requireSomething: true });
     const details = detailsFrom(body, s.summaryKeys);
     Object.assign(details, urlHosts(body));
     if ("password" in body) details.password = "(changed)";
+    const warning = s.updateWarning?.(body);
+    if (warning) details.warning = warning;
     const data = await confirmedCall(ctx, { action: `Update ${s.noun} ${id}`, details: { changes: Object.keys(body).join(", "), ...details } }, s.update, {
       path: { [s.idParam]: id },
       body,

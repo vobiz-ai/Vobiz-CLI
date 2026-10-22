@@ -42,6 +42,11 @@ describe("apps", () => {
     const u = await runCli(["apps", "update", "123", "--app-name", "IVR2", "--no-default-number-app", "--yes"], { fetch: api.fetch });
     expect(u.code).toBe(0);
     expect(api.last()).toMatchObject({ method: "POST", path: `${A}/Application/123/`, body: { app_name: "IVR2", default_number_app: false } });
+    // Partial update (live 2026-10-22): one field is enough, nothing else is required or sent.
+    const partial = await runCli(["apps", "update", "123", "--answer-url", "https://example.com/v2", "--yes"], { fetch: api.fetch });
+    expect(partial.code, partial.err).toBe(0);
+    expect(api.last().body).toEqual({ answer_url: "https://example.com/v2" });
+    expect((await runCli(["apps", "update", "123", "--yes"], { fetch: api.fetch })).code).toBe(2); // nothing to change
     expect((await runCli(["apps", "delete", "123"], { fetch: api.fetch })).code).toBe(6);
     expect((await runCli(["apps", "delete", "123", "--yes"], { fetch: api.fetch })).code).toBe(0);
     expect(api.last()).toMatchObject({ method: "DELETE", path: `${A}/Application/123/` });
@@ -107,25 +112,38 @@ describe("endpoints", () => {
 
   it("create sends the body, prompts for nothing with --password, never echoes the password the user typed", async () => {
     const api = fakeFetch({ [`POST ${A}/Endpoint/`]: reply(201, { alias: "Desk", endpoint_id: "e-1", username: "desk_01", password: "Pw-123456!" }) });
-    const r = await runCli(["endpoints", "create", "--username", "desk_01", "--password", "Pw-123456!", "--alias", "Desk", "--application", "42", "--yes", "--json"], { fetch: api.fetch });
+    const r = await runCli(["endpoints", "create", "--username", "desk_01", "--password", "Pw-123456!", "--alias", "Desk", "--app-id", "42", "--yes", "--json"], { fetch: api.fetch });
     expect(r.code).toBe(0);
-    expect(api.last().body).toEqual({ username: "desk_01", password: "Pw-123456!", alias: "Desk", application: 42 });
+    expect(api.last().body).toEqual({ username: "desk_01", password: "Pw-123456!", alias: "Desk", app_id: "42" });
     expect(r.out + r.err).not.toContain("Pw-123456!"); // the password the user typed is never echoed back
     expect(r.err).not.toContain("shown ONCE");
   });
 
-  it("a 17-digit application id is refused with a clear reason instead of being rounded (live regression)", async () => {
-    const api = fakeFetch({});
-    const r = await runCli(["endpoints", "create", "--username", "u", "--password", "Pw-123456!", "--alias", "a", "--application", "18902825214371853", "--yes"], { fetch: api.fetch });
-    expect(r.code).toBe(2);
-    expect(r.err).toContain("cannot be sent exactly as a JSON number");
-    expect(r.err).toContain("--body");
-    expect(api.calls).toHaveLength(0);
+  it("a 17-digit --app-id is sent as an exact string (live: the API links endpoints through app_id)", async () => {
+    const api = fakeFetch({ [`POST ${A}/Endpoint/`]: reply(201, { endpoint_id: "e-1" }) });
+    const r = await runCli(["endpoints", "create", "--username", "u", "--password", "Pw-123456!", "--alias", "a", "--app-id", "18902825214371853", "--yes"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(api.last().body).toMatchObject({ app_id: "18902825214371853" });
+    expect(api.last().body).not.toHaveProperty("application");
+  });
+
+  it("--application is a deprecated alias for --app-id: same string, a warning, never both", async () => {
+    const api = fakeFetch({ [`POST ${A}/Endpoint/e-1/`]: reply(202, "") });
+    const r = await runCli(["endpoints", "update", "e-1", "--alias", "a", "--password", "Pw-123456!", "--application", "18902825214371853", "--yes"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(api.last().body).toEqual({ alias: "a", password: "Pw-123456!", app_id: "18902825214371853" });
+    expect(r.err).toContain("--application is deprecated; use --app-id");
+    const both = await runCli(["endpoints", "update", "e-1", "--alias", "a", "--password", "Pw-123456!", "--application", "1", "--app-id", "2", "--yes"], { fetch: api.fetch });
+    expect(both.code).toBe(2);
+    expect(both.err).toContain("both set app_id");
+    const bad = await runCli(["endpoints", "create", "--username", "u", "--password", "Pw-123456!", "--alias", "a", "--app-id", "12a", "--yes"], { fetch: api.fetch });
+    expect(bad.code).toBe(2);
+    expect(api.calls).toHaveLength(1);
   });
 
   it("create without --password and without a terminal is a usage error", async () => {
     const api = fakeFetch({});
-    const r = await runCli(["endpoints", "create", "--username", "u", "--alias", "a", "--application", "1", "--yes"], { fetch: api.fetch });
+    const r = await runCli(["endpoints", "create", "--username", "u", "--alias", "a", "--app-id", "1", "--yes"], { fetch: api.fetch });
     expect(r.code).toBe(2);
     expect(r.err).toContain("--password");
   });

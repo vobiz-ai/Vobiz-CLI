@@ -318,9 +318,9 @@ describe("numbers and SIP trunking", () => {
 
   it("point inbound calls at a PBX with an origination URI", async () => {
     const api = specFake();
-    const r = await runCli(["trunks", "origination-uris", "create", "--name", "primary", "--sip-uri", "sip:pbx.example.com:5060", "--priority", "1", "--yes", "--json"], { fetch: api.fetch });
+    const r = await runCli(["trunks", "origination-uris", "create", "--uri", "sip:pbx.example.com:5060", "--description", "primary", "--priority", "1", "--yes", "--json"], { fetch: api.fetch });
     expect(r.code, r.err).toBe(0);
-    expect(api.last().body).toMatchObject({ name: "primary", sip_uri: "sip:pbx.example.com:5060", priority: 1 });
+    expect(api.last().body).toEqual({ uri: "sip:pbx.example.com:5060", description: "primary", priority: 1 });
   });
 
   it("create a trunk from a JSON file and override one field", async () => {
@@ -336,9 +336,9 @@ describe("numbers and SIP trunking", () => {
     const api = specFake({ answer: (op) => (op.id === "create-application" ? { app_id: "12345", app_name: "softphone" } : undefined) });
     const app = await runCli(["apps", "create", "--app-name", "softphone", "--answer-url", "https://app.example.com/answer", "--answer-method", "POST", "--yes", "--json"], { fetch: api.fetch });
     expect(app.code, app.err).toBe(0);
-    const ep = await runCli(["endpoints", "create", "--username", "desk_01", "--password", "Desk-Passw0rd!", "--alias", "Front desk", "--application", "12345", "--yes", "--json"], { fetch: api.fetch });
+    const ep = await runCli(["endpoints", "create", "--username", "desk_01", "--password", "Desk-Passw0rd!", "--alias", "Front desk", "--app-id", "12345", "--yes", "--json"], { fetch: api.fetch });
     expect(ep.code, ep.err).toBe(0);
-    expect(api.last().body).toMatchObject({ username: "desk_01", alias: "Front desk", application: 12345 });
+    expect(api.last().body).toMatchObject({ username: "desk_01", alias: "Front desk", app_id: "12345" });
   });
 });
 
@@ -594,7 +594,7 @@ describe("--dry-run on every write group sends nothing", () => {
     ["trunks", "delete", "t1"],
     ["trunks", "credentials", "delete", "c1"],
     ["trunks", "ip-acl", "update", "a1", "--name", "x", "--ip-address", "203.0.113.5"],
-    ["trunks", "origination-uris", "create", "--name", "p", "--sip-uri", "sip:pbx.example.com", "--priority", "1"],
+    ["trunks", "origination-uris", "create", "--uri", "sip:pbx.example.com", "--description", "p", "--priority", "1"],
     ["apps", "update", "a1", "--app-name", "x", "--default-number-app"],
     ["apps", "delete", "a1"],
     ["endpoints", "delete", "e1"],

@@ -63,11 +63,35 @@ describe("sub-accounts", () => {
     });
     expect((await runCli(["sub-accounts", "create", "--name", "x", "--kyc-mode", "other", "--yes"], { fetch: api.fetch })).code).toBe(2);
     expect((await runCli(["sub-accounts", "get", "SA_XXXXXXXX", "--json"], { fetch: api.fetch })).code).toBe(0);
-    expect((await runCli(["sub-accounts", "update", "SA_XXXXXXXX", "--no-enabled", "--yes"], { fetch: api.fetch })).code).toBe(0);
-    expect(api.last()).toMatchObject({ method: "PUT", body: { enabled: false } });
+    expect((await runCli(["sub-accounts", "update", "SA_XXXXXXXX", "--name", "Acme 2", "--yes"], { fetch: api.fetch })).code).toBe(0);
+    expect(api.last()).toMatchObject({ method: "PUT", body: { name: "Acme 2" } });
     expect((await runCli(["sub-accounts", "delete", "SA_XXXXXXXX"], { fetch: api.fetch })).code).toBe(6);
     expect((await runCli(["sub-accounts", "delete", "SA_XXXXXXXX", "--yes"], { fetch: api.fetch })).code).toBe(0);
     expect(api.last()).toMatchObject({ method: "DELETE", path: `${S}/SA_XXXXXXXX` });
+  });
+});
+
+describe("sub-accounts update --active (live: the API honours is_active, ignores enabled)", () => {
+  it("--no-active sends is_active false and the confirmation warns it cannot be undone through the API", async () => {
+    const api = fakeFetch({ [`PUT ${S}/SA_XXXXXXXX`]: sub });
+    const dry = await runCli(["sub-accounts", "update", "SA_XXXXXXXX", "--no-active", "--dry-run", "--yes"], { fetch: api.fetch });
+    expect(dry.code, dry.err).toBe(0);
+    expect(dry.out + dry.err).toContain("cannot be reactivated through the API");
+    expect(api.calls).toHaveLength(0);
+    expect((await runCli(["sub-accounts", "update", "SA_XXXXXXXX", "--no-active"], { fetch: api.fetch })).code).toBe(6);
+    expect((await runCli(["sub-accounts", "update", "SA_XXXXXXXX", "--no-active", "--yes"], { fetch: api.fetch })).code).toBe(0);
+    expect(api.last()).toMatchObject({ method: "PUT", body: { is_active: false } });
+    expect((await runCli(["sub-accounts", "update", "SA_XXXXXXXX", "--active", "--yes"], { fetch: api.fetch })).code).toBe(0);
+    expect(api.last().body).toEqual({ is_active: true });
+  });
+
+  it("--enabled/--no-enabled is a deprecated alias that sets is_active, never enabled", async () => {
+    const api = fakeFetch({ [`PUT ${S}/SA_XXXXXXXX`]: sub });
+    const r = await runCli(["sub-accounts", "update", "SA_XXXXXXXX", "--no-enabled", "--yes"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(api.last().body).toEqual({ is_active: false });
+    expect(r.err).toContain("--enabled is deprecated; use --active");
+    expect((await runCli(["sub-accounts", "update", "SA_XXXXXXXX", "--no-enabled", "--active", "--yes"], { fetch: api.fetch })).code).toBe(2);
   });
 });
 

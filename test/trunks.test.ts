@@ -130,19 +130,42 @@ describe("trunks credentials", () => {
   });
 });
 
+describe("trunk status and IP ACL labels as the live API reports them (2026-10-22)", () => {
+  it("--trunk-status takes enabled|disabled, list shows active|suspended, and help says so", async () => {
+    const api = fakeFetch({
+      [`GET ${A}/trunks`]: { meta: { total: 2 }, objects: [{ ...trunk, trunk_status: "active" }, { ...trunk, trunk_id: "t-2", trunk_status: "suspended" }] },
+    });
+    const l = await runCli(["trunks", "list", "--fields", "trunk_id,trunk_status", "-o", "tsv"], { fetch: api.fetch });
+    expect(l.out).toBe("trunk_id\ttrunk_status\nt-1\tactive\nt-2\tsuspended\n");
+    expect((await runCli(["trunks", "update", "t-1", "--trunk-status", "active", "--yes"], { fetch: api.fetch })).code).toBe(2);
+    const help = await runCli(["trunks", "--help"], { fetch: api.fetch });
+    expect(help.out).toContain("--trunk-status takes enabled or disabled; list and get report them as active and suspended");
+  });
+
+  it("ip-acl list shows the description column the API returns", async () => {
+    const api = fakeFetch({
+      [`GET ${A}/trunks/ip-acl`]: { meta: { total: 1 }, objects: [{ id: "acl-1", ip_address: "10.20.30.0/24", description: "Office IP", enabled: true, created_at: "2026-03-25T10:00:00Z" }] },
+    });
+    const l = await runCli(["trunks", "ip-acl", "list", "--fields", "id,description", "-o", "tsv"], { fetch: api.fetch });
+    expect(l.out).toBe("id\tdescription\nacl-1\tOffice IP\n");
+    const help = await runCli(["trunks", "ip-acl", "create", "--help"], { fetch: api.fetch });
+    expect(help.out).not.toContain("203.0.113");
+  });
+});
+
 describe("trunks ip-acl and origination-uris", () => {
   it("ip-acl CRUD", async () => {
     const api = fakeFetch({
       [`GET ${A}/trunks/ip-acl`]: { meta: { total: 0 }, objects: [] },
-      [`POST ${A}/ip-acl`]: reply(201, { id: "acl-1", ip_address: "203.0.113.0/24" }),
+      [`POST ${A}/ip-acl`]: reply(201, { id: "acl-1", ip_address: "10.20.30.0/24" }),
       [`PUT ${A}/ip-acl/acl-1`]: { id: "acl-1" },
       [`DELETE ${A}/ip-acl/acl-1`]: reply(204),
     });
     const l = await runCli(["trunks", "ip-acl", "list", "-o", "table"], { fetch: api.fetch });
     expect(l.code).toBe(0);
     expect(l.err).toContain("No IP ACL entries.");
-    expect((await runCli(["trunks", "ip-acl", "create", "--name", "office", "--ip-address", "203.0.113.0/24", "--yes"], { fetch: api.fetch })).code).toBe(0);
-    expect(api.last().body).toEqual({ name: "office", ip_address: "203.0.113.0/24" });
+    expect((await runCli(["trunks", "ip-acl", "create", "--name", "office", "--ip-address", "10.20.30.0/24", "--yes"], { fetch: api.fetch })).code).toBe(0);
+    expect(api.last().body).toEqual({ name: "office", ip_address: "10.20.30.0/24" });
     expect((await runCli(["trunks", "ip-acl", "update", "acl-1", "--name", "o2", "--ip-address", "203.0.113.1", "--yes"], { fetch: api.fetch })).code).toBe(0);
     expect(api.last()).toMatchObject({ method: "PUT", path: `${A}/ip-acl/acl-1` });
     expect((await runCli(["trunks", "ip-acl", "update", "acl-1", "--name", "o2", "--yes"], { fetch: api.fetch })).code).toBe(2); // ip_address is required
@@ -157,10 +180,21 @@ describe("trunks ip-acl and origination-uris", () => {
       [`DELETE ${A}/origination-uris/u-1`]: reply(204),
     });
     expect((await runCli(["trunks", "origination-uris", "list", "--json"], { fetch: api.fetch })).json()).toMatchObject({ objects: [{ id: "u-1" }] });
-    expect((await runCli(["trunks", "origination-uris", "create", "--name", "p", "--sip-uri", "sip:pbx.example.com", "--priority", "1", "--yes"], { fetch: api.fetch })).code).toBe(0);
-    expect(api.last().body).toEqual({ name: "p", sip_uri: "sip:pbx.example.com", priority: 1 });
-    expect((await runCli(["trunks", "origination-uris", "update", "u-1", "--name", "p", "--priority", "2", "--yes"], { fetch: api.fetch })).code).toBe(0);
-    expect(api.last()).toMatchObject({ method: "PUT", body: { name: "p", priority: 2 } });
+    expect((await runCli(["trunks", "origination-uris", "create", "--uri", "sip:pbx.example.com", "--description", "p", "--priority", "1", "--yes"], { fetch: api.fetch })).code).toBe(0);
+    expect(api.last().body).toEqual({ uri: "sip:pbx.example.com", description: "p", priority: 1 });
+    expect((await runCli(["trunks", "origination-uris", "create", "--description", "p", "--priority", "1", "--yes"], { fetch: api.fetch })).code).toBe(2); // uri is required
+    // The old flags still work and send the names the API reads (it ignores sip_uri and name: live 2026-10-22).
+    const old = await runCli(["trunks", "origination-uris", "create", "--name", "p", "--sip-uri", "sip:pbx.example.com", "--priority", "1", "--yes"], { fetch: api.fetch });
+    expect(old.code, old.err).toBe(0);
+    expect(api.last().body).toEqual({ uri: "sip:pbx.example.com", description: "p", priority: 1 });
+    expect(old.err).toContain("--sip-uri is deprecated; use --uri");
+    expect(old.err).toContain("--name is deprecated; use --description");
+    // update is partial: --priority alone is enough.
+    expect((await runCli(["trunks", "origination-uris", "update", "u-1", "--priority", "2", "--yes"], { fetch: api.fetch })).code).toBe(0);
+    expect(api.last()).toMatchObject({ method: "PUT", body: { priority: 2 } });
+    expect((await runCli(["trunks", "origination-uris", "update", "u-1", "--name", "p", "--yes"], { fetch: api.fetch })).code).toBe(0);
+    expect(api.last().body).toEqual({ description: "p" });
+    expect((await runCli(["trunks", "origination-uris", "update", "u-1", "--name", "p", "--description", "q", "--yes"], { fetch: api.fetch })).code).toBe(2);
     expect((await runCli(["trunks", "origination-uris", "delete", "u-1"], { fetch: api.fetch })).code).toBe(6);
     expect((await runCli(["trunks", "origination-uris", "delete", "u-1", "--yes"], { fetch: api.fetch })).code).toBe(0);
     expect(api.last()).toMatchObject({ method: "DELETE", path: `${A}/origination-uris/u-1` });

@@ -3911,6 +3911,11 @@ paths:
       description: |
         Update the name or status of a sub-account, or change its `kyc_mode`.
 
+        Set `is_active` to `false` to deactivate a sub-account. A deactivated
+        sub-account no longer appears in the list, and retrieve, update and
+        delete requests for it return `404`. The `enabled` field is accepted
+        but has no effect.
+
         Promoting an existing sub-account to `customer_use` requires the
         sub-account to already have an `email` (otherwise `400`). On any
         `kyc_mode` change, `kyc_calls_blocked` is re-derived from the
@@ -3932,8 +3937,13 @@ paths:
               properties:
                 name:
                   type: string
+                is_active:
+                  type: boolean
+                  description: Set to `false` to deactivate the sub-account. A deactivated sub-account no longer appears in list, retrieve, update or delete requests (`404`).
                 enabled:
                   type: boolean
+                  deprecated: true
+                  description: Accepted but has no effect. Use `is_active` instead.
                 kyc_mode:
                   type: string
                   enum: [ personal_use, customer_use ]
@@ -5131,6 +5141,8 @@ paths:
                           type: string
                         trunk_status:
                           type: string
+                          enum: [ active, suspended ]
+                          description: "Trunk state as reported in responses - `active` or `suspended`. Requests set it with `enabled` (reported as `active`) or `disabled` (reported as `suspended`)."
                         secure:
                           type: boolean
                         trunk_direction:
@@ -5215,7 +5227,7 @@ paths:
                 trunk_status:
                   type: string
                   enum: [ enabled, disabled ]
-                  description: "Trunk status - `enabled` or `disabled` (note: not `active`)."
+                  description: "Trunk status to set - `enabled` or `disabled`. Responses report `enabled` as `active` and `disabled` as `suspended`."
                 secure:
                   type: boolean
                 trunk_domain:
@@ -5359,6 +5371,8 @@ paths:
                     type: string
                   trunk_status:
                     type: string
+                    enum: [ active, suspended ]
+                    description: "Trunk state as reported in responses - `active` or `suspended`. Requests set it with `enabled` (reported as `active`) or `disabled` (reported as `suspended`)."
                   secure:
                     type: boolean
                   trunk_direction:
@@ -5437,6 +5451,8 @@ paths:
                     type: string
                   trunk_status:
                     type: string
+                    enum: [ active, suspended ]
+                    description: "Trunk state as reported in responses - `active` or `suspended`. Requests set it with `enabled` (reported as `active`) or `disabled` (reported as `suspended`)."
                   secure:
                     type: boolean
                   trunk_direction:
@@ -5532,6 +5548,7 @@ paths:
                 trunk_status:
                   type: string
                   enum: [ enabled, disabled ]
+                  description: "Trunk status to set - `enabled` or `disabled`. Responses report `enabled` as `active` and `disabled` as `suspended`."
                 secure:
                   type: boolean
                 trunk_domain:
@@ -5598,6 +5615,8 @@ paths:
                     type: string
                   trunk_status:
                     type: string
+                    enum: [ active, suspended ]
+                    description: "Trunk state as reported in responses - `active` or `suspended`. Requests set it with `enabled` (reported as `active`) or `disabled` (reported as `suspended`)."
                   secure:
                     type: boolean
                   trunk_direction:
@@ -6536,6 +6555,7 @@ paths:
                           type: string
                         recording_url:
                           type: string
+                          description: "Download URL for the audio, on `media.vobiz.ai`. Send the same `X-Auth-ID` and `X-Auth-Token` headers as for API requests; without them the media host returns `401`. The body is WAV (RIFF/WAVE PCM), although the response may carry `Content-Type: audio/mpeg`."
                         resource_uri:
                           type: string
                         rounded_recording_duration:
@@ -6569,7 +6589,13 @@ paths:
     get:
       operationId: get-recording
       summary: Retrieve a recording
-      description: Get details and download URL for a specific recording.
+      description: |
+        Get details and download URL for a specific recording.
+
+        `recording_url` points at `media.vobiz.ai`. Download it with the same
+        `X-Auth-ID` and `X-Auth-Token` headers you use for the API; the media
+        host returns `401` without them. The file is WAV, although the media
+        host may label it `Content-Type: audio/mpeg`.
       tags: [ Recordings ]
       parameters:
         - $ref: "#/components/parameters/AuthId"
@@ -6617,6 +6643,7 @@ paths:
                     type: string
                   recording_url:
                     type: string
+                    description: "Download URL for the audio, on `media.vobiz.ai`. Send the same `X-Auth-ID` and `X-Auth-Token` headers as for API requests; without them the media host returns `401`. The body is WAV (RIFF/WAVE PCM), although the response may carry `Content-Type: audio/mpeg`."
                   resource_uri:
                     type: string
                   rounded_recording_duration:
@@ -7098,7 +7125,12 @@ paths:
     post:
       operationId: create-ip-acl
       summary: Create an IP ACL
-      description: Add an IP access control rule to restrict SIP trunk access.
+      description: |
+        Add an IP access control rule to restrict SIP trunk access.
+
+        Use the public IP address or CIDR range of your own SBC or PBX. The API
+        rejects documentation-only ranges such as `203.0.113.0/24` with `400`.
+        Responses return the rule's label in `description`.
       tags: [ IP Access Control List ]
       parameters:
         - $ref: "#/components/parameters/AuthId"
@@ -7118,7 +7150,7 @@ paths:
                 - ip_address
             example:
               name: Office IP
-              cidr_ip: "203.0.113.0/24"
+              ip_address: "YOUR_PUBLIC_IP/32"
       responses:
         "201":
           description: IP ACL created
@@ -7339,19 +7371,29 @@ paths:
             schema:
               type: object
               properties:
-                name:
+                uri:
                   type: string
-                sip_uri:
+                  description: SIP URI of your inbound destination, for example `sip:sbc.example.com`.
+                description:
                   type: string
+                  description: Label for the origination URI.
                 priority:
                   type: integer
+                  description: Routing priority. Lower values are tried first.
+                sip_uri:
+                  type: string
+                  deprecated: true
+                  description: Not read by the API. The API accepts the request but stores an empty `uri`. Send `uri` instead.
+                name:
+                  type: string
+                  deprecated: true
+                  description: Not read by the API. Send `description` instead.
               required:
-                - name
-                - sip_uri
+                - uri
                 - priority
             example:
-              name: Primary SBC
-              sip_uri: sip:sbc.example.com
+              uri: sip:sbc.example.com
+              description: Primary SBC
               priority: 1
       responses:
         "201":
@@ -7519,14 +7561,25 @@ paths:
           application/json:
             schema:
               type: object
+              description: Partial update. Fields you omit stay unchanged.
               properties:
-                name:
+                uri:
                   type: string
+                  description: SIP URI of your inbound destination.
+                description:
+                  type: string
+                  description: Label for the origination URI.
                 priority:
                   type: integer
-              required:
-                - name
-                - priority
+                  description: Routing priority. Lower values are tried first.
+                name:
+                  type: string
+                  deprecated: true
+                  description: Not read by the API. Send `description` instead.
+            example:
+              uri: sip:sbc.example.com
+              description: Primary SBC
+              priority: 2
       responses:
         "200":
           description: Origination URI updated
@@ -8014,9 +8067,6 @@ paths:
                 hangup_method:
                   type: string
                   description: HTTP method used for `hangup_url`, `GET` or `POST`.
-              required:
-                - app_name
-                - default_number_app
             example:
               app_name: Updated Application Name
               default_number_app: true
@@ -8102,6 +8152,10 @@ paths:
         Create a new SIP endpoint that can be used to make and receive calls
         through IP phones, softphones, or SIP clients. Each endpoint is
         assigned a unique SIP URI and endpoint ID.
+
+        The API appends digits to the `username` you request (for example,
+        `acme01` can become `acme0125672327435497`). Configure your SIP client
+        with the `username` returned in the response.
       tags: [ Endpoints ]
       parameters:
         - $ref: "#/components/parameters/AuthId"
@@ -8118,18 +8172,23 @@ paths:
                   type: string
                 alias:
                   type: string
+                app_id:
+                  type: string
+                  pattern: "^[0-9]+$"
+                  description: ID of the application that handles calls from this endpoint. Application IDs are 17-digit strings; send them as JSON strings.
                 application:
                   type: integer
+                  deprecated: true
+                  description: Not read by the API. Application IDs exceed the range of a JSON integer, and the endpoint is created without an application. Send `app_id` instead.
               required:
                 - username
                 - password
                 - alias
-                - application
             example:
               username: john_doe
               password: SecurePassword123!
               alias: John's Desktop Phone
-              application: 12345678
+              app_id: "12345678901234567"
       responses:
         "201":
           description: Endpoint created
@@ -8384,12 +8443,17 @@ paths:
                   type: string
                 password:
                   type: string
+                app_id:
+                  type: string
+                  pattern: "^[0-9]+$"
+                  description: ID of the application to attach to this endpoint, as a string.
               required:
                 - alias
                 - password
             example:
               alias: John's Updated Desktop Phone
               password: NewSecurePassword456!
+              app_id: "12345678901234567"
       responses:
         "202":
           description: Endpoint updated
@@ -9141,6 +9205,8 @@ paths:
                   - balance
                   - created_at
                   - updated_at
+        "401":
+          description: Invalid credentials, or the account is not a partner account. A valid non-partner Auth ID and Auth Token also receive `401 Not authenticated`.
 
   /api/v1/partner/dashboard:
     get:
@@ -9432,6 +9498,8 @@ paths:
                   - traffic
                   - by_product
                   - time_series
+        "401":
+          description: Invalid credentials, or the account is not a partner account. A valid non-partner Auth ID and Auth Token also receive `401 Not authenticated`.
 
   /api/v1/partner/accounts:
     get:

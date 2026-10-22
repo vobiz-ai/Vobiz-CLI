@@ -95,6 +95,10 @@ describe("10dlc documents get file name (S3 #7) and SMS writers (S3 #4)", () => 
     expect(documentFileName("..%2F..%2F.npmrc", "doc1", "application/pdf")).toBe("document-doc1.pdf");
     expect(documentFileName(".envrc", "doc1")).toBe("document-doc1");
     expect(documentFileName("%E0%A4%A", "doc1")).toBe("document-doc1");
+    // Windows device names, bare or with an extension, never become the output file.
+    for (const n of ["CON", "con.pdf", "NUL.txt", "aux", "COM1.pdf", "lpt9", "Prn .pdf"]) expect(documentFileName(n, "doc1", "application/pdf"), n).toBe("document-doc1.pdf");
+    expect(documentFileName("console.pdf", "doc1")).toBe("console.pdf");
+    expect(documentFileName("COM10.pdf", "doc1")).toBe("COM10.pdf");
     expect(documentFileName("a\x1b[2Jb.pdf", "d/../x")).toBe("document-d____x");
     expect(documentFileName("dir\\evil.pdf", "doc1")).toBe("evil.pdf");
   });

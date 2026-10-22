@@ -464,10 +464,13 @@ const EXT_FOR_TYPE: Record<string, string> = {
   "text/plain": "txt",
 };
 
+/** Windows device names (CON, NUL, COM1, ...), with or without an extension: writing "CON.pdf" there does not create a file. */
+const WINDOWS_DEVICE_NAME = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])( *\.|$)/i;
+
 /**
  * A safe local name for a downloaded document. The server's Content-Disposition name is used only when, after
  * defensive percent-decoding and dropping any directory part, it is a plain name: no leading dot, no control
- * characters, letters, digits and `._ -` only, at most 100 characters. Otherwise `document-<id>.<ext>`.
+ * characters, letters, digits and `._ -` only, at most 100 characters, and not a Windows device name. Otherwise `document-<id>.<ext>`.
  */
 export function documentFileName(serverName: string | undefined, id: string, contentType?: string): string {
   if (serverName) {
@@ -478,7 +481,7 @@ export function documentFileName(serverName: string | undefined, id: string, con
       /* keep the raw text; the checks below decide */
     }
     name = name.split(/[\\/]/).pop() ?? "";
-    if (/^[A-Za-z0-9][A-Za-z0-9._ -]{0,99}$/.test(name) && !/^\.|\.\.|[. ]$/.test(name)) return name;
+    if (/^[A-Za-z0-9][A-Za-z0-9._ -]{0,99}$/.test(name) && !/^\.|\.\.|[. ]$/.test(name) && !WINDOWS_DEVICE_NAME.test(name)) return name;
   }
   const ext = EXT_FOR_TYPE[(contentType ?? "").split(";")[0].trim().toLowerCase()];
   return `document-${id.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80)}${ext ? `.${ext}` : ""}`;

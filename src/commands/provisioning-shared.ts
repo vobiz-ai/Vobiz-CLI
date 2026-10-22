@@ -59,6 +59,9 @@ function parseNumber(flag: string, integer: boolean) {
   return (v: string): number => {
     // Integers: plain decimal digits (no 0x, 1e3 or padding). Decimals: a plain decimal literal.
     const ok = integer ? tryParseIntStrict(v, { min: -Number.MAX_SAFE_INTEGER }) !== undefined : /^-?\d{1,16}(\.\d{1,16})?$/.test(v);
+    // A 17-digit id (application ids are) is a valid integer that a JSON number cannot carry exactly: say so.
+    if (!ok && integer && /^-?\d+$/.test(v))
+      throw usage(`--${flag} ${v} is beyond ${Number.MAX_SAFE_INTEGER}, so it cannot be sent exactly as a JSON number. Send the field yourself with --body.`);
     if (!ok) throw usage(`--${flag} must be ${integer ? "an integer" : "a number"} (got "${v}").`);
     return Number(v);
   };

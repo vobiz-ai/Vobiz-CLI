@@ -21,6 +21,17 @@ const EXPORT = op("bulk-export-recordings");
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Hosts that receive the account credentials on a recording download: the API host itself and,
+ * for the production API, Vobiz's media host, which answers 401 without them (live-verified 2026-10-22).
+ * Any other storage host (and any redirect target) gets no credentials.
+ */
+export function credentialHosts(apiHost: string): Set<string> {
+  const hosts = new Set([apiHost]);
+  if (apiHost === "api.vobiz.ai") hosts.add("media.vobiz.ai");
+  return hosts;
+}
+
 /** Default file name: `<id>.<format>` from the record, else the URL's extension, else mp3. */
 export function defaultFileName(id: string, rec: Rec, url: URL): string {
   const fmt = typeof rec.recording_format === "string" && /^[a-z0-9]{2,5}$/i.test(rec.recording_format) ? rec.recording_format.toLowerCase() : undefined;
@@ -96,7 +107,7 @@ export function register(program: Command, ctx: Ctx): void {
         throw new VobizError("unexpected_response", `Recording ${id} has an invalid recording_url.`);
       }
       if (url.protocol !== "https:") throw new VobizError("unexpected_response", `Refusing to download over ${url.protocol} (expected https).`);
-      // Only send credentials back to the API host itself, never to a storage host.
+      // Only send credentials to the API host and Vobiz's own media host, never to a third-party storage host.
       const apiHost = new URL(ctx.client.baseUrl("voice")).host;
       // The URL comes from the API answer: never let it point the CLI at this machine or an internal network.
       if (url.host !== apiHost && isInternalHost(url.hostname) && !o.allowInsecureUrl)
@@ -105,7 +116,7 @@ export function register(program: Command, ctx: Ctx): void {
       const out = toStdout ? undefined : (o.out ?? defaultFileName(id, body, url));
       if (out) assertWritableTarget(out, !!o.force, "Pass --force to overwrite it or --out to pick another name.");
       const headers: Record<string, string> = { "User-Agent": USER_AGENT };
-      if (url.host === apiHost) Object.assign(headers, { "X-Auth-ID": ctx.creds.authId, "X-Auth-Token": ctx.creds.authToken });
+      if (credentialHosts(apiHost).has(url.host)) Object.assign(headers, { "X-Auth-ID": ctx.creds.authId, "X-Auth-Token": ctx.creds.authToken });
       const bytes = await streamUrl(ctx, url, headers, `GET recording from ${url.host}`, { out, force: o.force });
       if (out) ctx.out.success(`Saved ${out} (${bytes} bytes from ${hostOf(raw)}).`, { recording_id: id, file: out, bytes });
     });

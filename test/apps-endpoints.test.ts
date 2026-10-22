@@ -114,6 +114,15 @@ describe("endpoints", () => {
     expect(r.err).not.toContain("shown ONCE");
   });
 
+  it("a 17-digit application id is refused with a clear reason instead of being rounded (live regression)", async () => {
+    const api = fakeFetch({});
+    const r = await runCli(["endpoints", "create", "--username", "u", "--password", "Pw-123456!", "--alias", "a", "--application", "18902825214371853", "--yes"], { fetch: api.fetch });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("cannot be sent exactly as a JSON number");
+    expect(r.err).toContain("--body");
+    expect(api.calls).toHaveLength(0);
+  });
+
   it("create without --password and without a terminal is a usage error", async () => {
     const api = fakeFetch({});
     const r = await runCli(["endpoints", "create", "--username", "u", "--alias", "a", "--application", "1", "--yes"], { fetch: api.fetch });

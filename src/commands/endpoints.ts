@@ -34,6 +34,7 @@ export function register(program: Command, ctx: Ctx): void {
     secretPaths: ["password"],
     secretLabel: "SIP password",
     listFilters: true,
-    createExamples: ["vobiz endpoints create --username desk_01 --alias 'Front desk' --application 12345678901234567"],
+    // Application ids have 17 digits; the live API links the endpoint through `app_id` (a string), see SPEC-GAPS.
+    createExamples: [`vobiz endpoints create --username desk_01 --alias 'Front desk' --body '{"app_id":"12345678901234567"}'`],
   });
 }

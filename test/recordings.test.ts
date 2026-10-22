@@ -66,6 +66,19 @@ describe("vobiz recordings", () => {
     expect(stdout.out).toBe("RIFFxxxxWAVE");
   });
 
+  it("download sends the credentials to Vobiz's media host, which requires them (live 401 regression)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "vobiz-rec-"));
+    const api = fakeFetch({
+      [`GET ${A}/Recording/${ID}/`]: { ...rec(ID), recording_url: `https://media.vobiz.ai/v1/Account/${TEST_AUTH_ID}/Recording/${ID}.wav` },
+      [`GET /v1/Account/${TEST_AUTH_ID}/Recording/${ID}.wav`]: (req) =>
+        req.headers["x-auth-id"] === TEST_AUTH_ID && req.headers["x-auth-token"] ? textReply(200, "RIFF", { "content-type": "audio/wav" }) : reply(401, { error: "Authentication required" }),
+    });
+    const r = await runCli(["recordings", "download", ID, "--out", join(dir, "m.wav")], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(api.last().url).toBe(`https://media.vobiz.ai/v1/Account/${TEST_AUTH_ID}/Recording/${ID}.wav`);
+    expect(api.last().headers["x-auth-id"]).toBe(TEST_AUTH_ID);
+  });
+
   it("download never forwards the API credentials through a redirect to another host", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vobiz-rec-"));
     const api = fakeFetch({

@@ -1,6 +1,7 @@
 /**
- * Profiles and settings on disk: $VOBIZ_CONFIG_DIR or $XDG_CONFIG_HOME/vobiz or ~/.config/vobiz.
- * credentials.json holds one entry per profile and is written with mode 0600; config.json holds non-secret settings.
+ * Profiles and settings on disk: $VOBIZ_CONFIG_DIR, else $XDG_CONFIG_HOME/vobiz, else %APPDATA%\vobiz on Windows, else
+ * ~/.config/vobiz.
+ * credentials.json holds one entry per profile and is written with mode 0600 (on Windows the user profile ACLs protect it); config.json holds non-secret settings.
  * Nothing here is ever logged.
  */
 import { existsSync, readFileSync } from "node:fs";

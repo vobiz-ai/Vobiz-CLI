@@ -1193,7 +1193,7 @@ vobiz conferences record stop <conference> [options]
 
 ### vobiz config
 
-Read and change CLI settings (output, color, updateCheck, telemetry, defaultProfile)
+Read and change CLI settings (output, color, updateCheck, defaultProfile)
 
 ```
 vobiz config <command> [options]

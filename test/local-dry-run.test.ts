@@ -15,7 +15,7 @@ function setup() {
 
 describe("--dry-run on local writes", () => {
   const cases: [string, string[], RegExp][] = [
-    ["config set", ["config", "set", "telemetry", "true"], /\[dry-run\] would set telemetry = true/],
+    ["config set", ["config", "set", "updateCheck", "false"], /\[dry-run\] would set updateCheck = false/],
     ["config unset", ["config", "unset", "color"], /\[dry-run\] would reset color/],
     ["profiles use", ["profiles", "use", "staging"], /\[dry-run\] would make "staging" the default profile/],
     ["profiles rename", ["profiles", "rename", "staging", "stage2"], /\[dry-run\] would rename the profile "staging" to "stage2"/],
@@ -35,9 +35,9 @@ describe("--dry-run on local writes", () => {
 
   it("config set reports the change on stdout as dry_run", async () => {
     const { t } = setup();
-    expect(await run(["config", "set", "telemetry", "true", "--dry-run", "--json"], t.ctx)).toBe(0);
-    expect(JSON.parse(t.stdout.text)).toMatchObject({ dry_run: true, key: "telemetry", value: true });
-    expect(t.store.settings().telemetry).toBeUndefined();
+    expect(await run(["config", "set", "updateCheck", "false", "--dry-run", "--json"], t.ctx)).toBe(0);
+    expect(JSON.parse(t.stdout.text)).toMatchObject({ dry_run: true, key: "updateCheck", value: false });
+    expect(t.store.settings().updateCheck).toBeUndefined();
   });
 
   it("login --dry-run shows the verification request and saves nothing", async () => {

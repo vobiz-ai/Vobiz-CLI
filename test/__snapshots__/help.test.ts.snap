@@ -51,7 +51,7 @@ Commands:
                                  in use (offline; --check verifies with the API)
   profiles                       List, switch, rename and remove saved logins
   config                         Read and change CLI settings (output, color,
-                                 updateCheck, telemetry, defaultProfile)
+                                 updateCheck, defaultProfile)
   doctor [options]               Check Node.js, config permissions,
                                  connectivity, credentials, clock skew and proxy
                                  settings

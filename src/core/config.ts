@@ -47,7 +47,7 @@ const settingsFile = z.object({
   updateCheck: z.boolean().optional(),
   lastUpdateCheck: z.string().optional(),
   latestKnownVersion: z.string().optional(),
-  /** Reserved for opt-in anonymous usage telemetry; nothing reads it yet and the CLI sends no telemetry. */
+  /** Accepted in existing config files for forward compatibility; not a user-visible setting and nothing reads it. */
   telemetry: z.boolean().optional(),
 });
 export type Settings = z.infer<typeof settingsFile>;

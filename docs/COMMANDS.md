@@ -27,7 +27,7 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
 | `--verbose` | log requests (method, route, status, duration) to stderr |
 | `--debug` | also log request and response bodies, secrets redacted (env: VOBIZ_LOG=debug) |
 | `--no-update-check` | skip the daily version check (env: VOBIZ_NO_UPDATE_CHECK, CI) |
-| `-h, --help` | Display help for the command |
+| `-h, --help` | show help for this command |
 
 ## Exit codes
 

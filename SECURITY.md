@@ -1,6 +1,6 @@
 # Security policy
 
-Please report vulnerabilities privately by email to **security@vobiz.ai** (or support@vobiz.ai), or use the **Report a vulnerability** button on this repository's Security tab. Do not open a public issue. Include steps to reproduce and the affected version (`vobiz --version`). We acknowledge reports within 3 business days.
+Please report vulnerabilities privately by email to **security@vobiz.ai** (or support@vobiz.ai), or report it through GitHub at https://github.com/vobiz-ai/Vobiz-CLI/security/advisories/new (the **Report a vulnerability** button on this repository's Security tab). Do not open a public issue. Include steps to reproduce and the affected version (`vobiz --version`). We acknowledge reports within 3 business days.
 
 We aim to ship a fix within 90 days of the report and coordinate disclosure with you; fixed issues are published as GitHub security advisories, with a CVE when one applies. We will not pursue or support legal action against good-faith research that respects user privacy, avoids accounts and data that are not your own, and gives us reasonable time to fix before disclosure.
 

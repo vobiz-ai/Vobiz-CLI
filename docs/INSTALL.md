@@ -152,6 +152,8 @@ Homebrew installs bash, zsh and fish completions for you. The release archives a
 | Install script | `rm "$(command -v vobiz)"` |
 | PowerShell script | delete `%LOCALAPPDATA%\Programs\vobiz` and remove it from your user `PATH` |
 | Scoop | `scoop uninstall vobiz` |
+| Docker | `docker rmi ghcr.io/vobiz-ai/vobiz-cli` (add `:<version>` for each tag you pulled) |
+| Standalone binary | delete the `vobiz` (or `vobiz.exe`) file you extracted, plus its `completions/` and `man/` if you copied them |
 
 Your saved logins stay in the config directory (`vobiz config path`). Run `vobiz logout --all` first, or delete that directory, to remove them.
 

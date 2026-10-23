@@ -10,7 +10,7 @@ Thanks for helping make the Vobiz CLI better. Bug reports, fixes, new commands a
   - support `--dry-run`
   - print the destination, caller ID and URL host for calls and messages
   - never retry on its own
-- **No secrets in output or logs.** Never print a token. `--verbose` logs route templates, not concrete paths; `--debug` redacts `authToken`, `password`, `secret` and `token`.
+- **No secrets in output or logs.** Never print a token. `--verbose` logs route templates, not concrete paths; `--debug` redacts every key whose name ends in `token`, `secret`, `password`, `credential(s)`, `api_key` or `private_key` (and `pin`, `authorization`).
 - **Your account only.** Build account paths from the resolved Auth ID. Never accept an account ID as an argument. Keep the API's path casing exactly.
 - **Clean stdout.** Data goes to stdout; progress, hints and warnings go to stderr.
 - **Naming.** Plural nouns, standard verbs (`list get create update delete`), sentence-case help text, and **Vobiz** for the product name.
@@ -23,7 +23,7 @@ Requirements: Node.js 22.12+ and npm.
 ```bash
 git clone https://github.com/vobiz-ai/Vobiz-CLI.git
 cd Vobiz-CLI
-npm ci
+npm ci --ignore-scripts
 npm run check          # lint (tsc --noUnusedLocals), build, all tests
 npm run dev -- --help  # build and run
 ```

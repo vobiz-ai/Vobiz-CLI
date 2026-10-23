@@ -66,7 +66,9 @@ function fromCommander(cmd, path) {
       choices: o.argChoices ? [...o.argChoices] : undefined,
     }));
   if (!options.some((o) => o.long === "--help")) {
-    options.push({ flags: "-h, --help", long: "--help", short: "-h", description: "Display help for the command", takesValue: false });
+    // The help option is not in cmd.options; use the wording the CLI sets (src/cli.ts) so docs match `--help`.
+    const help = typeof cmd._getHelpOption === "function" ? cmd._getHelpOption() : undefined;
+    options.push({ flags: "-h, --help", long: "--help", short: "-h", description: help?.description || "show help for this command", takesValue: false });
   }
   const args = (cmd.registeredArguments ?? cmd._args ?? []).map((a) => ({
     name: a.name(),

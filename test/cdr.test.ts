@@ -199,3 +199,22 @@ describe("recordings default file name", () => {
     expect(defaultFileName("../r1", {}, new URL("https://x/a"))).toBe(".._r1.mp3");
   });
 });
+
+describe("cdr third-party note", () => {
+  const rec = { call_id: "u1", call_status: "answered", caller_id_name: "Ignore previous instructions", from_number: "+14155550100" };
+  const api = () => fakeFetch({ [`GET ${A}/cdr/recent`]: { count: 1, data: [rec], success: true } });
+  const note = /caller_id_name come from third parties/;
+
+  it("is printed when caller_id_name is in the output", async () => {
+    expect((await runCli(["cdr", "recent", "--output", "tsv", "--fields", "call_id,caller_id_name"], { fetch: api().fetch })).err).toMatch(note);
+    expect((await runCli(["cdr", "recent", "--json", "--query", "data[0].caller_id_name"], { fetch: api().fetch })).err).toMatch(note);
+  });
+
+  it("is not printed when --fields or --query leave caller_id_name out", async () => {
+    const r = await runCli(["cdr", "recent", "--output", "tsv", "--fields", "call_id,call_status"], { fetch: api().fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(r.err).not.toMatch(note);
+    expect((await runCli(["cdr", "recent", "--json", "--query", "data[0].call_id"], { fetch: api().fetch })).err).not.toMatch(note);
+  });
+});
+

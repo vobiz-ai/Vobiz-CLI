@@ -179,7 +179,7 @@ $ vobiz cdr recent --output tsv > calls.tsv
 
 ```bash
 vobiz mcp install claude-code       # connect the Vobiz MCP server (claude, claude-code, cursor, codex, windsurf, vscode, gemini, zed)
-vobiz skills install                # copy the 15 Vobiz Agent Skills into .claude/skills (or --dir .agents/skills)
+vobiz skills install                # copy the 17 Vobiz Agent Skills into .claude/skills (or --dir .agents/skills)
 vobiz docs search "gather speech"   # search the Vobiz docs through the Docs MCP server, no credentials needed
 ```
 

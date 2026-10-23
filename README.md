@@ -218,7 +218,7 @@ The contract agents rely on: data on stdout, everything else on stderr; `--outpu
 | `--yes`, `--dry-run` | `VOBIZ_YES` | Confirmations |
 | `--timeout <sec>` | `VOBIZ_TIMEOUT` | Per-request timeout (default 30) |
 | `--base-url`, `--sms-base-url` | `VOBIZ_BASE_URL`, `VOBIZ_SMS_BASE_URL` | Gateway overrides, `https://*.vobiz.ai` only |
-| `--verbose`, `--debug`, `--no-color` | `VOBIZ_LOG`, `NO_COLOR` | Logging and colour |
+| `--verbose`, `--debug`, `--no-color` | `VOBIZ_LOG`, `NO_COLOR` | Logging and color |
 
 Profiles and settings live in `~/.config/vobiz` (`%APPDATA%\vobiz` on Windows, or `$VOBIZ_CONFIG_DIR`); `vobiz config path` prints the location. If your account restricts API access by IP, allow the addresses your scripts use: see [IP whitelisting](https://www.vobiz.ai/docs/concepts/ip-whitelisting).
 

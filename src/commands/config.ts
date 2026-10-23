@@ -31,7 +31,7 @@ export const CONFIG_KEYS: Record<Key, KeySpec> = {
   },
   color: { description: "colored output (true/false)", parse: bool("color") },
   updateCheck: { description: "daily check for a newer CLI version (true/false)", parse: bool("updateCheck") },
-  telemetry: { description: "anonymous usage telemetry, off unless set to true", parse: bool("telemetry") },
+  telemetry: { description: "reserved for opt-in usage telemetry; the CLI sends none today, whatever the value", parse: bool("telemetry") },
   defaultProfile: {
     description: "profile used when --profile is not given",
     parse: (v, ctx) => {

@@ -287,6 +287,15 @@ describe("input validation (exit 2, nothing sent)", () => {
     });
   }
 
+  for (const argv of [["trunks", "explode"], ["numbers", "list", "--colour"], ["trunks", "get"]]) {
+    it(`a parse error (${argv.join(" ")}) prints the same JSON error shape when stdout is piped`, async () => {
+      const r = await runCli(argv);
+      expect(r.code).toBe(2);
+      expect(r.out).toBe("");
+      expect(JSON.parse(r.err)).toMatchObject({ error: "invalid_input", retryable: false, status: null, hint: expect.any(String) });
+    });
+  }
+
   it("invalid input prints JSON errors with --json", async () => {
     const r = await runCli(["numbers", "get", "hello", "--json"]);
     expect(r.code).toBe(2);

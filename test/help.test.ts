@@ -49,7 +49,7 @@ describe("completion", () => {
       expect(s, shell).toContain("profiles");
       expect(s, shell).toContain("--output");
     }
-    expect(completionScript("bash", program)).toContain('"vobiz profiles") words="list ls use remove rm rename');
+    expect(completionScript("bash", program)).toContain('"vobiz profiles") words="list ls use remove rm delete rename');
     const r = await runCli(["completion", "zsh"]);
     expect(r.code).toBe(0);
     expect(r.out.startsWith("#compdef vobiz")).toBe(true);

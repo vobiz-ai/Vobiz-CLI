@@ -47,6 +47,7 @@ export function register(program: Command, ctx: Ctx): void {
 
   account
     .command("show")
+    .alias("get")
     .description("Show the account profile (name, limits, pricing tier)")
     .action(async () => {
       ctx.out.print(await ctx.client.call(RETRIEVE_ACCOUNT));

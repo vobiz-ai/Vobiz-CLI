@@ -5,7 +5,7 @@
  * Also here: list printing that keeps the raw response shape in json/yaml modes even across `--all` pages.
  * (DELETE requests with a JSON body, such as `remove-campaign-numbers`, go through `ctx.client.call` like any other.)
  */
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { Option, type Command } from "commander";
 import type { CallArgs } from "../../core/client.js";
@@ -119,11 +119,16 @@ export function scheduleAt(value: string, now: Date): string {
 export function fileForm(field: string, path: string, extra: Record<string, string | undefined> = {}): { form: FormData; name: string; size: number } {
   let bytes: Buffer;
   let size: number;
+  // One open file descriptor for both the size and the bytes, so the file cannot change between the two.
+  let fd: number | undefined;
   try {
-    size = statSync(path).size;
-    bytes = readFileSync(path);
+    fd = openSync(path, "r");
+    size = fstatSync(fd).size;
+    bytes = readFileSync(fd);
   } catch {
     throw usage(`Cannot read ${path}.`);
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
   const form = new FormData();
   const name = basename(path);

@@ -19,7 +19,15 @@ const GET = op("get-recording");
 const DELETE = op("delete-recording");
 const EXPORT = op("bulk-export-recordings");
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** local@domain.tld without whitespace; a linear check instead of a backtracking regex. */
+export function isEmail(s: string): boolean {
+  if (/\s/.test(s)) return false;
+  const at = s.indexOf("@");
+  if (at <= 0 || at !== s.lastIndexOf("@")) return false;
+  const domain = s.slice(at + 1);
+  const dot = domain.lastIndexOf(".");
+  return dot > 0 && dot < domain.length - 1;
+}
 
 /**
  * Hosts that receive the account credentials on a recording download: the API host itself and,
@@ -141,7 +149,7 @@ export function register(program: Command, ctx: Ctx): void {
       "\nExamples:\n  vobiz recordings export --email ops@example.com --from 2026-09-01 --to 2026-09-30\n  vobiz recordings export --email ops@example.com --min-age-days 7 --max-age-days 30 --format wav --yes",
     )
     .action(async (o: ExportOpts) => {
-      for (const e of o.email) if (!EMAIL.test(e)) throw usage(`"${e}" is not an email address.`);
+      for (const e of o.email) if (!isEmail(e)) throw usage(`"${e}" is not an email address.`);
       const byAge = o.ageDays !== undefined || o.minAgeDays !== undefined || o.maxAgeDays !== undefined;
       if (byAge && (o.from || o.to)) throw usage("Use either --from/--to or the --*-age-days filters, not both.");
       if (o.ageDays !== undefined && (o.minAgeDays !== undefined || o.maxAgeDays !== undefined)) throw usage("--age-days cannot be combined with --min-age-days/--max-age-days.");

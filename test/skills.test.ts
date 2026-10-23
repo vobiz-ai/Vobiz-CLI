@@ -10,9 +10,9 @@ import { runCli } from "./helpers.js";
 const tempDir = () => join(mkdtempSync(join(tmpdir(), "vobiz-skills-")), ".claude", "skills");
 
 describe("bundled skills", () => {
-  it("ships the 15 Vobiz skills with valid front matter", () => {
+  it("ships the 17 Vobiz skills with valid front matter", () => {
     const all = bundledSkills();
-    expect(all).toHaveLength(15);
+    expect(all).toHaveLength(17);
     for (const s of all) {
       expect(s.name).toMatch(/^vobiz-[a-z0-9-]+$/);
       expect(s.description.length, s.name).toBeGreaterThan(20);
@@ -27,7 +27,7 @@ describe("skills list", () => {
     const r = await runCli(["skills", "list", "--json"], { loggedOut: true });
     expect(r.code).toBe(0);
     const rows = r.json();
-    expect(rows).toHaveLength(15);
+    expect(rows).toHaveLength(17);
     expect(rows[0]).toEqual({ name: "vobiz-ai-voice-agents", version: expect.any(String), description: expect.stringContaining("voice agents") });
   });
 
@@ -66,7 +66,7 @@ describe("skills install", () => {
     expect((await runCli(["skills", "install", "--dir", dir])).code).toBe(6);
     const dry = await runCli(["skills", "install", "--dir", dir, "--dry-run", "--json"]);
     expect(dry.code).toBe(0);
-    expect(dry.err).toContain("[dry-run] Install 15 Vobiz skills");
+    expect(dry.err).toContain("[dry-run] Install 17 Vobiz skills");
     expect(existsSync(dir)).toBe(false);
   });
 

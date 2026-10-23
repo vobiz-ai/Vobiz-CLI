@@ -6,6 +6,21 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-23
+
+### Added
+
+- Bundles the 17 Vobiz Agent Skills: `vobiz-reports` and `vobiz-campaign-planner` are new, and `vobiz-forward-deployed-engineer` gives the 140-series calling hours as 10 AM-8 PM.
+
+### Changed
+
+- `vobiz help exit-codes`, docs/COMMANDS.md, the man page, README, docs/AGENTS.md and docs/ARCHITECTURE.md share one
+  exit-code text (src/core/exit-codes.ts). Code 7 names a lost connection and a 5xx or 408 answer on a write.
+- `vobiz config` lists only the settings it uses: `output`, `color`, `updateCheck` and `defaultProfile`.
+- `sub-accounts kyc --test` and `kyc finalize-pending` stay callable but are left out of `--help`.
+- `--help` reads "show help for this command" in docs/COMMANDS.md too.
+- Docs: version pins use 0.1.2 and explain how to pick a version; uninstall rows for Docker and standalone binaries.
+
 ## [0.1.2] - 2026-10-23
 
 ### Fixed
@@ -37,7 +52,7 @@ All notable changes to the Vobiz CLI are documented here. The format follows
   page, so `--limit` trims it in the CLI.
 - `vobiz update` reports `install_method: "source"` (and suggests `git pull && npm ci && npm run build`) when it runs
   from a git checkout.
-- New public `docs/ARCHITECTURE.md` (command tree conventions, safety model, output modes, exit codes), linked from the
+- New `docs/ARCHITECTURE.md` (command tree conventions, safety model, output modes, exit codes), linked from the
   README, CONTRIBUTING and CLAUDE.md.
 - `scripts/pack-guard.mjs` fails the pack when README, CHANGELOG or LICENSE would be missing from the package.
 
@@ -50,7 +65,7 @@ All notable changes to the Vobiz CLI are documented here. The format follows
   `--type`, `--format`, `--direction`) offered the first command's values everywhere.
 - The "come from third parties" note on stderr names only fields that are printed: `cdr` with `--fields` or `--query`
   that leave `caller_id_name` out, and tables whose columns leave the field out, no longer print it.
-- Public test, script and source comments no longer carry internal review labels.
+- Comment cleanup in tests, scripts and sources.
 
 ### Security
 
@@ -85,7 +100,8 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 - CI on Node.js 22 and 24 (lint, build, tests, spec and docs drift, package and Docker smoke tests, a standalone
   binary build), CodeQL, OpenSSF Scorecard and Dependabot.
 
-[Unreleased]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vobiz-ai/Vobiz-CLI/releases/tag/v0.1.0

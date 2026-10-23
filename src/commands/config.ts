@@ -8,7 +8,7 @@ import type { Ctx } from "../core/context.js";
 import { localDryRun } from "../core/confirm.js";
 import { VobizError } from "../core/errors.js";
 
-type Key = "output" | "color" | "updateCheck" | "telemetry" | "defaultProfile";
+type Key = "output" | "color" | "updateCheck" | "defaultProfile";
 
 interface KeySpec {
   description: string;
@@ -32,7 +32,6 @@ export const CONFIG_KEYS: Record<Key, KeySpec> = {
   },
   color: { description: "colored output (true/false)", parse: bool("color") },
   updateCheck: { description: "daily check for a newer CLI version (true/false)", parse: bool("updateCheck") },
-  telemetry: { description: "reserved for opt-in usage telemetry; the CLI sends none today, whatever the value", parse: bool("telemetry") },
   defaultProfile: {
     description: "profile used when --profile is not given",
     parse: (v, ctx) => {
@@ -54,7 +53,7 @@ function keyOf(name: string): Key {
 }
 
 export function register(program: Command, ctx: Ctx): void {
-  const config = program.command("config").description("Read and change CLI settings (output, color, updateCheck, telemetry, defaultProfile)");
+  const config = program.command("config").description("Read and change CLI settings (output, color, updateCheck, defaultProfile)");
 
   config
     .command("list")

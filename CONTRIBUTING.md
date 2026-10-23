@@ -4,13 +4,13 @@ Thanks for helping make the Vobiz CLI better. Bug reports, fixes, new commands a
 
 ## Ground rules
 
-- **Spec first.** Every HTTP call comes from an operation in the vendored OpenAPI documents in `spec/` (`ctx.client.call(op("<operationId>"), …)`). Don't invent fields or paths. If the API does something the spec does not describe, add an entry to [`docs/SPEC-GAPS.md`](docs/SPEC-GAPS.md) instead. `npm run spec:sync` refreshes `spec/` from the published Vobiz docs.
+- **Spec first.** Every HTTP call comes from an operation in the vendored OpenAPI documents in `spec/` (`ctx.client.call(op("<operationId>"), …)`). Don't invent fields or paths. If you need something the spec does not describe, leave it out and describe it in the pull request or an issue. `npm run spec:sync` refreshes `spec/` from the published Vobiz docs.
 - **Safe by default.** Any command that spends money, contacts a real person, or changes or deletes something must:
   - go through `requireConfirmation` (prompt on a terminal, exit code 6 without `--yes` otherwise)
   - support `--dry-run`
   - print the destination, caller ID and URL host for calls and messages
   - never retry on its own
-- **No secrets in output or logs.** Never print a token. `--verbose` logs route templates, not concrete paths; `--debug` redacts `authToken`, `password`, `secret` and `token`.
+- **No secrets in output or logs.** Never print a token. `--verbose` logs route templates, not concrete paths; `--debug` redacts every key whose name ends in `token`, `secret`, `password`, `credential(s)`, `api_key` or `private_key` (and `pin`, `authorization`).
 - **Your account only.** Build account paths from the resolved Auth ID. Never accept an account ID as an argument. Keep the API's path casing exactly.
 - **Clean stdout.** Data goes to stdout; progress, hints and warnings go to stderr.
 - **Naming.** Plural nouns, standard verbs (`list get create update delete`), sentence-case help text, and **Vobiz** for the product name.
@@ -23,7 +23,7 @@ Requirements: Node.js 22.12+ and npm.
 ```bash
 git clone https://github.com/vobiz-ai/Vobiz-CLI.git
 cd Vobiz-CLI
-npm ci
+npm ci --ignore-scripts
 npm run check          # lint (tsc --noUnusedLocals), build, all tests
 npm run dev -- --help  # build and run
 ```

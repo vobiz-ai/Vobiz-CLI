@@ -6,7 +6,7 @@
 # installs vobiz.exe and adds the install directory to your user PATH.
 #
 # Environment overrides:
-#   VOBIZ_VERSION      version to install, e.g. 0.1.0 or v0.1.0 (default: the latest release, resolved once
+#   VOBIZ_VERSION      version to install, e.g. 0.1.2 or v0.1.2 (default: the latest release, resolved once
 #                      through the GitHub API and then pinned for every download in this run)
 #   VOBIZ_INSTALL_DIR  target directory (default: %LOCALAPPDATA%\Programs\vobiz)
 #   VOBIZ_REPO         GitHub repository to download from (default: vobiz-ai/Vobiz-CLI)

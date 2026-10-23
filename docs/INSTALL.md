@@ -42,11 +42,13 @@ The script downloads the release archive for your OS and CPU from GitHub Release
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `VOBIZ_VERSION` | latest release | Version to install, e.g. `0.1.0` |
+| `VOBIZ_VERSION` | latest release | Version to install, e.g. `0.1.2` |
 | `VOBIZ_INSTALL_DIR` | `/usr/local/bin` (root) or `~/.local/bin` | Where to put the binary |
 
+The examples on this page pin `0.1.2`; replace it with the version you want (`npm view @vobiz/cli version` prints the latest).
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vobiz-ai/Vobiz-CLI/main/install.sh | VOBIZ_VERSION=0.1.0 VOBIZ_INSTALL_DIR=/opt/bin sh
+curl -fsSL https://raw.githubusercontent.com/vobiz-ai/Vobiz-CLI/main/install.sh | VOBIZ_VERSION=0.1.2 VOBIZ_INSTALL_DIR=/opt/bin sh
 ```
 
 Prefer to read a script before you run it? Download it first: `curl -fsSLO https://raw.githubusercontent.com/vobiz-ai/Vobiz-CLI/main/install.sh`, inspect it, then `sh install.sh`.
@@ -101,7 +103,7 @@ Each archive holds `vobiz` (or `vobiz.exe`), `LICENSE`, `README.md`, `completion
 ### Verify a download
 
 ```bash
-V=0.1.0
+V=0.1.2
 curl -fsSLO https://github.com/vobiz-ai/Vobiz-CLI/releases/download/v$V/vobiz-$V-linux-x64.tar.gz
 curl -fsSLO https://github.com/vobiz-ai/Vobiz-CLI/releases/download/v$V/SHA256SUMS
 sha256sum --check --ignore-missing SHA256SUMS          # macOS: shasum -a 256 --check --ignore-missing SHA256SUMS
@@ -150,6 +152,8 @@ Homebrew installs bash, zsh and fish completions for you. The release archives a
 | Install script | `rm "$(command -v vobiz)"` |
 | PowerShell script | delete `%LOCALAPPDATA%\Programs\vobiz` and remove it from your user `PATH` |
 | Scoop | `scoop uninstall vobiz` |
+| Docker | `docker rmi ghcr.io/vobiz-ai/vobiz-cli` (add `:<version>` for each tag you pulled) |
+| Standalone binary | delete the `vobiz` (or `vobiz.exe`) file you extracted, plus its `completions/` and `man/` if you copied them |
 
 Your saved logins stay in the config directory (`vobiz config path`). Run `vobiz logout --all` first, or delete that directory, to remove them.
 

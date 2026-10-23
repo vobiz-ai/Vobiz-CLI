@@ -6,7 +6,7 @@ The Vobiz CLI runs unattended in any CI system. Three rules make it reliable:
 2. **Writes need `--yes`.** Without a terminal, any command that would ask for confirmation exits with code `6` unless you pass `--yes` (or set `VOBIZ_YES=1`). Use `--dry-run` in pull-request pipelines to show what would happen.
 3. **Read JSON, branch on exit codes.** Pass `--output json` and parse stdout. Errors arrive on stderr as one JSON line `{"error","message","status","retryable","hint"}` with a stable [exit code](../README.md#exit-codes).
 
-The update check is skipped automatically when `CI` is set. Pin the CLI version so a new release never changes a pipeline by surprise.
+The update check is skipped automatically when `CI` is set. Pin the CLI version so a new release never changes a pipeline by surprise. The examples pin `0.1.2`; replace it with the version you want (`npm view @vobiz/cli version` prints the latest).
 
 If your account restricts API access by IP address, allow your runners' addresses. See [IP whitelisting](https://www.vobiz.ai/docs/concepts/ip-whitelisting).
 
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-      - run: npm install --global @vobiz/cli@0.1.0
+      - run: npm install --global @vobiz/cli@0.1.2
       - run: vobiz whoami --output json
       - name: Balance and numbers
         run: |
@@ -63,7 +63,7 @@ Pin every action to a commit SHA, as above, so a moved tag cannot change your pi
 ```yaml
       - run: |
           docker run --rm -e VOBIZ_AUTH_ID -e VOBIZ_AUTH_TOKEN \
-            ghcr.io/vobiz-ai/vobiz-cli:0.1.0 cdr list --from 7d --output json > cdrs.json
+            ghcr.io/vobiz-ai/vobiz-cli:0.1.2 cdr list --from 7d --output json > cdrs.json
 ```
 
 ## GitLab CI
@@ -73,7 +73,7 @@ Add `VOBIZ_AUTH_ID` and `VOBIZ_AUTH_TOKEN` under **Settings → CI/CD → Variab
 ```yaml
 vobiz-report:
   image:
-    name: ghcr.io/vobiz-ai/vobiz-cli:0.1.0
+    name: ghcr.io/vobiz-ai/vobiz-cli:0.1.2
     # The image's entrypoint is the CLI; clear it so GitLab can run a shell script.
     entrypoint: [""]
   script:
@@ -91,7 +91,7 @@ Or with a Node.js image:
 vobiz-numbers:
   image: node:24
   script:
-    - npm install --global @vobiz/cli@0.1.0
+    - npm install --global @vobiz/cli@0.1.2
     - vobiz numbers list --output json --quiet
 ```
 
@@ -104,7 +104,7 @@ pipeline {
   agent { docker { image 'node:24' } }
   stages {
     stage('Install') {
-      steps { sh 'npm install --global @vobiz/cli@0.1.0' }
+      steps { sh 'npm install --global @vobiz/cli@0.1.2' }
     }
     stage('Report') {
       steps {

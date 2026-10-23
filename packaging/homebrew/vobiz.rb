@@ -1,6 +1,7 @@
-# Homebrew formula for the Vobiz CLI. The release workflow fills in the version, URLs and sha256 values
-# (scripts/update-homebrew-formula.mjs) and opens a pull request with this file to vobiz-ai/homebrew-tap
-# as Formula/vobiz.rb. Install: brew install vobiz-ai/tap/vobiz
+# Template for the Vobiz CLI Homebrew formula. The version, URLs and all-zero sha256 values below are
+# placeholders: for each stable release the release workflow fills them in (scripts/update-homebrew-formula.mjs)
+# and opens a pull request to vobiz-ai/homebrew-tap. The live formula is Formula/vobiz.rb in that repository.
+# Install: brew install vobiz-ai/tap/vobiz
 class Vobiz < Formula
   desc "Official Vobiz CLI: voice calls, SMS, phone numbers, SIP trunks and VobizXML"
   homepage "https://www.vobiz.ai/docs/resources/cli"

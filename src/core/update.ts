@@ -6,7 +6,7 @@
 import type { Ctx } from "./context.js";
 import { CLI_NAME, CLI_VERSION } from "./version.js";
 
-export const REGISTRY_URL = `https://registry.npmjs.org/-/package/${CLI_NAME.replace("/", "%2f")}/dist-tags`;
+export const REGISTRY_URL = `https://registry.npmjs.org/-/package/${encodeURIComponent(CLI_NAME)}/dist-tags`;
 const DAY_MS = 86_400_000;
 export const UPDATE_TIMEOUT_MS = 1500;
 

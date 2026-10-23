@@ -37,10 +37,10 @@ jobs:
       - run: npx vitest run
       - name: Operations are up to date with spec/ (spec drift)
         run: npm run gen && git diff --exit-code src/generated
-      - name: docs/COMMANDS.md is up to date with the command tree
+      - name: docs/COMMANDS.md and the generated doc blocks are up to date with the command tree
         run: |
           npm run docs:commands
-          git diff --exit-code docs/COMMANDS.md
+          git diff --exit-code docs/COMMANDS.md README.md docs/AGENTS.md docs/ARCHITECTURE.md
           test -z "$(git status --porcelain docs/COMMANDS.md)" || { echo "docs/COMMANDS.md is not committed: run npm run docs:commands"; exit 1; }
       - name: Completions and man page generate
         run: npm run build:assets

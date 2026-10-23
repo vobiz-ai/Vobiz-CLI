@@ -136,4 +136,14 @@ describe("whoami, logout, profiles, config", () => {
     expect(await run(["config", "path", "--output", "plain"], t.ctx)).toBe(0);
     expect(t.stdout.text.trim()).toBe(t.configDir);
   });
+
+  it("config list shows only user-visible settings; a stored telemetry value still loads", async () => {
+    const t = makeCtx();
+    t.store.patchSettings({ telemetry: true });
+    expect(await run(["config", "list", "--json"], t.ctx)).toBe(0);
+    expect(JSON.parse(t.stdout.text).map((r: { key: string }) => r.key)).toEqual(["output", "color", "updateCheck", "defaultProfile"]);
+    expect(await run(["config", "set", "telemetry", "true"], t.ctx)).toBe(2);
+    expect(t.stderr.text).not.toContain("telemetry,");
+    expect(t.store.settings().telemetry).toBe(true);
+  });
 });

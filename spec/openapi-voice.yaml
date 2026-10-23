@@ -9937,7 +9937,7 @@ paths:
           content:
             application/json:
               example:
-                auth_id: "MA_ZKITB8Z2"
+                auth_id: "MA_XXXXXXXX"
                 auth_token: "your_auth_token_here"
                 name: "John Doe"
                 email: "john@example.com"
@@ -9962,7 +9962,7 @@ paths:
           required: true
           schema:
             type: string
-            example: "MA_ZKITB8Z2"
+            example: "MA_XXXXXXXX"
       requestBody:
         required: true
         content:
@@ -10558,7 +10558,7 @@ paths:
                 account_auth_id:
                   type: string
                   description: Customer's auth_id (from create-customer-account).
-                  example: "MA_ZKITB8Z2"
+                  example: "MA_XXXXXXXX"
                 flow_type:
                   type: string
                   enum: [ email, redirect ]
@@ -10616,7 +10616,7 @@ paths:
                   summary: Email-flow response
                   value:
                     session_id: "a5f8da3c-b47f-40c3-a3e6-d2c9a0f27065"
-                    account_auth_id: "MA_E31MAU98"
+                    account_auth_id: "MA_XXXXXXXX"
                     customer_email: "customer@example.com"
                     email_dispatched_to: "c***@example.com"
                     kyc_type: null
@@ -10629,7 +10629,7 @@ paths:
                   summary: Redirect-flow response
                   value:
                     session_id: "1a0f7da5-2abb-47bf-a6c3-eb5cff7feda5"
-                    account_auth_id: "MA_E31MAU98"
+                    account_auth_id: "MA_XXXXXXXX"
                     customer_email: null
                     email_dispatched_to: null
                     kyc_type: null

@@ -1,11 +1,15 @@
 #!/usr/bin/env node
-// Generates docs/COMMANDS.md from the built command tree (dist/cli.js). CI fails when the file is stale.
+// Generates docs/COMMANDS.md from the built command tree (dist/cli.js), and refreshes the generated parts of the
+// hand-written docs: the exit-code tables between `<!-- BEGIN GENERATED exit-codes… -->` markers in README.md,
+// docs/AGENTS.md and docs/ARCHITECTURE.md (text from src/core/exit-codes.ts, the source of `vobiz help exit-codes`)
+// and the command count in README.md. CI fails when any of them is stale.
 // Usage: npm run build && npm run docs:commands
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { EXIT_CODES, flatten, loadCommandTree, root, usageLine } from "./lib/command-tree.mjs";
+import { flatten, loadCommandTree, loadExitCodes, root, usageLine } from "./lib/command-tree.mjs";
 
 const tree = await loadCommandTree();
+const { exitCodesMarkdown, fillGeneratedBlocks } = await loadExitCodes();
 const cell = (s) => String(s ?? "").replace(/\s+/g, " ").trim().replace(/[\\|]/g, (c) => `\\${c}`); // escape backslashes and pipes in one pass
 const anchor = (node) => ["vobiz", ...node.path].join("-").toLowerCase().replace(/[^a-z0-9-]/g, "");
 const optionRows = (options) => options.map((o) => `| \`${cell(o.flags)}\` | ${cell(o.description)}${o.choices?.length ? ` (one of: ${o.choices.map((c) => `\`${c}\``).join(", ")})` : ""} |`);
@@ -26,9 +30,7 @@ const out = [
   "",
   "## Exit codes",
   "",
-  "| Code | Meaning |",
-  "|---|---|",
-  ...EXIT_CODES.map(([c, t]) => `| ${c} | ${cell(t)} |`),
+  exitCodesMarkdown(),
   "",
   "## Commands",
   "",
@@ -53,3 +55,15 @@ for (const n of nodes) {
 
 writeFileSync(join(root, "docs", "COMMANDS.md"), out.join("\n").replace(/\n+$/, "\n"));
 process.stderr.write(`wrote docs/COMMANDS.md (${nodes.length} commands)\n`);
+
+// "N commands and command groups" counts every node in docs/COMMANDS.md (groups and leaves, hidden ones excluded).
+const COUNT = /\b\d[\d,]* commands and command groups\b/g;
+for (const rel of ["README.md", join("docs", "AGENTS.md"), join("docs", "ARCHITECTURE.md")]) {
+  const file = join(root, rel);
+  const before = readFileSync(file, "utf8");
+  const after = fillGeneratedBlocks(before).replace(COUNT, `${nodes.length} commands and command groups`);
+  if (after !== before) {
+    writeFileSync(file, after);
+    process.stderr.write(`updated ${rel}\n`);
+  }
+}

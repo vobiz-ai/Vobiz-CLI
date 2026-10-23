@@ -10,7 +10,7 @@ metadata:
 
 # Vobiz Partner API skill
 
-Use this for **white-label / reseller workflows** where one partner master account owns multiple **partner child accounts** (the docs also call them customer accounts or customer sub-accounts). Each child is a full Vobiz main account (`MA_…`) with its own wallet, KYC, numbers, CPS, and concurrency. Auth uses the **same** `X-Auth-ID` / `X-Auth-Token` headers as the main API - there is **no separate Bearer JWT for server-to-server calls**. Just use your partner-tier credentials. (`POST /login` exchanges email + password for a JWT, but the docs reserve it for interactive sessions; it is doc-only and not in `openapi.yaml`.)
+Use this for **reseller workflows** where one partner master account owns multiple **partner child accounts** (the docs also call them customer accounts or customer sub-accounts). Each child is a full Vobiz main account (`MA_…`) with its own wallet, KYC, numbers, CPS, and concurrency. Auth uses the **same** `X-Auth-ID` / `X-Auth-Token` headers as the main API - there is **no separate Bearer JWT for server-to-server calls**. Just use your partner-tier credentials. (`POST /login` exchanges email + password for a JWT, but the docs reserve it for interactive sessions; it is doc-only and not in `openapi.yaml`.)
 
 Not sure whether the user needs partner child accounts or sub-accounts? See `concepts/sub-accounts-vs-partner-accounts` and the `vobiz-sub-accounts` skill.
 

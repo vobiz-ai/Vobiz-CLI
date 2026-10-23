@@ -128,6 +128,11 @@ describe("#6 confirmation details cannot forge lines", () => {
     expect(text).not.toMatch(/[\x00-\x08\x0b-\x1f\x7f]/);
     expect(oneLine("a\u2028b")).toBe("a\u2424b");
   });
+
+  it("escapes backslashes before quotes so an API value cannot close its own quotes", () => {
+    const text = formatSummary({ action: "Rename", details: { name: { value: 'a\\" b', fromApi: true } } });
+    expect(text.split("\n")[1]).toBe('  name: "a\\\\\\" b"');
+  });
 });
 
 describe("#10 account first, profile changes", () => {

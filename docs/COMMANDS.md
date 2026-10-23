@@ -27,20 +27,20 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
 | `--verbose` | log requests (method, route, status, duration) to stderr |
 | `--debug` | also log request and response bodies, secrets redacted (env: VOBIZ_LOG=debug) |
 | `--no-update-check` | skip the daily version check (env: VOBIZ_NO_UPDATE_CHECK, CI) |
-| `-h, --help` | Display help for the command |
+| `-h, --help` | show help for this command |
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | 0 | Success. |
-| 1 | Server error or unknown failure. |
+| 1 | Server error or unknown failure. A 5xx on a read is retryable; a 5xx on a write is exit 7. |
 | 2 | Usage error or invalid input. |
-| 3 | Authentication failed, credentials missing, or access forbidden. |
+| 3 | Authentication failed, credentials missing, access forbidden or account suspended. |
 | 4 | Not found. |
 | 5 | Rate limited or insufficient balance. |
 | 6 | Confirmation required (pass --yes) or the action is not allowed. |
-| 7 | Outcome unknown: a side-effecting request timed out, lost its connection or got a 5xx. Check the state before retrying. |
+| 7 | Outcome unknown: a side-effecting request (call, message, purchase, transfer) timed out, lost its connection, or got a 5xx or 408 answer on a write. It may have taken effect, so it is not retryable; check the state first. The CLI never retries on its own. |
 | 8 | Timeout or network error on a read (nothing was changed; safe to retry). |
 | 130 | Interrupted (Ctrl-C). |
 
@@ -286,7 +286,6 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
     - [`vobiz sub-accounts kyc digilocker`](#vobiz-sub-accounts-kyc-digilocker)
       - [`vobiz sub-accounts kyc digilocker initiate`](#vobiz-sub-accounts-kyc-digilocker-initiate)
       - [`vobiz sub-accounts kyc digilocker verify`](#vobiz-sub-accounts-kyc-digilocker-verify)
-    - [`vobiz sub-accounts kyc finalize-pending`](#vobiz-sub-accounts-kyc-finalize-pending)
     - [`vobiz sub-accounts kyc session`](#vobiz-sub-accounts-kyc-session)
       - [`vobiz sub-accounts kyc session create`](#vobiz-sub-accounts-kyc-session-create)
     - [`vobiz sub-accounts kyc status`](#vobiz-sub-accounts-kyc-status)
@@ -1194,7 +1193,7 @@ vobiz conferences record stop <conference> [options]
 
 ### vobiz config
 
-Read and change CLI settings (output, color, updateCheck, telemetry, defaultProfile)
+Read and change CLI settings (output, color, updateCheck, defaultProfile)
 
 ```
 vobiz config <command> [options]
@@ -3783,11 +3782,7 @@ Sub-account KYC: status, PAN/GST/CIN/DigiLocker verification and hosted KYC sess
 vobiz sub-accounts kyc <command> [options]
 ```
 
-| Option | Description |
-|---|---|
-| `--test` | use the Test Mode endpoints (mock results; nothing is sent to a verification provider) |
-
-Subcommands: [`cin`](#vobiz-sub-accounts-kyc-cin), [`digilocker`](#vobiz-sub-accounts-kyc-digilocker), [`finalize-pending`](#vobiz-sub-accounts-kyc-finalize-pending), [`session`](#vobiz-sub-accounts-kyc-session), [`status`](#vobiz-sub-accounts-kyc-status), [`verify-gst`](#vobiz-sub-accounts-kyc-verify-gst), [`verify-pan`](#vobiz-sub-accounts-kyc-verify-pan)
+Subcommands: [`cin`](#vobiz-sub-accounts-kyc-cin), [`digilocker`](#vobiz-sub-accounts-kyc-digilocker), [`session`](#vobiz-sub-accounts-kyc-session), [`status`](#vobiz-sub-accounts-kyc-status), [`verify-gst`](#vobiz-sub-accounts-kyc-verify-gst), [`verify-pan`](#vobiz-sub-accounts-kyc-verify-pan)
 
 ### vobiz sub-accounts kyc cin
 
@@ -3878,24 +3873,6 @@ vobiz sub-accounts kyc digilocker verify <sub-auth-id> [options]
 |---|---|
 | `--access-request-id <value>` | access request ID (required) |
 | `--linked-number <value>` | linked number |
-| `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
-
-### vobiz sub-accounts kyc finalize-pending
-
-Test Mode only: resolve a pending verification as verified or failed
-
-```
-vobiz sub-accounts kyc finalize-pending <sub-auth-id> [options]
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `sub-auth-id` | yes | sub-account Auth ID, e.g. SA_XXXXXXXX |
-
-| Option | Description |
-|---|---|
-| `--verification-type <value>` | verification type (required) (one of: `pan`, `aadhaar`, `gst`, `cin`) |
-| `--outcome <value>` | outcome (required) (one of: `verified`, `failed`) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz sub-accounts kyc session

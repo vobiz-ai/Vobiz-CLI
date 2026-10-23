@@ -20,7 +20,7 @@ spec/                    the vendored Vobiz Voice and Messaging OpenAPI document
 
 - **Spec-driven.** Every HTTP call resolves an operation by id: `ctx.client.call(op("make-call"), { path, query, body })`.
   `op()` fails at startup if the id is missing, so a spec rename breaks the build, not a user. Behaviour the spec does
-  not describe goes to [SPEC-GAPS.md](SPEC-GAPS.md), not into code.
+  not describe stays out of the code until the spec describes it.
 - **Nouns and verbs.** `vobiz <noun> <verb>`: plural nouns (`numbers`, `trunks`), standard verbs
   (`list get create update delete`) plus domain verbs (`calls hangup`, `numbers buy`). Ids are positional, flags are
   kebab-case, phone numbers are E.164.
@@ -28,13 +28,18 @@ spec/                    the vendored Vobiz Voice and Messaging OpenAPI document
 - **Lists.** `--limit` caps the number of records, `--all` follows pagination; single-page endpoints apply `--limit`
   on the client.
 
+## Operations not yet in the CLI
+
+These operations join the CLI once they are in the vendored OpenAPI documents: call transfer (`calls transfer`) and
+number tags (`numbers update --tags`).
+
 ## Safety model
 
 - Every billable, destructive or account-changing command goes through `requireConfirmation`: it prints the account,
   destination, caller ID, URL host and price when known, then asks. Without a terminal it needs `--yes` (exit `6`).
 - `--dry-run` prints the exact request, secrets redacted, and sends nothing. Local writes (config, profiles, login and
   logout, skills, MCP client config) honour it too: they print what would change, marked `[dry-run]`, and write nothing.
-- Side-effecting requests are never retried. A timeout or 5xx on a write exits `7` (outcome unknown).
+- Side-effecting requests are never retried. A timeout, lost connection, or 5xx/408 answer on a write exits `7` (outcome unknown).
 - Credentials resolve as flags > environment > profile, are sent only to `https://*.vobiz.ai`, are stored with mode
   0600 and are never printed or logged. `--debug` redacts secrets in bodies.
 - Answer, callback and stream URLs must be HTTPS (plain HTTP only for localhost or with `--allow-insecure-url`).
@@ -52,18 +57,20 @@ spec/                    the vendored Vobiz Voice and Messaging OpenAPI document
 In JSON mode a failure writes one line to stderr: `{"error","message","status","retryable","hint"}`. The exit codes
 are stable (`vobiz help exit-codes`):
 
+<!-- BEGIN GENERATED exit-codes -->
 | Code | Meaning |
 |---|---|
-| 0 | Success |
-| 1 | Server error or unknown failure |
-| 2 | Usage error or invalid input |
-| 3 | Authentication failed, credentials missing, or forbidden |
-| 4 | Not found |
-| 5 | Rate limited or insufficient balance |
-| 6 | Confirmation required (pass `--yes`) or not allowed |
-| 7 | Outcome unknown: a side-effecting request timed out, lost its connection or got a 5xx; check state first |
-| 8 | Timeout or network error on a read (nothing was changed; safe to retry) |
-| 130 | Interrupted (Ctrl-C) |
+| 0 | Success. |
+| 1 | Server error or unknown failure. A 5xx on a read is retryable; a 5xx on a write is exit 7. |
+| 2 | Usage error or invalid input. |
+| 3 | Authentication failed, credentials missing, access forbidden or account suspended. |
+| 4 | Not found. |
+| 5 | Rate limited or insufficient balance. |
+| 6 | Confirmation required (pass --yes) or the action is not allowed. |
+| 7 | Outcome unknown: a side-effecting request (call, message, purchase, transfer) timed out, lost its connection, or got a 5xx or 408 answer on a write. It may have taken effect, so it is not retryable; check the state first. The CLI never retries on its own. |
+| 8 | Timeout or network error on a read (nothing was changed; safe to retry). |
+| 130 | Interrupted (Ctrl-C). |
+<!-- END GENERATED exit-codes -->
 
 ## Generated files
 

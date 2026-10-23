@@ -158,7 +158,7 @@ Your saved logins stay in the config directory (`vobiz config path`). Run `vobiz
 | Symptom | Fix |
 |---|---|
 | `vobiz: command not found` | Add the install directory to `PATH` (the installer prints the line to add). |
-| `Node.js 22.12 or newer is required` (npm) | Upgrade Node.js, or use Homebrew, the install script or Docker. |
-| Requests fail with `network_error` behind a proxy | Set `HTTPS_PROXY`; `vobiz doctor` shows which proxy variables it sees. |
+| npm warns `EBADENGINE`, or `vobiz` fails to start after an npm install | Node.js is older than 22.12: upgrade it, or use Homebrew, the install script or Docker. `vobiz doctor` reports the Node.js version. |
+| Requests fail with `network_error` behind a proxy | Set `HTTPS_PROXY` and `NODE_USE_ENV_PROXY=1` (Node.js 22.21+ or 24+); `vobiz doctor` shows which proxy variables it sees. |
 | Requests are refused from CI or a server | If your account restricts API access by IP, allow that machine's address. See [IP whitelisting](https://www.vobiz.ai/docs/concepts/ip-whitelisting). |
 | `checksum mismatch` from the installer | Retry; if it persists, report it as described in [SECURITY.md](../SECURITY.md). |

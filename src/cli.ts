@@ -151,6 +151,8 @@ export function buildProgram(ctx: Ctx): Command {
   // Commander's built-in "help" subcommand and -h option use its own lower-case wording; match the CLI's voice.
   const polish = (cmd: Command) => {
     cmd.helpOption("-h, --help", "show help for this command");
+    // Mark mandatory options the same way as the spec-derived ones ("(required)"); commander does not.
+    for (const o of cmd.options) if (o.mandatory && !o.description.includes("(required)")) o.description += " (required)";
     if (cmd !== program && cmd.commands.length) cmd.helpCommand("help [command]", "Show help for a command");
     cmd.commands.forEach(polish);
   };

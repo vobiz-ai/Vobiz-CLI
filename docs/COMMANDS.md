@@ -357,8 +357,8 @@ vobiz account channel-pricing [options]
 
 | Option | Description |
 |---|---|
-| `--type <resource>` | capacity to price: concurrent_calls or cps (one of: `concurrent_calls`, `cps`) |
-| `--quantity <n>` | capacity quantity (1-10000) |
+| `--type <resource>` | capacity to price: concurrent_calls or cps (required) (one of: `concurrent_calls`, `cps`) |
+| `--quantity <n>` | capacity quantity (1-10000) (required) |
 
 ### vobiz account channel-subscriptions
 
@@ -380,8 +380,8 @@ vobiz account channel-subscriptions create [options]
 
 | Option | Description |
 |---|---|
-| `--type <resource>` | capacity to price: concurrent_calls or cps (one of: `concurrent_calls`, `cps`) |
-| `--quantity <n>` | capacity quantity (1-10000) |
+| `--type <resource>` | capacity to price: concurrent_calls or cps (required) (one of: `concurrent_calls`, `cps`) |
+| `--quantity <n>` | capacity quantity (1-10000) (required) |
 
 ### vobiz account concurrency
 
@@ -607,7 +607,7 @@ vobiz calls dtmf <uuid> [options]
 
 | Option | Description |
 |---|---|
-| `--digits <digits>` | digits 0-9, *, #, A-D; w pauses 0.5s and W pauses 1s |
+| `--digits <digits>` | digits 0-9, *, #, A-D; w pauses 0.5s and W pauses 1s (required) |
 | `--leg <leg>` | which side hears it: aleg (caller), bleg (callee) or both (one of: `aleg`, `bleg`, `both`) |
 
 ### vobiz calls get
@@ -813,7 +813,7 @@ vobiz calls stream start <uuid> [options]
 
 | Option | Description |
 |---|---|
-| `--url <wss-url>` | WebSocket URL that receives the audio (wss://) |
+| `--url <wss-url>` | WebSocket URL that receives the audio (wss://) (required) |
 | `--bidirectional` | let the WebSocket send audio back into the call |
 | `--track <track>` | which audio to send (one of: `inbound`, `outbound`, `both`) |
 | `--format <format>` | audio encoding (one of: `pcm`, `mulaw`) |
@@ -1559,7 +1559,7 @@ vobiz numbers assign <e164> [options]
 
 | Option | Description |
 |---|---|
-| `--trunk <trunk-id>` | trunk ID (see `vobiz trunks list`) |
+| `--trunk <trunk-id>` | trunk ID (see `vobiz trunks list`) (required) |
 
 ### vobiz numbers assign-subaccount
 
@@ -1575,7 +1575,7 @@ vobiz numbers assign-subaccount <e164> [options]
 
 | Option | Description |
 |---|---|
-| `--sub-account <SA_id>` | sub-account Auth ID, e.g. SA_XXXXXXXX |
+| `--sub-account <SA_id>` | sub-account Auth ID, e.g. SA_XXXXXXXX (required) |
 
 ### vobiz numbers buy
 
@@ -2084,7 +2084,7 @@ vobiz recordings export [options]
 
 | Option | Description |
 |---|---|
-| `--email <address>` | recipient of the download link (repeat for several) |
+| `--email <address>` | recipient of the download link (repeat for several) (required) |
 | `--from <when>` | start of the window (today, 7d, 2026-10-01 or ISO; default: 7 days ago) |
 | `--to <when>` | end of the window (default: now) |
 | `--age-days <n>` | instead of --from/--to: recordings exactly N days old |
@@ -2466,7 +2466,7 @@ vobiz sms 10dlc campaigns appeal <id> [options]
 
 | Option | Description |
 |---|---|
-| `--reason <text>` | what you changed since the rejection |
+| `--reason <text>` | what you changed since the rejection (required) |
 
 ### vobiz sms 10dlc campaigns create
 
@@ -2779,7 +2779,7 @@ vobiz sms 10dlc documents upload [options]
 
 | Option | Description |
 |---|---|
-| `--file <path>` | the file to upload |
+| `--file <path>` | the file to upload (required) |
 
 ### vobiz sms broadcasts
 
@@ -3092,8 +3092,8 @@ vobiz sms cost [options]
 
 | Option | Description |
 |---|---|
-| `--from <e164>` | your Vobiz messaging number |
-| `--to <e164>` | recipient; its country decides the price |
+| `--from <e164>` | your Vobiz messaging number (required) |
+| `--to <e164>` | recipient; its country decides the price (required) |
 | `--text <text>` | message body; its length and characters decide the segments |
 | `--text-file <path>` | read the body from a file, or - for stdin |
 | `--type <channel>` | sms (default) or mms (one of: `sms`, `mms`) |
@@ -3208,7 +3208,7 @@ vobiz sms numbers buy <e164> [options]
 
 | Option | Description |
 |---|---|
-| `--country <code>` | ISO country code of the number, e.g. US |
+| `--country <code>` | ISO country code of the number, e.g. US (required) |
 | `--number-key <key>` | numberKey from search (required for CA and GB; looked up when omitted) |
 
 ### vobiz sms numbers countries
@@ -3259,7 +3259,7 @@ vobiz sms numbers search [options]
 
 | Option | Description |
 |---|---|
-| `--country <code>` | ISO country code, e.g. US, CA, GB |
+| `--country <code>` | ISO country code, e.g. US, CA, GB (required) |
 | `--capabilities <list>` | required capabilities (one of: `SMS`, `MMS`, `SMS,MMS`) |
 | `--area-code <code>` | three-digit area code (US and CA only) |
 | `--limit <n>` | maximum results (the API returns at most 10) |
@@ -3352,7 +3352,7 @@ vobiz sms rcs-reachability <to> [options]
 
 | Option | Description |
 |---|---|
-| `--from <sender>` | the senderName of your RCS sender |
+| `--from <sender>` | the senderName of your RCS sender (required) |
 
 ### vobiz sms send
 
@@ -3364,8 +3364,8 @@ vobiz sms send [options]
 
 | Option | Description |
 |---|---|
-| `--from <sender>` | your Vobiz messaging number in E.164, or your RCS sender name for --type rcs |
-| `--to <e164>` | recipient in E.164 (repeatable or comma-separated) |
+| `--from <sender>` | your Vobiz messaging number in E.164, or your RCS sender name for --type rcs (required) |
+| `--to <e164>` | recipient in E.164 (repeatable or comma-separated) (required) |
 | `--text <text>` | message body (required for sms and rcs) |
 | `--text-file <path>` | read the message body from a file, or - for stdin |
 | `--media-url <url>` | https URL of media to attach (repeatable; MMS up to 10, RCS sends the first) |
@@ -3483,9 +3483,9 @@ vobiz sms senders templates create <sender-id> [options]
 
 | Option | Description |
 |---|---|
-| `--name <name>` | unique template name on this sender |
-| `--type <type>` | template type as the RCS platform defines it |
-| `--content <json>` | template content as JSON, @file.json or @- |
+| `--name <name>` | unique template name on this sender (required) |
+| `--type <type>` | template type as the RCS platform defines it (required) |
+| `--content <json>` | template content as JSON, @file.json or @- (required) |
 
 ### vobiz sms senders templates delete
 
@@ -3597,7 +3597,7 @@ vobiz sms webhooks create [options]
 
 | Option | Description |
 |---|---|
-| `--url <url>` | https URL that receives the POSTs |
+| `--url <url>` | https URL that receives the POSTs (required) |
 | `--secret <secret>` | shared secret for the X-Webhook-Signature HMAC (@file or @- for stdin keeps it out of shell history) |
 | `--event <name>` | event to deliver (repeatable; default: message.received, message.delivered, message.failed) |
 
@@ -3677,7 +3677,7 @@ vobiz streams forward [options]
 
 | Option | Description |
 |---|---|
-| `--to <ws-url>` | your stream server: wss://, or ws:// on localhost (e.g. ws://localhost:8080/media) |
+| `--to <ws-url>` | your stream server: wss://, or ws:// on localhost (e.g. ws://localhost:8080/media) (required) |
 | `--port <port>` | local port to listen on (0 picks a free one; default: 8765) |
 | `--host <host>` | interface to listen on (default 127.0.0.1); anything else also needs --allow-lan |
 | `--allow-lan` | allow a non-loopback --host such as 0.0.0.0 (the proxy is then reachable from your network) |
@@ -4400,7 +4400,7 @@ vobiz webhooks verify [options]
 
 | Option | Description |
 |---|---|
-| `--signature <value>` | the signature header value (X-Vobiz-Signature-V3, -V2, X-Webhook-Signature or X-Vobiz-Signature) |
+| `--signature <value>` | the signature header value (X-Vobiz-Signature-V3, -V2, X-Webhook-Signature or X-Vobiz-Signature) (required) |
 | `--url <callback-url>` | voice callbacks: the full URL Vobiz called (the query string is ignored) |
 | `--nonce <nonce>` | voice callbacks: the X-Vobiz-Signature-V3-Nonce (or -V2-Nonce) header value |
 | `--scheme <v3\|v2>` | voice callbacks: which signature version to check (default: try V3, then V2) |

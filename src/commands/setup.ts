@@ -16,6 +16,7 @@ import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { VobizError, usage } from "../core/errors.js";
 import { op } from "../core/ops.js";
+import { readSecretArg } from "../core/secrets.js";
 import { extractItems } from "../core/pagination.js";
 import { toE164 } from "../core/phone.js";
 import { findInventoryNumber, findOwnNumber, routingSteps, type NumberRecord } from "./numbers.js";
@@ -403,7 +404,7 @@ function registerSms(setup: Command, ctx: Ctx) {
     .option("--number-key <key>", "with --buy: numberKey from search (looked up when omitted)")
     .option("--webhook-url <url>", "https URL for message.received, message.delivered and message.failed (reused if it exists)", httpsUrl("--webhook-url"))
     .option("--webhook <id>", "use this existing messaging webhook instead")
-    .option("--secret <secret>", "with --webhook-url: signing secret for X-Webhook-Signature")
+    .option("--secret <secret>", "with --webhook-url: signing secret for X-Webhook-Signature (@file or @- for stdin keeps it out of shell history)")
     .option("--event <name>", "with --webhook-url: event to deliver (repeatable; default: the three message events)", collect)
     .option("--no-webhook", "skip the webhook (you will poll message status instead)")
     .addHelpText(
@@ -414,11 +415,12 @@ account-wide: one subscription receives events for all your messaging numbers.
 
 Examples:
   vobiz setup sms
-  vobiz setup sms --number +14155550100 --webhook-url https://example.com/vobiz/sms --secret "$WEBHOOK_SECRET" --yes
+  vobiz setup sms --number +14155550100 --webhook-url https://example.com/vobiz/sms --secret @webhook-secret.txt --yes
   vobiz setup sms --buy +14155550123 --country US --no-webhook --dry-run`,
     )
     .action(async (o: Omit<SmsOpts, "webhook"> & { webhook?: string | boolean }) => {
       const opts: SmsOpts = { ...o, webhook: typeof o.webhook === "string" ? o.webhook : undefined, noWebhook: o.webhook === false };
+      if (opts.secret !== undefined) opts.secret = await readSecretArg(ctx, opts.secret, "--secret");
       const num = await pickSmsNumber(ctx, opts);
       const hook = await pickWebhook(ctx, opts);
       if (hook?.create && !opts.secret) ctx.out.warn("No --secret: deliveries will be signed with an empty secret, so you cannot verify them.");

@@ -23,15 +23,13 @@ import type { Ctx } from "../core/context.js";
 import { cleanLogText } from "../core/sanitize.js";
 import { VobizError } from "../core/errors.js";
 import { rememberSecret } from "../core/redact.js";
+import { readSecretArg } from "../core/secrets.js";
 import { WEBHOOK_KEYS, markUntrusted } from "../core/untrusted.js";
 import { checkForwardUrl } from "./voice-shared.js";
 
-function secretFrom(ctx: Ctx, flag: string | undefined, required: boolean): string | undefined {
-  if (flag) {
-    ctx.out.warn("--secret is saved in your shell history. Prefer VOBIZ_WEBHOOK_SECRET.");
-    rememberSecret(flag);
-    return flag;
-  }
+/** The signing secret: --secret (literal, @file or @- for stdin, like every other secret flag) or VOBIZ_WEBHOOK_SECRET. */
+async function secretFrom(ctx: Ctx, flag: string | undefined, required: boolean): Promise<string | undefined> {
+  if (flag) return readSecretArg(ctx, flag, "--secret");
   const env = ctx.env.VOBIZ_WEBHOOK_SECRET;
   if (env) {
     rememberSecret(env);
@@ -220,7 +218,7 @@ export function register(program: Command, ctx: Ctx): void {
     .option("--nonce <nonce>", "voice callbacks: the X-Vobiz-Signature-V3-Nonce (or -V2-Nonce) header value")
     .option("--scheme <v3|v2>", "voice callbacks: which signature version to check (default: try V3, then V2)")
     .option("--body <text|@file|@->", "body-signed webhooks: the raw request body, @file for a file, @- for stdin")
-    .option("--secret <secret>", "signing secret: your Auth Token for voice callbacks (parent account's for -MA- headers), the subscription secret for messaging (env: VOBIZ_WEBHOOK_SECRET)")
+    .option("--secret <secret>", "signing secret: your Auth Token for voice callbacks (parent account's for -MA- headers), the subscription secret for messaging; @file or @- for stdin keeps it out of shell history (env: VOBIZ_WEBHOOK_SECRET)")
     .addHelpText(
       "after",
       `
@@ -244,7 +242,8 @@ Docs: https://www.vobiz.ai/docs/concepts/validating-callbacks`,
         if (v !== "v3" && v !== "v2") throw new VobizError("invalid_input", "--scheme must be v3 or v2.");
         version = v;
       }
-      const secret = secretFrom(ctx, opts.secret, true)!;
+      if (opts.secret === "@-" && opts.body === "@-") throw new VobizError("invalid_input", "--secret @- and --body @- both read stdin; pass one of them as @file.");
+      const secret = (await secretFrom(ctx, opts.secret, true))!;
       let result: VerifyResult;
       if (urlMode) {
         if (!opts.url || !opts.nonce) throw new VobizError("invalid_input", "Voice callbacks need both --url and --nonce.");
@@ -272,7 +271,7 @@ Docs: https://www.vobiz.ai/docs/concepts/validating-callbacks`,
     .option("--host <address>", "address to bind (default 127.0.0.1); anything else also needs --allow-lan", "127.0.0.1")
     .option("--allow-lan", "allow a non-loopback --host such as 0.0.0.0 (the receiver is then reachable from your network)")
     .option("--forward <url>", "also send each request to this URL (e.g. your app) and relay its 2xx response back to Vobiz")
-    .option("--secret <secret>", "check each request's signature with this secret and refuse (401) any that fail (env: VOBIZ_WEBHOOK_SECRET)")
+    .option("--secret <secret>", "check each request's signature with this secret and refuse (401) any that fail; @file or @- for stdin keeps it out of shell history (env: VOBIZ_WEBHOOK_SECRET)")
     .option("--public-url <url>", "the https URL Vobiz calls (your tunnel); required to check voice-callback signatures")
     .addOption(new Option("--scheme <v3>", "refuse V2 voice-callback signatures (accept V3 only)").choices(["v3"]))
     .option("--allow-insecure-url", "allow a plain http:// --forward to a host other than localhost (bodies are sent unencrypted)")
@@ -305,7 +304,7 @@ Examples:
           }
         }
         checkBindHost(ctx, opts.host, opts.allowLan);
-        const secret = secretFrom(ctx, opts.secret, false);
+        const secret = await secretFrom(ctx, opts.secret, false);
         const server = await startWebhookListener(ctx, {
           port: parsePort(opts.port, 4000),
           host: opts.host,

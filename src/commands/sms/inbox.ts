@@ -164,7 +164,7 @@ function registerWebhooks(sms: Command, ctx: Ctx): void {
     .description("Change a webhook's URL, secret, events or active state")
     .argument("<id>", "webhook id")
     .option("--url <url>", "new https URL", httpsUrl("--url"))
-    .option("--secret <secret>", "new signing secret (@file or @- for stdin)")
+    .option("--secret <secret>", "new signing secret (@file or @- for stdin keeps it out of shell history)")
     .option("--event <name>", "replace the event list (repeatable)", collect)
     .option("--active", "resume deliveries")
     .option("--no-active", "pause deliveries and keep the subscription")

@@ -28,7 +28,7 @@ apps         write  vobiz apps create --app-name cli-verify-app --answer-url htt
 apps         read   vobiz apps get <app>
 apps         write  vobiz apps update <app> --app-name cli-verify-app-2 --no-default-number-app --answer-url https://example.com/cli-verify/answer2 --answer-method GET --hangup-url https://example.com/cli-verify/hangup2 --hangup-method GET --yes
 apps         write  vobiz apps update <app> --body {"answer_url":"https://example.com/cli-verify/answer3"} --yes
-apps         read   vobiz apps update <app> --answer-url https://example.com/cli-verify/answer4 --yes   [expect exit 2]
+apps         write  vobiz apps update <app> --answer-url https://example.com/cli-verify/answer4 --yes
 apps         write  vobiz apps delete <app> --yes
 apps         read   vobiz apps get <app>   [expect exit 4]
 trunks       sweep  vobiz trunks list --all   [then deletes matches]

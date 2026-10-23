@@ -190,7 +190,7 @@ export function buildPlan({ only, files }) {
       R("apps", "apps get", (s) => ["apps", "get", s.app], { needs: ["app"] }),
       W("apps", "apps update", (s) => ["apps", "update", s.app, "--app-name", `${PREFIX}-app-2`, "--no-default-number-app", "--answer-url", `${EX}/answer2`, "--answer-method", "GET", "--hangup-url", `${EX}/hangup2`, "--hangup-method", "GET"], { needs: ["app"] }),
       W("apps", "apps update", (s) => ["apps", "update", s.app, "--body", JSON.stringify({ answer_url: `${EX}/answer3` })], { needs: ["app"], note: "recorded: partial update accepted although the spec requires app_name" }),
-      R("apps", "apps update", (s) => ["apps", "update", s.app, "--answer-url", `${EX}/answer4`, "--yes"], { needs: ["app"], expect: 2, note: "CLI enforces the spec's required fields" }),
+      W("apps", "apps update", (s) => ["apps", "update", s.app, "--answer-url", `${EX}/answer4`], { needs: ["app"], note: "partial update with one flag (spec corrected 2026-10-22: no required fields)" }),
       W("apps", "apps delete", (s) => ["apps", "delete", s.app], { needs: ["app"], resolves: "app" }),
       gone("apps", "apps get", (s) => ["apps", "get", s.app], ["app"]),
     );

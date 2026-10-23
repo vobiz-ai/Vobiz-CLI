@@ -146,7 +146,7 @@ describe("webhooks listen", () => {
       expect(app.last()).toMatchObject({ method: "POST", url: "http://localhost:8080/hooks?a=1" });
       expect(app.last().headers.host).toBeUndefined();
       expect(JSON.parse(t.stdout.text).forwarded).toEqual({ url: "http://localhost:8080/hooks?a=1", status: 201 });
-      // no --secret: the payload is marked as unchecked, third-party data (S6 hand-off #4)
+      // no --secret: the payload is marked as unchecked, third-party data
       const event = JSON.parse(t.stdout.text);
       expect(event.signature).toBe("not_checked");
       expect(event._untrusted_fields).toEqual(expect.arrayContaining(["query", "headers", "body"]));

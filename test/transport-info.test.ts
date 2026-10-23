@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fetchLatestVersion, isPlainVersion } from "../src/core/update.js";
 import { fakeFetch, runCli } from "./helpers.js";
 
-describe("S2 info items (#17, #18, #19)", () => {
+describe("transport input checks", () => {
   it("CR/LF or spaces in credentials are invalid_input, not network_error, and nothing is sent", async () => {
     const api = fakeFetch({ "GET /api/v1/auth/me": { name: "x" } });
     for (const env of [{ VOBIZ_AUTH_TOKEN: "x\r\nX-Injected: 1" }, { VOBIZ_AUTH_ID: "MA_X\nY" }, { VOBIZ_AUTH_TOKEN: "with space" }]) {
@@ -31,7 +31,7 @@ describe("S2 info items (#17, #18, #19)", () => {
   });
 });
 
-describe("S2 #20 URL notes", async () => {
+describe("docs URL handling", async () => {
   const { docsUrl } = await import("../src/agent/docs-mcp.js");
   it("docs open upgrades an http docs URL to https", () => {
     expect(docsUrl("http://www.vobiz.ai/docs/xml/gather")).toBe("https://www.vobiz.ai/docs/xml/gather");

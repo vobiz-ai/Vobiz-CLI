@@ -47,17 +47,17 @@ import { register as api } from "./api.js";
 import { register as completion } from "./completion.js";
 import { register as helpTopics } from "./help-topics.js";
 
-// ── internal: maintainer-only `vobiz internal …` commands in src/internal/ (not part of the published CLI) ──
-// The module is optional: when it is absent (the public tree) nothing is loaded. When it is present, the group is
-// registered only if `internalEnabled(env)`: VOBIZ_INTERNAL=1 at run time, or a `npm run build:internal` build
-// (unless VOBIZ_INTERNAL=0, which the docs/completions/man generators set so they always describe the public CLI).
+// ── internal: optional ops command group, enabled with VOBIZ_INTERNAL=1 at build time ──
+// The module is optional: when it is absent (as in the published package) nothing is loaded. When it is present, the
+// group is registered only if `internalEnabled(env)`: VOBIZ_INTERNAL=1, or a build made with it enabled (unless
+// VOBIZ_INTERNAL=0, which the docs/completions/man generators set so they always describe the published CLI).
 const INTERNAL_MODULE = "../internal/commands/index.js"; // a variable, so tsc does not require the file to exist
 let internalGroups: RegisterFn[] | undefined;
 
 /**
  * Loads the optional internal module once. Called by `run()` before the program is built. The dynamic import lives
  * inside a function (not at top level) so the CommonJS bundle of the single-executable build still compiles; there
- * the import fails and the group is simply absent, exactly like the public npm package.
+ * the import fails and the group is simply absent, exactly like the published npm package.
  */
 export async function prepareInternal(): Promise<void> {
   if (internalGroups) return;
@@ -66,7 +66,7 @@ export async function prepareInternal(): Promise<void> {
     internalGroups = m.INTERNAL_GROUPS ?? [];
   } catch (err) {
     const e = err as NodeJS.ErrnoException;
-    // Only "the internal module itself is missing" means "public tree"; anything else is a real bug.
+    // Only "the optional module itself is missing" means it is not installed; anything else is a real bug.
     const missing = /'([^']+)'/.exec(String(e?.message))?.[1] ?? "";
     const notFound = e?.code === "ERR_MODULE_NOT_FOUND" || e?.code === "MODULE_NOT_FOUND";
     if (notFound && /internal[\\/]commands[\\/]index(\.[jt]s)?$/.test(missing)) {

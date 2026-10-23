@@ -56,7 +56,7 @@ export function forbiddenReason(args) {
   const loose = words.filter((w) => !w.startsWith("-")).join(" ");
   for (const f of FORBIDDEN) if (f.re.test(path) || f.re.test(loose)) return f.why;
   if (words[0] === "api" && words.some((w) => /^(POST|PUT|PATCH|DELETE)$/i.test(w))) return "a raw API write bypasses every check here";
-  if (words[0] === "sub-accounts" && words.some((w) => w.includes("is_active"))) return "is_active:false hides a sub-account from the API for good (see LIVE-REVIEW Leftovers)";
+  if (words[0] === "sub-accounts" && words.some((w) => w.includes("is_active"))) return "is_active:false hides a sub-account from the API for good";
   return null;
 }
 

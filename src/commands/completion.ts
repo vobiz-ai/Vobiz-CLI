@@ -43,17 +43,17 @@ export function bashScript(root: CommandNode): string {
   const cases = all
     .map((e) => `    "${e.key}") words="${[...e.subs.map((s) => s.name), ...e.flags.map((f) => f.name)].join(" ")}" ;;`)
     .join("\n");
-  const choiceCases = [...globals, ...all.flatMap((e) => e.flags)]
-    .filter((f) => f.choices?.length)
-    .map((f) => `    ${f.name}) COMPREPLY=( $(compgen -W "${f.choices!.join(" ")}" -- "$cur") ); return ;;`)
+  // Value choices are scoped per command ("<key>|<flag>"): the same flag (--status, --type) takes different values on
+  // different commands, so one arm per flag name would offer the first command's values everywhere.
+  const choiceCases = [
+    ...all.flatMap((e) => e.flags.filter((f) => f.choices?.length).map((f) => `    "${e.key}|${f.name}") COMPREPLY=( $(compgen -W "${f.choices!.join(" ")}" -- "$cur") ); return ;;`)),
+    ...globals.filter((f) => f.choices?.length).map((f) => `    *"|${f.name}") COMPREPLY=( $(compgen -W "${f.choices!.join(" ")}" -- "$cur") ); return ;;`),
+  ]
     .filter((v, i, a) => a.indexOf(v) === i)
     .join("\n");
   return `# bash completion for vobiz. Install: vobiz completion bash > ~/.local/share/bash-completion/completions/vobiz
 _vobiz_complete() {
   local cur="\${COMP_WORDS[COMP_CWORD]}" prev="\${COMP_WORDS[COMP_CWORD-1]}" key="vobiz" w i words
-  case "$prev" in
-${choiceCases}
-  esac
   for ((i=1; i<COMP_CWORD; i++)); do
     w="\${COMP_WORDS[i]}"
     [[ "$w" == -* ]] && continue
@@ -61,6 +61,9 @@ ${choiceCases}
       ${known || '"__none__"'}) key="$key $w" ;;
     esac
   done
+  case "$key|$prev" in
+${choiceCases}
+  esac
   case "$key" in
 ${cases}
   esac

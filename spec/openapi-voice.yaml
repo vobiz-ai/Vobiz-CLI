@@ -9937,7 +9937,7 @@ paths:
           content:
             application/json:
               example:
-                auth_id: "MA_ZKITB8Z2"
+                auth_id: "MA_XXXXXXXX"
                 auth_token: "your_auth_token_here"
                 name: "John Doe"
                 email: "john@example.com"
@@ -9962,7 +9962,7 @@ paths:
           required: true
           schema:
             type: string
-            example: "MA_ZKITB8Z2"
+            example: "MA_XXXXXXXX"
       requestBody:
         required: true
         content:
@@ -10558,7 +10558,7 @@ paths:
                 account_auth_id:
                   type: string
                   description: Customer's auth_id (from create-customer-account).
-                  example: "MA_ZKITB8Z2"
+                  example: "MA_XXXXXXXX"
                 flow_type:
                   type: string
                   enum: [ email, redirect ]

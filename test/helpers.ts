@@ -1,5 +1,5 @@
 /**
- * Shared test helpers for every command group (W1–W5). Nothing here touches the network or your real config.
+ * Shared test helpers for every command group. Nothing here touches the network or your real config.
  *
  *   import { fakeFetch, reply, makeCtx, runCli, TEST_AUTH_ID } from "./helpers.js";
  *

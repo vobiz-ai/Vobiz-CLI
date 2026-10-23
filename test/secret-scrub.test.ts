@@ -1,4 +1,4 @@
-/** S1 #7, #8, #11, #13: secret VALUES never reach error text, dry-run URLs or debug logs. */
+/** Secret VALUES never reach error text, dry-run URLs or debug logs. */
 import { afterEach, describe, expect, it } from "vitest";
 import { forgetSecrets } from "../src/core/redact.js";
 import { fakeFetch, reply, runCli, textReply } from "./helpers.js";
@@ -9,7 +9,7 @@ const env = { VOBIZ_AUTH_TOKEN: TOKEN };
 
 afterEach(() => forgetSecrets());
 
-describe("backend error text is scrubbed (S1 #7)", () => {
+describe("backend error text is scrubbed", () => {
   it("never echoes the token from an HTML proxy page, and caps it to the status", async () => {
     const html = `<html><body><h1>502</h1><pre>X-Auth-Token: ${TOKEN}</pre>${"x".repeat(5000)}</body></html>`;
     const api = fakeFetch({ "GET /api/v1/auth/me": textReply(500, html, { "content-type": "text/html" }) });
@@ -43,7 +43,7 @@ describe("backend error text is scrubbed (S1 #7)", () => {
   });
 });
 
-describe("dry-run and debug URLs (S1 #8, #13)", () => {
+describe("dry-run and debug URLs", () => {
   it("hides secret-named query parameters in the --dry-run URL", async () => {
     for (const argv of [["api", "GET", `/api/v1/x?password=${PW}&limit=5`], ["api", "GET", "/api/v1/x", "--param", `auth_token=${PW}`]]) {
       const r = await runCli([...argv, "--dry-run", "--json"], { env });
@@ -69,7 +69,7 @@ describe("dry-run and debug URLs (S1 #8, #13)", () => {
   });
 });
 
-describe("campaignVerifyToken (S1 #11)", () => {
+describe("campaignVerifyToken", () => {
   it("is redacted in the --dry-run body and the --debug request log", async () => {
     const argv = ["sms", "10dlc", "campaigns", "create-toll-free", "--name", "Acme TF", "--number", "+18885550100", "--use-case", "NOTIFICATIONS", "--reference-id", "tf-1", "--campaign-verify-token", "CVT_SENTINEL_1", "--yes", "--json"];
     const dry = await runCli([...argv, "--dry-run"], { env });

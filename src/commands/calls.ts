@@ -538,7 +538,7 @@ function registerControl(calls: Command, ctx: Ctx) {
     });
 }
 
-/** Third-party text in call details (S6 #4). */
+/** Third-party text in call details. */
 const CALL_UNTRUSTED = [...CALLER_KEYS, ...RESOURCE_NAME_KEYS];
 
 export function register(program: Command, ctx: Ctx): void {

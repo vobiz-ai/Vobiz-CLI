@@ -1,4 +1,4 @@
-/** S1 #1, #3, #6, #9, #12: files that hold the Auth Token. */
+/** Files that hold the Auth Token. */
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +15,7 @@ const SECRET = "tok_REAL_LOOKING_SECRET_777";
 const temp = (p = "vobiz-sec-") => mkdtempSync(join(tmpdir(), p));
 const hasGit = spawnSync("git", ["--version"]).status === 0;
 
-describe("mcp install never prints the token when the merge fails (S1 #1)", () => {
+describe("mcp install never prints the token when the merge fails", () => {
   for (const dry of [false, true]) {
     for (const [label, content] of [["invalid JSON", "{ not json"], ["JSONC", "// mine\n{}\n"], ["not an object", "[1,2]"]] as const) {
       it(`${label}${dry ? " with --dry-run" : ""}`, async () => {
@@ -35,7 +35,7 @@ describe("mcp install never prints the token when the merge fails (S1 #1)", () =
   }
 });
 
-describe.skipIf(!hasGit)("mcp install --with-credentials --project in a git work tree (S1 #3)", () => {
+describe.skipIf(!hasGit)("mcp install --with-credentials --project in a git work tree", () => {
   const repo = () => {
     const dir = temp("vobiz-repo-");
     expect(spawnSync("git", ["init", "-q", dir]).status).toBe(0);
@@ -69,7 +69,7 @@ describe.skipIf(!hasGit)("mcp install --with-credentials --project in a git work
   });
 });
 
-describe("mcp install backups never keep a dropped token (S1 #9)", () => {
+describe("mcp install backups never keep a dropped token", () => {
   it("replaces the old token in <file>.bak when the new file no longer has it", async () => {
     const HOME = temp();
     const env = { HOME, VOBIZ_AUTH_TOKEN: SECRET };
@@ -94,7 +94,7 @@ describe("mcp install backups never keep a dropped token (S1 #9)", () => {
   });
 });
 
-describe.skipIf(!posix)("atomic secret-file writes (S1 #6)", () => {
+describe.skipIf(!posix)("atomic secret-file writes", () => {
   it("uses an exclusive random temp name, so a planted pid-named symlink receives nothing", () => {
     const dir = temp();
     const loot = join(temp(), "loot");
@@ -138,7 +138,7 @@ describe.skipIf(!posix)("atomic secret-file writes (S1 #6)", () => {
   });
 });
 
-describe.skipIf(!posix)("credentials.json permissions on read (S1 #12)", () => {
+describe.skipIf(!posix)("credentials.json permissions on read", () => {
   it("warns when the file is readable by group or others, and not when it is 0600", async () => {
     const configDir = temp();
     const store = new ConfigStore(configDir);

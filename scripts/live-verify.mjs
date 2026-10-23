@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Scripted, repeatable version of the 2026-10-22 live review (docs/internal/LIVE-REVIEW-2026-10-22.md) against the
-// REAL account in VOBIZ_AUTH_ID / VOBIZ_AUTH_TOKEN. Runbook: docs/internal/runbooks/NIGHTLY.md.
+// Scripted, repeatable live review of the CLI against the REAL account in VOBIZ_AUTH_ID / VOBIZ_AUTH_TOKEN
+// (a maintainer test account).
 //
 //   node scripts/live-verify.mjs --dry-run                 # print the plan, send nothing
 //   node scripts/live-verify.mjs --only apps,trunks        # some groups
@@ -660,7 +660,7 @@ export async function main(argv = process.argv.slice(2), io = { log: (l) => cons
   }
   const token = process.env.VOBIZ_AUTH_TOKEN;
   if (!process.env.VOBIZ_AUTH_ID || !token || token === "YOUR_AUTH_TOKEN") {
-    io.error("live-verify: set VOBIZ_AUTH_ID and VOBIZ_AUTH_TOKEN (the test account; see docs/internal/runbooks/NIGHTLY.md).");
+    io.error("live-verify: set VOBIZ_AUTH_ID and VOBIZ_AUTH_TOKEN (a test account, never a production one).");
     return 3;
   }
   const tmp = mkdtempSync(join(tmpdir(), "vobiz-verify-"));

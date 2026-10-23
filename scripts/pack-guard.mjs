@@ -3,7 +3,7 @@
 // dev dependency, so a publish job never runs the test toolchain with its OIDC token (the full `npm run check`
 // runs in the unprivileged CI/verify jobs).
 //   1. dist/index.js exists (`npm run build` ran).
-//   2. No dist/internal/** file would be packed: the internal repository compiles src/internal, and the
+//   2. No dist/internal/** file would be packed: a maintainer build may compile src/internal, and the
 //      `vobiz internal …` group must never ship. package.json `files` excludes it; this re-checks the real pack list.
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";

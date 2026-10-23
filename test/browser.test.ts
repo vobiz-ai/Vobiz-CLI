@@ -17,7 +17,7 @@ describe("browser launching", () => {
   });
 });
 
-describe("browser opener hardening (S3 #5)", async () => {
+describe("browser opener hardening", async () => {
   const { openInBrowser, openUrlProblem } = await import("../src/core/context.js");
   const { feedbackUrl } = await import("../src/commands/feedback.js");
   const fakeSpawn = () => {

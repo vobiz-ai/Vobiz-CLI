@@ -1,5 +1,5 @@
 /**
- * S6 agent-safety regressions (docs/internal/security/S6-authorization-and-agents.md, docs/internal/security/FIXES-S6.md).
+ * Agent-safety regressions: authorization, confirmations and untrusted third-party text.
  * Placeholder credentials only; every request goes to a fake fetch.
  */
 import { mkdtempSync, writeFileSync } from "node:fs";

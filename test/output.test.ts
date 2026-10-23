@@ -148,7 +148,7 @@ describe("output modes", () => {
     expect(t.stderr.text).toContain("vobiz: internal_error: boom");
   });
 
-  it("printError prints JSON for json, jsonl and yaml and whenever stdout is not a terminal (S6 #20)", () => {
+  it("printError prints JSON for json, jsonl and yaml and whenever stdout is not a terminal", () => {
     for (const [flags, tty] of [[{ output: "yaml" }, true], [{ output: "jsonl" }, true], [{ output: "table" }, false], [{}, false]] as const) {
       const t = printer(flags, { tty });
       t.p.printError(new VobizError("outcome_unknown", "maybe", 502));

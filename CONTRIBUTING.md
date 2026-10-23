@@ -37,6 +37,8 @@ npm run test:live
 
 ## Adding a command
 
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the command tree conventions, safety model, output modes and exit codes every command follows.
+
 1. Add or extend `src/commands/<group>.ts` (`export function register(program, ctx)`), registered in `COMMAND_GROUPS` in `src/commands/index.ts`.
 2. Resolve the operation by its `operationId` with `op("…")`; a renamed operation then fails the build, not a user.
 3. Throw `VobizError` with an existing error kind and an actionable message; the entry point maps it to the exit code.

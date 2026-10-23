@@ -103,7 +103,7 @@ profile         default
 | `mcp`, `skills`, `docs` | connect AI clients to the Vobiz MCP server, install the Agent Skills, search the docs | `vobiz mcp install cursor` |
 | `api` | raw requests against any operation in the spec | `vobiz api GET /api/v1/auth/me` |
 
-Every command and flag is in [docs/COMMANDS.md](docs/COMMANDS.md) and in `vobiz <group> --help`.
+Every command and flag is in [docs/COMMANDS.md](docs/COMMANDS.md) and in `vobiz <group> --help`; [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers the conventions, safety model, output modes and exit codes.
 
 ## Examples
 
@@ -231,7 +231,7 @@ npm run check          # lint, build, 1,900+ tests
 npm run dev -- --help
 ```
 
-Commands are generated from the OpenAPI documents in `spec/`; [CONTRIBUTING.md](CONTRIBUTING.md) explains how to add one, [docs/RELEASING.md](docs/RELEASING.md) the release pipeline, and [docs/SPEC-GAPS.md](docs/SPEC-GAPS.md) what the spec does not cover yet.
+Commands are generated from the OpenAPI documents in `spec/`; [CONTRIBUTING.md](CONTRIBUTING.md) explains how to add one, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) the conventions, [docs/RELEASING.md](docs/RELEASING.md) the release pipeline, and [docs/SPEC-GAPS.md](docs/SPEC-GAPS.md) what the spec does not cover yet.
 
 ## Built by Team Vobiz
 

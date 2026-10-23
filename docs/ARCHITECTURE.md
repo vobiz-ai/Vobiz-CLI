@@ -32,7 +32,8 @@ spec/                    the vendored Vobiz Voice and Messaging OpenAPI document
 
 - Every billable, destructive or account-changing command goes through `requireConfirmation`: it prints the account,
   destination, caller ID, URL host and price when known, then asks. Without a terminal it needs `--yes` (exit `6`).
-- `--dry-run` prints the exact request, secrets redacted, and sends nothing.
+- `--dry-run` prints the exact request, secrets redacted, and sends nothing. Local writes (config, profiles, login and
+  logout, skills, MCP client config) honour it too: they print what would change, marked `[dry-run]`, and write nothing.
 - Side-effecting requests are never retried. A timeout or 5xx on a write exits `7` (outcome unknown).
 - Credentials resolve as flags > environment > profile, are sent only to `https://*.vobiz.ai`, are stored with mode
   0600 and are never printed or logged. `--debug` redacts secrets in bodies.

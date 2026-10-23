@@ -4,7 +4,7 @@
  */
 import type { Command } from "commander";
 import { CONSOLE_URL, SMS_BASE_URL, VOICE_BASE_URL } from "../core/config.js";
-import { requireConfirmation } from "../core/confirm.js";
+import { localDryRun, requireConfirmation } from "../core/confirm.js";
 import type { Ctx } from "../core/context.js";
 import { describeAuthId, profileName, resolveBaseUrls, type ResolvedCredentials } from "../core/credentials.js";
 import { VobizError } from "../core/errors.js";
@@ -104,6 +104,8 @@ function registerLogin(program: Command, ctx: Ctx) {
         source: "flags",
         profile: name,
       };
+      // Under --dry-run the verification request below is printed instead of sent, and nothing is saved.
+      if (ctx.flags.dryRun) ctx.stderr.write(`[dry-run] would verify these credentials and save them as the profile "${name}" in ${ctx.store.credentialsPath}\n`);
       let me: AccountMe | undefined;
       try {
         me = await ctx.makeClient(creds).call<AccountMe>(RETRIEVE_ACCOUNT);
@@ -151,10 +153,7 @@ function registerLogout(program: Command, ctx: Ctx) {
           details: { profiles: names.map((n) => `${n} (${ctx.store.getProfile(n)?.authId ?? "?"})`).join(", "), file: ctx.store.credentialsPath },
           account: false,
         });
-      if (ctx.flags.dryRun) {
-        ctx.stderr.write(`[dry-run] would remove ${names.length ? names.map((n) => `"${n}"`).join(", ") : "no profiles"}\n`);
-        return;
-      }
+      if (localDryRun(ctx, `would remove ${names.length ? names.map((n) => `"${n}"`).join(", ") : "no profiles"} from ${ctx.store.credentialsPath}`, { file: ctx.store.credentialsPath, remove: names })) return;
       for (const n of names) ctx.store.removeProfile(n);
       if (opts.all) ctx.store.patchSettings({ defaultProfile: undefined });
       ctx.resetAuth();
@@ -218,6 +217,7 @@ function registerProfiles(program: Command, ctx: Ctx) {
     .action((name: string) => {
       const p = ctx.store.getProfile(name);
       if (!p) throw new VobizError("not_found", `No saved profile named "${name}". Run \`vobiz profiles list\`.`);
+      if (localDryRun(ctx, `would make "${name}" the default profile in ${ctx.store.settingsPath}`, { file: ctx.store.settingsPath, default_profile: name })) return;
       ctx.store.patchSettings({ defaultProfile: name });
       ctx.resetAuth();
       const who = `${p.authId}${p.accountName ? ` (${p.accountName})` : ""}, ${describeAuthId(p.authId)}`;
@@ -249,6 +249,7 @@ function registerProfiles(program: Command, ctx: Ctx) {
       if (!/^[A-Za-z0-9_.-]{1,64}$/.test(to)) throw new VobizError("invalid_input", "Profile names may use letters, digits, _ . and - (1-64 characters).");
       if (ctx.store.getProfile(to)) throw new VobizError("invalid_input", `A profile named "${to}" already exists.`);
       const wasDefault = ctx.store.settings().defaultProfile === from;
+      if (localDryRun(ctx, `would rename the profile "${from}" to "${to}" in ${ctx.store.credentialsPath}`, { file: ctx.store.credentialsPath, from, to, default: wasDefault })) return;
       ctx.store.setProfile(to, p);
       ctx.store.removeProfile(from);
       if (wasDefault) ctx.store.patchSettings({ defaultProfile: to });

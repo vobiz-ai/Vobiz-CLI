@@ -115,3 +115,15 @@ export async function requireConfirmation(ctx: Ctx, summary: ConfirmSummary): Pr
   const ok = await ctx.prompts.confirm("Continue?", false);
   if (!ok) throw new VobizError("confirmation_required", "Cancelled. Nothing was sent.");
 }
+
+/**
+ * `--dry-run` for a local write (config.json, the credentials file): prints `[dry-run] <action>` to stderr and the
+ * change that would be made to stdout (`dry_run: true`), like a request the client would send. Returns true when the
+ * caller must stop without writing.
+ */
+export function localDryRun(ctx: Ctx, action: string, change: Record<string, unknown>): boolean {
+  if (!ctx.flags.dryRun) return false;
+  ctx.stderr.write(`[dry-run] ${oneLine(action, 500)}\n`);
+  ctx.out.print({ dry_run: true, ...change });
+  return true;
+}

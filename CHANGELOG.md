@@ -6,6 +6,10 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] - 2026-10-23
+
 ### Added
 
 - `vobiz` command tree (277 commands) covering every operation in the Vobiz Voice and Messaging OpenAPI documents:
@@ -31,4 +35,5 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 - CI on Node.js 22 and 24 (lint, build, tests, spec and docs drift, package and Docker smoke tests, a standalone
   binary build), CodeQL, OpenSSF Scorecard and Dependabot.
 
-[Unreleased]: https://github.com/vobiz-ai/Vobiz-CLI/commits/main
+[Unreleased]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/vobiz-ai/Vobiz-CLI/releases/tag/v0.1.0

@@ -140,6 +140,16 @@ describe("sms send", () => {
       expect(r.json().messages[0].status).toBe("delivered");
     });
 
+    it("--max-wait bounds the wait, like calls create --max-wait", async () => {
+      const { r } = await run(["sms", "send", "--from", "+14155550100", "--to", "+14155550123", "--text", "Hi", "--wait", "--max-wait", "1"], {
+        "GET /messages/cost-preview": preview,
+        "POST /messages": reply(201, MSG),
+        "GET /messages/msg_1": { ...MSG, status: "sent" },
+      });
+      expect(r.code).toBe(8);
+      expect((await run(["sms", "send", "--from", "+14155550100", "--to", "+14155550123", "--text", "Hi", "--wait", "--max-wait", "0"], {})).r.code).toBe(2);
+    });
+
     it("exits 1 when a message fails", async () => {
       const { r } = await run(["sms", "send", "--from", "+14155550100", "--to", "+14155550123", "--text", "Hi", "--wait"], {
         "GET /messages/cost-preview": preview,

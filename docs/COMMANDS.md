@@ -3379,6 +3379,7 @@ vobiz sms send [options]
 | `--schedule-at <time>` | hold until this time: RFC 3339 (2026-11-01T09:00:00Z) or +30m, +2h, +1d |
 | `--idempotency-key <key>` | reuse a key from an earlier attempt so a retry never sends twice (default: generated and printed) |
 | `--max-fanout <n>` | allow this many recipients (default 50); each is a separate billed message (use sms broadcasts for bulk) |
+| `--max-wait <seconds>` | with --wait: give up waiting after this many seconds (default: --timeout) |
 | `--failover-to-sms` | RCS only: send the text as SMS when RCS cannot be delivered |
 | `--rcs-suggestions <json>` | RCS only: suggestion buttons as a JSON array, @file.json or @- |
 | `--dlt-entity-id <id>` | India (TRAI DLT): Principal Entity ID |

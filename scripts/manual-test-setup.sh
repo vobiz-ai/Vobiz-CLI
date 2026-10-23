@@ -2,7 +2,8 @@
 # Prepares an isolated manual-test environment for the Vobiz CLI on macOS or Linux.
 #   sh scripts/manual-test-setup.sh --published  # use the published CLI on PATH (npm install --global @vobiz/cli)
 #   sh scripts/manual-test-setup.sh              # build this checkout instead (when you are changing code)
-# Set VOBIZ_AUTH_ID and VOBIZ_AUTH_TOKEN in the environment (or in .env.live2 next to this repo) before running.
+# Set VOBIZ_AUTH_ID and VOBIZ_AUTH_TOKEN in the environment (or point VOBIZ_ENV_FILE at a file that sets them)
+# before running. Use a test account.
 # Nothing here touches ~/.config/vobiz: the scratch config lives under ./.manual-test/ (gitignored).
 set -eu
 cd "$(dirname "$0")/.."
@@ -24,7 +25,7 @@ else
   run() { node dist/index.js "$@"; }
   how="alias vobiz=\"node $PWD/dist/index.js\""
 fi
-if [ -z "${VOBIZ_AUTH_ID:-}" ] && [ -f .env.live2 ]; then set -a; . ./.env.live2; set +a; fi
+if [ -z "${VOBIZ_AUTH_ID:-}" ] && [ -n "${VOBIZ_ENV_FILE:-}" ]; then set -a; . "$VOBIZ_ENV_FILE"; set +a; fi
 : "${VOBIZ_AUTH_ID:?set VOBIZ_AUTH_ID (test account)}"; : "${VOBIZ_AUTH_TOKEN:?set VOBIZ_AUTH_TOKEN}"
 printf '%s:%s' "$VOBIZ_AUTH_ID" "$VOBIZ_AUTH_TOKEN" | run login --with-token --profile manual >/dev/null
 unset VOBIZ_AUTH_ID VOBIZ_AUTH_TOKEN

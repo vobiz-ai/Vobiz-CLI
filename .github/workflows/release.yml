@@ -62,7 +62,7 @@ jobs:
       # test toolchain and its ~80 dev dependencies never run next to the npm OIDC token.
       - run: npm run check
       - run: npm audit --audit-level=high
-      - name: Pack the npm tarball (prepack checks dist/internal is excluded and builds completions + man)
+      - name: Pack the npm tarball (prepack checks the pack list and builds completions + man)
         run: |
           mkdir -p "$RUNNER_TEMP/pack"
           npm pack --pack-destination "$RUNNER_TEMP/pack"

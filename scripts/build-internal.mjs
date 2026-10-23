@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Internal build: compiles the CLI with the `vobiz internal …` group enabled (src/internal, present only in the
-// internal repository). It sets INTERNAL_BUILD=true in src/generated/build-flags.ts,
+// Optional ops build: compiles the CLI with the `vobiz internal …` group (src/internal) enabled. The group is
+// switched on at build time here, or at runtime with VOBIZ_INTERNAL=1. It sets INTERNAL_BUILD=true in
+// src/generated/build-flags.ts,
 // runs `npm run build`, and always restores the committed file (INTERNAL_BUILD=false) afterwards, so the working
 // tree stays clean and a later plain `npm run build` is public again.
 // Usage: npm run build:internal        (equivalent at runtime without rebuilding: VOBIZ_INTERNAL=1 vobiz …)
@@ -12,7 +13,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const flags = join(root, "src", "generated", "build-flags.ts");
 if (!existsSync(join(root, "src", "internal", "commands", "index.ts"))) {
-  console.error("build:internal: src/internal/ is missing (it exists only in the internal repository).");
+  console.error("build:internal: src/internal/ is not in this checkout; this optional ops build needs it.");
   process.exit(1);
 }
 const original = readFileSync(flags, "utf8");

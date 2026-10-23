@@ -37,7 +37,7 @@ All notable changes to the Vobiz CLI are documented here. The format follows
   page, so `--limit` trims it in the CLI.
 - `vobiz update` reports `install_method: "source"` (and suggests `git pull && npm ci && npm run build`) when it runs
   from a git checkout.
-- New public `docs/ARCHITECTURE.md` (command tree conventions, safety model, output modes, exit codes), linked from the
+- New `docs/ARCHITECTURE.md` (command tree conventions, safety model, output modes, exit codes), linked from the
   README, CONTRIBUTING and CLAUDE.md.
 - `scripts/pack-guard.mjs` fails the pack when README, CHANGELOG or LICENSE would be missing from the package.
 
@@ -50,7 +50,7 @@ All notable changes to the Vobiz CLI are documented here. The format follows
   `--type`, `--format`, `--direction`) offered the first command's values everywhere.
 - The "come from third parties" note on stderr names only fields that are printed: `cdr` with `--fields` or `--query`
   that leave `caller_id_name` out, and tables whose columns leave the field out, no longer print it.
-- Public test, script and source comments no longer carry internal review labels.
+- Comment cleanup in tests, scripts and sources.
 
 ### Security
 

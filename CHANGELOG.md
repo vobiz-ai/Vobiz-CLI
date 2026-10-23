@@ -6,6 +6,11 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `sms send --max-wait <seconds>` bounds `--wait` (default: `--timeout`), like `calls create --max-wait`.
+- Aliases for the standard verbs: `skills ls`, `profiles delete`, `account get`.
+
 ### Changed
 
 - Usage errors from argument parsing (unknown option or command, missing argument) print the same one-line JSON

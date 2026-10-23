@@ -112,7 +112,8 @@ complete -o default -F _vobiz vobiz
 
 // ---------- zsh ----------
 {
-  const zdesc = (name, desc) => sq(`${name.replace(/:/g, "\\:")}:${oneLine(desc)}`);
+  // zsh "name:description" pairs: escape the backslash and the ":" separator in one pass, backslash included.
+  const zdesc = (name, desc) => sq(`${name.replace(/[\\:]/g, (c) => `\\${c}`)}:${oneLine(desc)}`);
   const caseOf = (fn) => rows.map((r) => `    ${sq(r.key)}) reply=(${fn(r)}) ;;`).join("\n");
   const choiceCases = rows.flatMap((r) => r.options.filter((o) => o.choices.length).map((o) => `    ${sq(`${r.key}|${o.flag}`)}) reply=(${o.choices.map(sq).join(" ")}) ;;`)).join("\n");
   const zsh = `#compdef vobiz

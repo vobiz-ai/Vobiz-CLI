@@ -107,15 +107,30 @@ export class VobizClient {
 
   /** Fills a path template. auth_id/account_id come from the credentials; the rest from `params`, encoded. */
   fillPath(template: string, params: Record<string, string | number> = {}): string {
-    return template.replace(/\{([^}]+)\}/g, (_, name: string) => {
-      if (ACCOUNT_PARAMS.has(name)) return encodeURIComponent(this.authId);
-      const v = params[name];
-      if (v === undefined || v === null || v === "") throw new VobizError("invalid_input", `Missing required path parameter "${name}".`);
-      // "." and ".." survive encodeURIComponent and would be collapsed by URL parsing, so `calls hangup ..`
-      // would otherwise DELETE the parent resource.
-      if (v === "." || v === "..") throw new VobizError("invalid_input", `Invalid path parameter "${name}": "${v}".`);
-      return encodeURIComponent(String(v));
-    });
+    // A linear scan instead of a regex: templates come from the spec and must never cost more than one pass.
+    let out = "";
+    let i = 0;
+    while (i < template.length) {
+      const open = template.indexOf("{", i);
+      if (open === -1) break;
+      const close = template.indexOf("}", open + 1);
+      if (close === -1) break;
+      const name = template.slice(open + 1, close);
+      out += template.slice(i, open);
+      out += name === "" ? "{}" : this.fillParam(name, params); // "{}" is not a placeholder
+      i = close + 1;
+    }
+    return out + template.slice(i);
+  }
+
+  private fillParam(name: string, params: Record<string, string | number>): string {
+    if (ACCOUNT_PARAMS.has(name)) return encodeURIComponent(this.authId);
+    const v = params[name];
+    if (v === undefined || v === null || v === "") throw new VobizError("invalid_input", `Missing required path parameter "${name}".`);
+    // "." and ".." survive encodeURIComponent and would be collapsed by URL parsing, so `calls hangup ..`
+    // would otherwise DELETE the parent resource.
+    if (v === "." || v === "..") throw new VobizError("invalid_input", `Invalid path parameter "${name}": "${v}".`);
+    return encodeURIComponent(String(v));
   }
 
   buildUrl(api: Api, path: string, query: Record<string, unknown> = {}): URL {

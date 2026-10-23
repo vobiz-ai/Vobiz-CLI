@@ -3,9 +3,10 @@
  *
  * KYC commands call the live verification endpoints by default. `--test` (on `kyc`, accepted anywhere after it)
  * switches to the Test Mode endpoints (`/sub-accounts/test/…`), which return mock results and never contact a
- * verification provider; `finalize-pending` exists only in Test Mode.
+ * verification provider; `finalize-pending` exists only in Test Mode. `--test` and `finalize-pending` stay callable but
+ * are hidden from --help until the Test Mode routes are generally available.
  */
-import type { Command } from "commander";
+import { Option, type Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { REDACTED } from "../core/redact.js";
 import { VobizError } from "../core/errors.js";
@@ -33,13 +34,15 @@ interface KycLeaf {
   action: string;
   summaryKeys: string[];
   example?: string;
+  /** Kept callable but left out of --help, docs and completions. */
+  hidden?: boolean;
   /** Fills body fields from the sub-account id when not given. */
   defaults?: (sa: string) => Opts;
 }
 
 function kycLeaf(parent: Command, ctx: Ctx, leaf: KycLeaf): void {
   const ops = [leaf.live, leaf.test].filter((o): o is Operation => !!o);
-  const cmd = parent.command(leaf.name).argument("<sub-auth-id>", "sub-account Auth ID, e.g. SA_XXXXXXXX").description(leaf.description);
+  const cmd = parent.command(leaf.name, { hidden: !!leaf.hidden }).argument("<sub-auth-id>", "sub-account Auth ID, e.g. SA_XXXXXXXX").description(leaf.description);
   const spec = addBodyOptions(cmd, ops);
   if (leaf.example) cmd.addHelpText("after", examples(leaf.example));
   cmd.action(async (sa: string, opts: Opts, self: Command) => {
@@ -73,14 +76,12 @@ function registerKyc(subAccounts: Command, ctx: Ctx): void {
   const kyc = subAccounts
     .command("kyc")
     .description("Sub-account KYC: status, PAN/GST/CIN/DigiLocker verification and hosted KYC sessions")
-    .option("--test", "use the Test Mode endpoints (mock results; nothing is sent to a verification provider)")
+    .addOption(new Option("--test", "use the Test Mode endpoints (mock results; nothing is sent to a verification provider)").hideHelp())
     .addHelpText(
       "after",
       examples(
         "vobiz sub-accounts kyc status SA_XXXXXXXX",
         "vobiz sub-accounts kyc verify-pan SA_XXXXXXXX --pan ABCDE1234F",
-        "vobiz sub-accounts kyc --test verify-pan SA_XXXXXXXX --pan ABCDE1234F",
-        "vobiz sub-accounts kyc --test finalize-pending SA_XXXXXXXX --verification-type pan --outcome verified",
         "vobiz sub-accounts kyc session create SA_XXXXXXXX --flow-type email --customer-email owner@example.com",
       ),
     );
@@ -154,6 +155,7 @@ function registerKyc(subAccounts: Command, ctx: Ctx): void {
     name: "finalize-pending",
     description: "Test Mode only: resolve a pending verification as verified or failed",
     test: op("mock-finalize-pending-kyc"),
+    hidden: true,
     action: "Finalize a pending verification of",
     summaryKeys: ["verification_type", "outcome"],
   });

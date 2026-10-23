@@ -142,6 +142,14 @@ describe("sub-accounts kyc", () => {
     expect(api.calls).toHaveLength(0);
   });
 
+  it("--help leaves out --test and finalize-pending, which stay callable", async () => {
+    const r = await runCli(["sub-accounts", "kyc", "--help"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("verify-pan");
+    expect(r.out).not.toContain("--test");
+    expect(r.out).not.toContain("finalize-pending");
+  });
+
   it("finalize-pending is Test Mode only", async () => {
     const api = fakeFetch({ [`POST ${T}/finalize-pending`]: { status: "verified" } });
     expect((await runCli(["sub-accounts", "kyc", "finalize-pending", "SA_XXXXXXXX", "--verification-type", "pan", "--outcome", "verified", "--yes"], { fetch: api.fetch })).code).toBe(2);

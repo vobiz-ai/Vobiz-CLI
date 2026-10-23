@@ -286,7 +286,6 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
     - [`vobiz sub-accounts kyc digilocker`](#vobiz-sub-accounts-kyc-digilocker)
       - [`vobiz sub-accounts kyc digilocker initiate`](#vobiz-sub-accounts-kyc-digilocker-initiate)
       - [`vobiz sub-accounts kyc digilocker verify`](#vobiz-sub-accounts-kyc-digilocker-verify)
-    - [`vobiz sub-accounts kyc finalize-pending`](#vobiz-sub-accounts-kyc-finalize-pending)
     - [`vobiz sub-accounts kyc session`](#vobiz-sub-accounts-kyc-session)
       - [`vobiz sub-accounts kyc session create`](#vobiz-sub-accounts-kyc-session-create)
     - [`vobiz sub-accounts kyc status`](#vobiz-sub-accounts-kyc-status)
@@ -3783,11 +3782,7 @@ Sub-account KYC: status, PAN/GST/CIN/DigiLocker verification and hosted KYC sess
 vobiz sub-accounts kyc <command> [options]
 ```
 
-| Option | Description |
-|---|---|
-| `--test` | use the Test Mode endpoints (mock results; nothing is sent to a verification provider) |
-
-Subcommands: [`cin`](#vobiz-sub-accounts-kyc-cin), [`digilocker`](#vobiz-sub-accounts-kyc-digilocker), [`finalize-pending`](#vobiz-sub-accounts-kyc-finalize-pending), [`session`](#vobiz-sub-accounts-kyc-session), [`status`](#vobiz-sub-accounts-kyc-status), [`verify-gst`](#vobiz-sub-accounts-kyc-verify-gst), [`verify-pan`](#vobiz-sub-accounts-kyc-verify-pan)
+Subcommands: [`cin`](#vobiz-sub-accounts-kyc-cin), [`digilocker`](#vobiz-sub-accounts-kyc-digilocker), [`session`](#vobiz-sub-accounts-kyc-session), [`status`](#vobiz-sub-accounts-kyc-status), [`verify-gst`](#vobiz-sub-accounts-kyc-verify-gst), [`verify-pan`](#vobiz-sub-accounts-kyc-verify-pan)
 
 ### vobiz sub-accounts kyc cin
 
@@ -3878,24 +3873,6 @@ vobiz sub-accounts kyc digilocker verify <sub-auth-id> [options]
 |---|---|
 | `--access-request-id <value>` | access request ID (required) |
 | `--linked-number <value>` | linked number |
-| `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
-
-### vobiz sub-accounts kyc finalize-pending
-
-Test Mode only: resolve a pending verification as verified or failed
-
-```
-vobiz sub-accounts kyc finalize-pending <sub-auth-id> [options]
-```
-
-| Argument | Required | Description |
-|---|---|---|
-| `sub-auth-id` | yes | sub-account Auth ID, e.g. SA_XXXXXXXX |
-
-| Option | Description |
-|---|---|
-| `--verification-type <value>` | verification type (required) (one of: `pan`, `aadhaar`, `gst`, `cin`) |
-| `--outcome <value>` | outcome (required) (one of: `verified`, `failed`) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz sub-accounts kyc session

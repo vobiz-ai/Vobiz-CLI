@@ -205,7 +205,7 @@ describe("vobiz streams test", () => {
     let r = await test(url);
     expect(r.code).toBe(8);
 
-    expect((await runCli(["streams", "test", "ws://127.0.0.1:1/x"])).code).toBe(2);
+    expect((await runCli(["streams", "test", "ws://198.51.100.7/x"])).code).toBe(2); // remote ws:// needs --allow-insecure-url
     expect((await runCli(["streams", "test", "https://example.com"])).code).toBe(2);
     expect((await runCli(["streams", "test", "wss://example.com/m", "--sample-rate", "16000"])).code).toBe(2);
 
@@ -366,6 +366,16 @@ describe("vobiz streams forward hardening", () => {
       for (const s of held) s.destroy();
       black.close();
     }
+  });
+
+  it("streams test treats ws:// like streams forward: fine on localhost, refused elsewhere without --allow-insecure-url", async () => {
+    const r = await runCli(["streams", "test", "ws://agent.example.com/media", "--seconds", "0.1", "--json"]);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("--allow-insecure-url");
+    const server = await agent();
+    const local = await runCli(["streams", "test", server.url, "--seconds", "0.1", "--linger", "0.3", "--json"]);
+    expect(local.err).not.toContain("--allow-insecure-url");
+    expect(local.code, local.err).not.toBe(2);
   });
 
   it("needs --allow-lan for a non-loopback --host and --allow-insecure-url for a remote ws:// --to", async () => {

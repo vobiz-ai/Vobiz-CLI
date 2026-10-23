@@ -111,10 +111,11 @@ interface SendOpts {
   dltHeaderId?: string;
   dltTemplateId?: string;
   maxFanout?: number;
+  maxWait?: number;
 }
 
-async function waitForFinal(ctx: Ctx, messages: Rec[]): Promise<boolean> {
-  const deadline = Date.now() + ctx.flags.timeout * 1000;
+async function waitForFinal(ctx: Ctx, messages: Rec[], maxWaitSeconds: number): Promise<boolean> {
+  const deadline = Date.now() + maxWaitSeconds * 1000;
   const pending = () => messages.filter((m) => typeof m.id === "string" && m.id && !TERMINAL_STATUSES.has(String(m.status)) && m.status !== "scheduled" && m.status !== "not_sent");
   if (messages.some((m) => m.status === "scheduled")) ctx.out.warn("Scheduled messages are not waited for; follow them with `vobiz sms messages get <id>`.");
   let lastLine = "";
@@ -148,10 +149,11 @@ function registerSend(sms: Command, ctx: Ctx): void {
     .option("--schedule-at <time>", "hold until this time: RFC 3339 (2026-11-01T09:00:00Z) or +30m, +2h, +1d")
     .option("--idempotency-key <key>", "reuse a key from an earlier attempt so a retry never sends twice (default: generated and printed)")
     .addOption(
-      new Option("--max-fanout <n>", `allow more than ${DEFAULT_MAX_RECIPIENTS} recipients in one command (each is billed); use sms broadcasts for bulk`).argParser(
+      new Option("--max-fanout <n>", `allow this many recipients (default ${DEFAULT_MAX_RECIPIENTS}); each is a separate billed message (use sms broadcasts for bulk)`).argParser(
         intArg("--max-fanout", 1, 100_000),
       ),
     )
+    .addOption(new Option("--max-wait <seconds>", "with --wait: give up waiting after this many seconds (default: --timeout)").argParser(intArg("--max-wait", 1, 86_400)))
     .option("--failover-to-sms", "RCS only: send the text as SMS when RCS cannot be delivered")
     .option("--rcs-suggestions <json>", "RCS only: suggestion buttons as a JSON array, @file.json or @-")
     .option("--dlt-entity-id <id>", "India (TRAI DLT): Principal Entity ID")
@@ -161,7 +163,7 @@ function registerSend(sms: Command, ctx: Ctx): void {
       "after",
       `
 Every recipient gets its own message and is billed per segment. The cost is previewed and you are asked to
-confirm (pass --yes in scripts). Add --wait to poll until each message is delivered or failed (bounded by --timeout).
+confirm (pass --yes in scripts). Add --wait to poll until each message is delivered or failed (bounded by --max-wait, default --timeout).
 
 Examples:
   vobiz sms send --from +14155550100 --to +14155550123 --text "Your code is 123456"
@@ -244,7 +246,7 @@ Examples:
       }
 
       let finished = true;
-      if (ctx.flags.wait) finished = await waitForFinal(ctx, messages);
+      if (ctx.flags.wait) finished = await waitForFinal(ctx, messages, opts.maxWait ?? ctx.flags.timeout);
 
       const failed = messages.filter((m) => ["failed", "not_sent"].includes(String(m.status)));
       const mode = ctx.out.mode;
@@ -255,7 +257,7 @@ Examples:
       if (!ctx.flags.wait) ctx.out.status(`${sent} of ${messages.length} accepted. "sent" means handed to the network; check delivery with \`vobiz sms messages get <id>\` or --wait.`);
       if (unknownOutcome) ctx.exitCode = EXIT.outcome_unknown;
       else if (!finished) {
-        ctx.out.warn(`Not every message reached a final status within ${ctx.flags.timeout}s.`);
+        ctx.out.warn(`Not every message reached a final status within ${opts.maxWait ?? ctx.flags.timeout}s.`);
         ctx.exitCode = EXIT.timeout;
       } else if (failed.length) ctx.exitCode = 1;
     });

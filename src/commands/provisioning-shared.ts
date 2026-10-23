@@ -42,12 +42,37 @@ const PAGINATION_PARAMS = new Set(["page", "per_page", "limit", "offset", "size"
 export const kebab = (name: string): string => name.replace(/_+/g, "-").toLowerCase();
 const camel = (flag: string): string => flag.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 
-/** First sentence of a spec description, without markdown emphasis, short enough for --help. */
-function shortDescription(p: Param): string {
+const ACRONYMS = new Set(["id", "ids", "url", "urls", "uuid", "sip", "cps", "ip", "acl", "uri", "kyc", "pan", "gst", "cin", "pii", "http", "https", "dtmf", "e164"]);
+const PROPER = new Set(["Vobiz", "Aadhaar", "DigiLocker", "India", "Indian"]);
+/** "answer_url" -> "answer URL": the fallback when the spec has no description. */
+const words = (name: string): string =>
+  name
+    .split(/_+/)
+    .filter(Boolean)
+    .map((w) => (w.toLowerCase() === "ipacl" ? "IP ACL" : ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w))
+    .join(" ")
+    .replace(/\bauth ID\b/i, "Auth ID");
+
+/**
+ * First sentence of a spec description, in the CLI's help voice: no markdown emphasis, lower-case start (unless it
+ * starts with an acronym or a code span), no trailing period, field names written as their flags, and short enough
+ * for --help. `fields` are the spec field names that have a flag on this command.
+ */
+function shortDescription(p: Param, fields: ReadonlySet<string> = new Set()): string {
   const text = p.description.replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
   let first = text.split(/(?<=[.!?])\s/)[0] ?? "";
+  first = first
+    .replace(/^Deprecated\s+[-–—:]\s+use\b/i, "deprecated: use")
+    .replace(/`([a-z][a-z0-9_]*)`/g, (m, name: string) => (fields.has(name) ? `--${kebab(name)}` : m))
+    .replace(/\.$/, "")
+    // The product's credential name, and the one operationId the spec cites in prose, as a user sees them.
+    .replace(/(^|[^`_a-z])auth_id\b/g, "$1Auth ID")
+    .replace(/\(from create-customer-account\)/, "(from `partner accounts create`)");
+  if (/^optional$/i.test(first)) first = "";
+  // Lower-case the first word unless it is an acronym ("URL", "SIP"), a mixed-case name ("VobizXML") or a proper noun.
+  first = first.replace(/^([A-Z])([a-z]+)\b/, (m, a: string, rest: string) => (ACRONYMS.has(m.toLowerCase()) || PROPER.has(m) ? m : a.toLowerCase() + rest));
   if (first.length > 110) first = first.slice(0, 107).trimEnd() + "…";
-  return first || p.name.replace(/_+/g, " ");
+  return first || words(p.name);
 }
 
 export interface FieldSpec {
@@ -82,12 +107,13 @@ function parseJson(flag: string) {
 /** Adds one option per param. Returns the mapping used at action time. */
 function addParamOptions(cmd: Command, params: Param[], extraDescription?: (p: Param) => string): FieldSpec[] {
   const fields: FieldSpec[] = [];
+  const names = new Set(params.map((p) => p.name));
   for (const p of params) {
     const flag = kebab(p.name);
     if (GLOBAL_FLAGS.has(flag)) throw new Error(`${cmd.name()}: spec field "${p.name}" collides with a reserved flag --${flag}.`);
     if (fields.some((f) => f.flag === flag)) continue;
     const attr = camel(flag);
-    let desc = shortDescription(p);
+    let desc = shortDescription(p, names);
     if (SECRET_FIELDS.has(p.name)) desc += " (@file or @- for stdin keeps it out of shell history)";
     if (p.required) desc += " (required)";
     if (p.deprecated && !/^deprecated\b/i.test(desc)) desc += " (deprecated)";
@@ -151,7 +177,7 @@ export function addBodyOptions(cmd: Command, ops: Operation | Operation[], skip:
   const props = list.flatMap((o) => o.body.props).filter((p) => !skip.includes(p.name) && !taken.has(kebab(p.name)));
   const fields = addParamOptions(cmd, props);
   for (const a of usable) {
-    const desc = a.deprecated ? `deprecated: use --${a.use ?? kebab(a.to)}. ${a.description}` : a.description;
+    const desc = a.deprecated ? `deprecated: use --${a.use ?? kebab(a.to)}; ${a.description}` : a.description;
     if (a.boolean) {
       cmd.addOption(new Option(`--${a.flag}`, `${desc} (--no-${a.flag} to set false)`));
       cmd.addOption(new Option(`--no-${a.flag}`, `set ${a.to} to false`).hideHelp());
@@ -233,18 +259,41 @@ function checkBodyUrls(body: Record<string, unknown>, fromFlags: Record<string, 
 
 export interface QuerySpec {
   fields: FieldSpec[];
+  /** The spec's date-window params that --from/--to (the CLI-wide names) also set. */
+  window?: { from: string; to: string };
 }
+
+const WHEN = "(today, yesterday, 7d, 2026-10-01 or ISO)";
 
 /** Flags for the filter query params of `op` (pagination params are handled by --limit/--all). */
 export function addQueryOptions(cmd: Command, op: Operation, skip: string[] = []): QuerySpec {
   const params = op.queryParams.filter((p) => !PAGINATION_PARAMS.has(p.name) && !skip.includes(p.name));
-  return { fields: addParamOptions(cmd, params, (p) => (/_date$/.test(p.name) ? " (today, 7d, 2026-10-01)" : "")) };
+  const fields = addParamOptions(cmd, params, (p) => (/_date$/.test(p.name) ? ` ${WHEN}` : ""));
+  // Date windows are --from/--to everywhere else (cdr, account transactions, recordings export): offer the same
+  // names here, next to the spec's own --start-date/--end-date or --from-date/--to-date.
+  const names = new Set(params.map((p) => p.name));
+  const pair = [["start_date", "end_date"], ["from_date", "to_date"]].find(([a, b]) => names.has(a) && names.has(b));
+  const window = pair && !names.has("from") && !names.has("to") ? { from: pair[0], to: pair[1] } : undefined;
+  if (window) {
+    cmd.option("--from <when>", `start date, same as --${kebab(window.from)} ${WHEN}`);
+    cmd.option("--to <when>", `end date, same as --${kebab(window.to)}`);
+  }
+  return { fields, window };
 }
 
 export function buildQuery(ctx: Ctx, opts: Opts, spec: QuerySpec): Record<string, unknown> {
   const q: Record<string, unknown> = {};
+  const o: Opts = { ...opts };
+  if (spec.window) {
+    for (const [alias, name] of [["from", spec.window.from], ["to", spec.window.to]] as const) {
+      if (o[alias] === undefined) continue;
+      const attr = camel(kebab(name));
+      if (o[attr] !== undefined) throw usage(`--${alias} and --${kebab(name)} set the same date; pass one.`);
+      o[attr] = o[alias];
+    }
+  }
   for (const f of spec.fields) {
-    let v = opts[f.attr];
+    let v = o[f.attr];
     if (v === undefined) continue;
     if (/_date$/.test(f.name) && typeof v === "string") v = toYmd(parseTime(v, ctx.now()));
     q[f.name] = Array.isArray(v) ? v.join(",") : v;

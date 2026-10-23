@@ -5,6 +5,7 @@
 import type { Command } from "commander";
 import type { Settings } from "../core/config.js";
 import type { Ctx } from "../core/context.js";
+import { localDryRun } from "../core/confirm.js";
 import { VobizError } from "../core/errors.js";
 
 type Key = "output" | "color" | "updateCheck" | "telemetry" | "defaultProfile";
@@ -31,7 +32,7 @@ export const CONFIG_KEYS: Record<Key, KeySpec> = {
   },
   color: { description: "colored output (true/false)", parse: bool("color") },
   updateCheck: { description: "daily check for a newer CLI version (true/false)", parse: bool("updateCheck") },
-  telemetry: { description: "anonymous usage telemetry, off unless set to true", parse: bool("telemetry") },
+  telemetry: { description: "reserved for opt-in usage telemetry; the CLI sends none today, whatever the value", parse: bool("telemetry") },
   defaultProfile: {
     description: "profile used when --profile is not given",
     parse: (v, ctx) => {
@@ -84,6 +85,7 @@ export function register(program: Command, ctx: Ctx): void {
     .action((name: string, value: string) => {
       const k = keyOf(name);
       const parsed = CONFIG_KEYS[k].parse(value, ctx);
+      if (localDryRun(ctx, `would set ${k} = ${String(parsed)} in ${ctx.store.settingsPath}`, { file: ctx.store.settingsPath, key: k, value: parsed })) return;
       ctx.store.patchSettings({ [k]: parsed } as Partial<Settings>);
       ctx.out.success(`${k} = ${String(parsed)}`, { key: k, value: parsed });
     });
@@ -94,6 +96,7 @@ export function register(program: Command, ctx: Ctx): void {
     .description("Reset a setting to its default")
     .action((name: string) => {
       const k = keyOf(name);
+      if (localDryRun(ctx, `would reset ${k} to its default in ${ctx.store.settingsPath}`, { file: ctx.store.settingsPath, key: k, value: null })) return;
       ctx.store.patchSettings({ [k]: undefined } as Partial<Settings>);
       ctx.out.success(`${k} reset to its default.`, { key: k, value: null });
     });

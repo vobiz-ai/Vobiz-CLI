@@ -100,6 +100,16 @@ export function resolveGlobalFlags(raw: RawGlobals, env: NodeJS.ProcessEnv): Glo
 
 export function buildProgram(ctx: Ctx): Command {
   const program = new Command("vobiz");
+  // Parse errors (unknown option, missing argument) follow the same error contract as every other failure: one
+  // JSON line on stderr in JSON mode (piped stdout, --json, -o json/jsonl/yaml, VOBIZ_OUTPUT), text otherwise.
+  // Global flags are not resolved yet when commander reports one, so read the raw options parsed so far.
+  let usageAsJson = false;
+  const jsonUsage = (): boolean => {
+    const raw = program.opts<RawGlobals>();
+    if (raw.json || (raw.output && ["json", "jsonl", "yaml"].includes(raw.output))) return true;
+    if (raw.output) return false;
+    return ctx.out.jsonErrors;
+  };
   program
     .description("Vobiz CLI: voice calls, conferences, SMS/MMS/RCS, phone numbers, SIP trunks, VobizXML and the Vobiz agent tools.")
     .version(CLI_VERSION, "-V, --version", "print the CLI version")
@@ -108,8 +118,17 @@ export function buildProgram(ctx: Ctx): Command {
     .configureHelp({ showGlobalOptions: false, sortSubcommands: false })
     .configureOutput({
       writeOut: (s) => void ctx.stdout.write(s),
-      writeErr: (s) => void ctx.stderr.write(s),
-      outputError: (s, write) => write(`vobiz: usage: ${s.replace(/^error: /, "")}`),
+      writeErr: (s) => {
+        // In JSON mode the "(run with --help for usage)" line is the error's hint instead.
+        if (usageAsJson && s === "(run with --help for usage)\n") return;
+        ctx.stderr.write(s);
+      },
+      outputError: (s, write) => {
+        const message = s.replace(/^error: /, "").trim();
+        usageAsJson = jsonUsage();
+        if (usageAsJson) ctx.out.printError(new VobizError("invalid_input", `${message.charAt(0).toUpperCase()}${message.slice(1)}${/[.?)]$/.test(message) ? "" : "."}`));
+        else write(`vobiz: usage: ${message}\n`);
+      },
       getOutHelpWidth: () => ctx.stdout.columns ?? 80,
       getErrHelpWidth: () => ctx.stderr.columns ?? 80,
     })
@@ -129,6 +148,15 @@ export function buildProgram(ctx: Ctx): Command {
   });
 
   for (const register of COMMAND_GROUPS) register(program, ctx);
+  // Commander's built-in "help" subcommand and -h option use its own lower-case wording; match the CLI's voice.
+  const polish = (cmd: Command) => {
+    cmd.helpOption("-h, --help", "show help for this command");
+    // Mark mandatory options the same way as the spec-derived ones ("(required)"); commander does not.
+    for (const o of cmd.options) if (o.mandatory && !o.description.includes("(required)")) o.description += " (required)";
+    if (cmd !== program && cmd.commands.length) cmd.helpCommand("help [command]", "Show help for a command");
+    cmd.commands.forEach(polish);
+  };
+  polish(program);
   return program;
 }
 

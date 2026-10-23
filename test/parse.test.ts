@@ -3,7 +3,7 @@ import { parsePort } from "../src/agent/http.js";
 import { parseIntStrict, tryParseIntStrict } from "../src/core/parse.js";
 import { runCli } from "./helpers.js";
 
-describe("strict integer parsing (S3 #16)", () => {
+describe("strict integer parsing", () => {
   it("accepts plain decimal digits within bounds only", () => {
     expect(tryParseIntStrict("42")).toBe(42);
     for (const bad of ["0x50", "0b11", "1e3", " 7 ", "", "7.0", "+7", "-1", "99999999999999999"]) expect(tryParseIntStrict(bad), bad).toBeUndefined();

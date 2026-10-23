@@ -14,7 +14,7 @@ Thanks for helping make the Vobiz CLI better. Bug reports, fixes, new commands a
 - **Your account only.** Build account paths from the resolved Auth ID. Never accept an account ID as an argument. Keep the API's path casing exactly.
 - **Clean stdout.** Data goes to stdout; progress, hints and warnings go to stderr.
 - **Naming.** Plural nouns, standard verbs (`list get create update delete`), sentence-case help text, and **Vobiz** for the product name.
-- **Dependencies.** Add one only when [`docs/PLAN.md`](docs/PLAN.md) lists it, or justify it in the PR.
+- **Dependencies.** Prefer Node.js built-ins and the dependencies already in `package.json`; justify any new one in the PR.
 
 ## Development setup
 
@@ -37,7 +37,9 @@ npm run test:live
 
 ## Adding a command
 
-1. Add or extend `src/commands/<group>.ts` (`export function register(program, ctx)`), registered in `src/cli.ts`.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the command tree conventions, safety model, output modes and exit codes every command follows.
+
+1. Add or extend `src/commands/<group>.ts` (`export function register(program, ctx)`), registered in `COMMAND_GROUPS` in `src/commands/index.ts`.
 2. Resolve the operation by its `operationId` with `op("…")`; a renamed operation then fails the build, not a user.
 3. Throw `VobizError` with an existing error kind and an actionable message; the entry point maps it to the exit code.
 4. Add tests in `test/` with the fake API (`test/helpers.ts`): assert method, path, query and body, and the JSON output. Tests must never reach the network.

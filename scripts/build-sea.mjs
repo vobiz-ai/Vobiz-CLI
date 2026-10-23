@@ -72,8 +72,15 @@ mkdirSync(stage, { recursive: true });
 log(`staging dist/ for ${name}`);
 cpSync(join(root, "dist"), join(stage, "dist"), { recursive: true });
 const versionFile = join(stage, "dist", "core", "version.js");
-if (existsSync(versionFile)) {
-  const src = readFileSync(versionFile, "utf8");
+// Read directly instead of exists-then-read: a missing file is the only case that skips inlining.
+let versionSrc;
+try {
+  versionSrc = readFileSync(versionFile, "utf8");
+} catch (e) {
+  if (e?.code !== "ENOENT") throw e;
+}
+if (versionSrc !== undefined) {
+  const src = versionSrc;
   const pattern = /require\(\s*["'](?:\.\.\/)+package\.json["']\s*\)/g;
   if (!pattern.test(src)) {
     fail("dist/core/version.js no longer requires ../../package.json; update the inlining step in scripts/build-sea.mjs");

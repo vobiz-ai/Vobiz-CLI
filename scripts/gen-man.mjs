@@ -8,8 +8,9 @@ import { EXIT_CODES, flatten, loadCommandTree, readVersion, root, usageLine } fr
 const tree = await loadCommandTree();
 const version = await readVersion();
 
-// roff escaping: backslashes, leading dots/quotes, and hyphens in flags.
-const esc = (s) => String(s ?? "").replace(/\s+/g, " ").trim().replace(/\\/g, "\\e").replace(/-/g, "\\-").replace(/^([.'])/, "\\&$1");
+// roff escaping in one pass (so an escape is never re-escaped): backslashes as \e, hyphens as \-, then leading
+// dots/quotes.
+const esc = (s) => String(s ?? "").replace(/\s+/g, " ").trim().replace(/[\\-]/g, (c) => (c === "\\" ? "\\e" : "\\-")).replace(/^([.'])/, "\\&$1");
 
 const out = [];
 out.push(

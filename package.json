@@ -1,6 +1,6 @@
 {
   "name": "@vobiz/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Official Vobiz CLI: voice calls, in-call control, conferences, SMS/MMS/RCS, phone numbers, SIP trunks, VobizXML, call records, sub-accounts and the Vobiz Agent Skills, from your terminal and CI.",
   "keywords": ["vobiz", "cli", "telephony", "voice-api", "sms", "rcs", "sip-trunking", "ivr", "vobizxml", "ai-agents", "mcp"],
   "homepage": "https://www.vobiz.ai/docs/resources/cli",
@@ -11,7 +11,7 @@
   "bin": { "vobiz": "dist/index.js" },
   "main": "dist/cli.js",
   "man": "./man/vobiz.1",
-  "files": ["dist/**/*.js", "!dist/internal/**", "spec/*.yaml", "skills/**", "README.md", "LICENSE", "completions/**", "man/**"],
+  "files": ["dist/**/*.js", "!dist/internal/**", "spec/*.yaml", "skills/**", "README.md", "CHANGELOG.md", "LICENSE", "completions/**", "man/**"],
   "engines": { "node": ">=22.12" },
   "repository": { "type": "git", "url": "git+https://github.com/vobiz-ai/Vobiz-CLI.git" },
   "publishConfig": { "access": "public", "provenance": true },

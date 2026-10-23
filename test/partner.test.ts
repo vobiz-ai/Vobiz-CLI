@@ -64,6 +64,12 @@ describe("partner", () => {
     expect(c.code).toBe(0);
     expect(api.last().query).toMatchObject({ call_direction: "outbound", min_duration: "5" });
     expect((await runCli(["partner", "accounts", "cdrs", "MA_XXXXXXXX", "--status", "weird"], { fetch: api.fetch })).code).toBe(2);
+    // --from/--to, the CLI-wide date-window names, set the spec's own date params.
+    expect((await runCli(["partner", "accounts", "cdrs", "MA_XXXXXXXX", "--from", "7d", "--to", "2026-10-22", "--json"], { fetch: api.fetch, now: NOW })).code).toBe(0);
+    expect(api.last().query).toMatchObject({ start_date: "2026-10-15", end_date: "2026-10-22" });
+    expect((await runCli(["partner", "accounts", "transactions", "MA_XXXXXXXX", "--from", "7d", "--json"], { fetch: api.fetch, now: NOW })).code).toBe(0);
+    expect(api.last().query).toMatchObject({ from_date: "2026-10-15" });
+    expect((await runCli(["partner", "accounts", "cdrs", "MA_XXXXXXXX", "--from", "7d", "--start-date", "1d"], { fetch: api.fetch })).code).toBe(2);
     const n = await runCli(["partner", "accounts", "numbers", "MA_XXXXXXXX", "--search", "+9180", "-q"], { fetch: api.fetch });
     expect(n.out).toBe("+918012345678\n");
   });
@@ -102,7 +108,7 @@ describe("partner", () => {
   });
 });
 
-describe("--secret-file is created before the request (S3 #12)", async () => {
+describe("--secret-file is created before the request", async () => {
   const fs = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const path = await import("node:path");

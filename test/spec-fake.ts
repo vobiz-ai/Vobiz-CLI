@@ -71,6 +71,7 @@ export function genericBody(op: Operation, req: RecordedRequest, pages: number):
     total: pages,
   };
   for (const k of ITEM_KEYS) body[k] = items;
+  body.calls = page <= pages ? [`call-${page}`] : []; // list-live-calls / list-queued-calls: an array of UUIDs
   return body;
 }
 

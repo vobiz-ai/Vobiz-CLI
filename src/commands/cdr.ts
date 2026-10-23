@@ -87,7 +87,7 @@ function printSummary(ctx: Ctx, last: unknown) {
   if (parts.length) ctx.out.status(`Summary: ${parts.join(", ")}`);
 }
 
-/** Third-party text in call records (S6 #4). */
+/** Third-party text in call records. */
 const CDR_UNTRUSTED = [...CALLER_KEYS, ...RESOURCE_NAME_KEYS];
 
 export function register(program: Command, ctx: Ctx): void {

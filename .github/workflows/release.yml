@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   verify:
-    # Only the public repository publishes; mirrors (e.g. the internal repo) never release.
+    # Only vobiz-ai/Vobiz-CLI publishes; forks and mirrors never release.
     if: github.repository == 'vobiz-ai/Vobiz-CLI' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:

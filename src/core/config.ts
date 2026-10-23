@@ -47,7 +47,7 @@ const settingsFile = z.object({
   updateCheck: z.boolean().optional(),
   lastUpdateCheck: z.string().optional(),
   latestKnownVersion: z.string().optional(),
-  /** Anonymous usage telemetry is OFF by default and only ever switched on with `vobiz config set telemetry true`. */
+  /** Reserved for opt-in anonymous usage telemetry; nothing reads it yet and the CLI sends no telemetry. */
   telemetry: z.boolean().optional(),
 });
 export type Settings = z.infer<typeof settingsFile>;

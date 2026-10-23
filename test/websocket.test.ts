@@ -1,4 +1,4 @@
-/** Hardening of the in-repo RFC 6455 codec (S5 #3-#5, #18; S2 #3, #7, #8, #13). */
+/** Hardening of the in-repo RFC 6455 codec: handshake checks, size limits, and frame and close-code validation. */
 import { createServer as createNetServer, connect, type Socket } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { startServer, type LocalServer } from "../src/agent/http.js";

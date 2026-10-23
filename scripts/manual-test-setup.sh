@@ -18,6 +18,6 @@ cat <<MSG
 Ready. In THIS shell, run:
   export VOBIZ_CONFIG_DIR="$VOBIZ_CONFIG_DIR"
   alias vobiz="node $PWD/dist/index.js"
-Then follow docs/internal/testing/MANUAL-TESTING.md. Profile "manual" is signed in; your real ~/.config/vobiz was not touched.
+Then try the commands in README.md and docs/COMMANDS.md. Profile "manual" is signed in; your real ~/.config/vobiz was not touched.
 When done: rm -rf "$PWD/.manual-test"
 MSG

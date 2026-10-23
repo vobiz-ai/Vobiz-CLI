@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { EXIT_CODES, flatten, loadCommandTree, root, usageLine } from "./lib/command-tree.mjs";
 
 const tree = await loadCommandTree();
-const cell = (s) => String(s ?? "").replace(/\s+/g, " ").trim().replace(/\|/g, "\\|");
+const cell = (s) => String(s ?? "").replace(/\s+/g, " ").trim().replace(/[\\|]/g, (c) => `\\${c}`); // escape backslashes and pipes in one pass
 const anchor = (node) => ["vobiz", ...node.path].join("-").toLowerCase().replace(/[^a-z0-9-]/g, "");
 const optionRows = (options) => options.map((o) => `| \`${cell(o.flags)}\` | ${cell(o.description)}${o.choices?.length ? ` (one of: ${o.choices.map((c) => `\`${c}\``).join(", ")})` : ""} |`);
 

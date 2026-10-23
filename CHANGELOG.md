@@ -6,13 +6,57 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+## [0.1.1] - 2026-10-23
+
+### Added
+
+- `sms send --max-wait <seconds>` bounds `--wait` (default: `--timeout`), like `calls create --max-wait`.
+- Aliases for the standard verbs: `skills ls`, `profiles delete`, `account get`.
+
+### Changed
+
+- Usage errors from argument parsing (unknown option or command, missing argument) print the same one-line JSON
+  error as every other failure (`invalid_input`, exit 2) when output is JSON (piped stdout, `--json`,
+  `-o json|jsonl|yaml`); text mode is unchanged.
+- `webhooks verify`, `webhooks listen` and `setup sms` read `--secret @file` and `--secret @-` (stdin) like every
+  other secret flag; before, the value was used literally.
+- `streams test` accepts `ws://` on localhost without `--allow-insecure-url`, and `--allow-insecure-url` now allows
+  a remote `ws://` server, the same rule as `streams forward`.
+- `partner accounts cdrs` and `partner accounts transactions` accept `--from`/`--to` for their date window, like
+  `cdr`, `account transactions` and `recordings export`.
+- The Docker image sets `VOBIZ_DOCKER=1`, so `vobiz update` suggests `docker pull`.
+- Help text: flag descriptions taken from the spec use the CLI's help voice and flag names, and deprecated aliases
+  read the same everywhere.
+- `calls list` accepts `--limit` and `--all` like every other list; the live and queued call endpoints return one
+  page, so `--limit` trims it in the CLI.
+- `vobiz update` reports `install_method: "source"` (and suggests `git pull && npm ci && npm run build`) when it runs
+  from a git checkout.
+- New public `docs/ARCHITECTURE.md` (command tree conventions, safety model, output modes, exit codes), linked from the
+  README, CONTRIBUTING and CLAUDE.md.
+- `scripts/pack-guard.mjs` fails the pack when README, CHANGELOG or LICENSE would be missing from the package.
+
+### Fixed
+
+- `--dry-run` is honoured by local writes: `config set`/`unset`, `profiles use`/`rename`, `login` and `logout` print
+  a `[dry-run]` line and the change, and write nothing (`profiles remove`, `skills install`/`update` and
+  `mcp install` already did).
+- `vobiz completion bash` scoped value completion per command: a flag shared by several commands (`--status`,
+  `--type`, `--format`, `--direction`) offered the first command's values everywhere.
+- The "come from third parties" note on stderr names only fields that are printed: `cdr` with `--fields` or `--query`
+  that leave `caller_id_name` out, and tables whose columns leave the field out, no longer print it.
+- Public test, script and source comments no longer carry internal review labels.
+
+### Security
+
+- `scripts/sync-skills.mjs` and `scripts/sync-spec.mjs` check status, content type and size of downloads, verify
+  the tag's commit, vet archive members before extracting and write only inside `skills/` or `spec/`; the path
+  template filler and the `recordings export --email` check run in linear time.
 
 ## [0.1.0] - 2026-10-23
 
 ### Added
 
-- `vobiz` command tree (277 commands) covering every operation in the Vobiz Voice and Messaging OpenAPI documents:
+- `vobiz` command tree (278 commands) covering every operation in the Vobiz Voice and Messaging OpenAPI documents:
   `login`/`logout`/`whoami`/`profiles`/`config`/`doctor`, `account`, `calls` (create with `--wait`, in-call control,
   audio streams, `watch`), `conferences`, `recordings`, `cdr`, `numbers`, `trunks` (credentials, IP ACLs, origination
   URIs), `apps`, `endpoints`, `sub-accounts` (KYC, test mode), `partner`, the full `sms` tree (send with cost preview
@@ -35,5 +79,6 @@ Nothing yet.
 - CI on Node.js 22 and 24 (lint, build, tests, spec and docs drift, package and Docker smoke tests, a standalone
   binary build), CodeQL, OpenSSF Scorecard and Dependabot.
 
-[Unreleased]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vobiz-ai/Vobiz-CLI/releases/tag/v0.1.0

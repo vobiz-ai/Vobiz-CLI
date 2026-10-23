@@ -14,7 +14,7 @@ const printer = (output: "table" | "plain" | "tsv" | "json", flags: Record<strin
   return { p, stdout, stderr };
 };
 
-describe("stripTerminalControls (S3 #2)", () => {
+describe("stripTerminalControls", () => {
   it("removes CSI, OSC 52, OSC 8, 8-bit CSI, C0/C1 controls and U+2028/2029, keeping tabs", () => {
     expect(stripTerminalControls(EVIL)).toBe("abcClickdefgh");
     expect(stripTerminalControls("x\ty")).toBe("x\ty");
@@ -72,7 +72,7 @@ describe("human output is sanitised; json stays verbatim", () => {
   });
 });
 
-describe("cleanLogText for the local servers (S5 #8)", () => {
+describe("cleanLogText for the local servers", () => {
   it("removes sequences and line breaks and caps the length", () => {
     expect(cleanLogText(`GET /x${ESC}]0;pwned${ESC}\\\r\nforged: line`)).toBe("GET /x forged: line");
     expect(cleanLogText("a".repeat(50), 10)).toBe(`${"a".repeat(9)}…`);
@@ -80,7 +80,7 @@ describe("cleanLogText for the local servers (S5 #8)", () => {
   });
 });
 
-describe("tsv formula injection (S3 #10)", () => {
+describe("tsv formula injection", () => {
   it("prefixes formula cells, escapes lone CR, leaves numbers and E.164 alone", () => {
     expect(tsvCell('=HYPERLINK("https://evil","x")')).toBe(`'=HYPERLINK("https://evil","x")`);
     expect(tsvCell("@SUM(1+1)")).toBe("'@SUM(1+1)");

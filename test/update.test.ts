@@ -36,3 +36,17 @@ describe("update notifier", () => {
     expect(await checkForUpdate(t.ctx)).toBeUndefined();
   });
 });
+
+describe("detectInstallMethod", async () => {
+  const { detectInstallMethod } = await import("../src/commands/update.js");
+  const none = () => false;
+  it("reports source for a git checkout, npm for node_modules, homebrew, npx and docker by path or env", () => {
+    const checkout = (p: string) => p === "/work/Vobiz-CLI/.git" || p === "/work/Vobiz-CLI/package.json";
+    expect(detectInstallMethod("/work/Vobiz-CLI/dist/index.js", {}, checkout)).toBe("source");
+    expect(detectInstallMethod("/usr/lib/node_modules/@vobiz/cli/dist/index.js", {}, checkout)).toBe("npm");
+    expect(detectInstallMethod("/opt/homebrew/Cellar/vobiz/0.1.1/libexec/dist/index.js", {}, none)).toBe("homebrew");
+    expect(detectInstallMethod("/home/u/.npm/_npx/abc/node_modules/@vobiz/cli/dist/index.js", {}, none)).toBe("npx");
+    expect(detectInstallMethod("/anything", { VOBIZ_DOCKER: "1" }, checkout)).toBe("docker");
+    expect(detectInstallMethod("/work/unpacked/dist/index.js", {}, none)).not.toBe("source");
+  });
+});

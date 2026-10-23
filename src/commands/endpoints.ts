@@ -16,8 +16,8 @@ const appId = (v: string): string => {
 
 /** The live API links an endpoint to an application through `app_id` (string); `application` is ignored. */
 const ENDPOINT_ALIASES: FlagAlias[] = [
-  { flag: "app-id", to: "app_id", description: "ID of the application that handles this endpoint's calls (sent as a string).", parse: appId },
-  { flag: "application", to: "app_id", deprecated: true, description: "ID of the application (sent as app_id).", parse: appId },
+  { flag: "app-id", to: "app_id", description: "ID of the application that handles this endpoint's calls (sent as a string)", parse: appId },
+  { flag: "application", to: "app_id", deprecated: true, description: "ID of the application (sent as app_id)", parse: appId },
 ];
 
 export function register(program: Command, ctx: Ctx): void {

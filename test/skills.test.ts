@@ -106,7 +106,7 @@ describe("skills update", () => {
   });
 });
 
-describe("skills install hardening (S3 #17)", async () => {
+describe("skills install hardening", async () => {
   const fs = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const path = await import("node:path");

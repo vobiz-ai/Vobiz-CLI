@@ -4,7 +4,7 @@ The Vobiz CLI runs unattended in any CI system. Three rules make it reliable:
 
 1. **Credentials come from secrets.** Store your Auth ID and Auth Token as CI secrets and expose them as `VOBIZ_AUTH_ID` and `VOBIZ_AUTH_TOKEN`. Never pass them as `--auth-token` flags: CI logs and shell history keep flags.
 2. **Writes need `--yes`.** Without a terminal, any command that would ask for confirmation exits with code `6` unless you pass `--yes` (or set `VOBIZ_YES=1`). Use `--dry-run` in pull-request pipelines to show what would happen.
-3. **Read JSON, branch on exit codes.** Pass `--output json` and parse stdout. Errors arrive on stderr as `{"error","message","status","retryable"}` with a stable [exit code](../README.md#exit-codes).
+3. **Read JSON, branch on exit codes.** Pass `--output json` and parse stdout. Errors arrive on stderr as one JSON line `{"error","message","status","retryable","hint"}` with a stable [exit code](../README.md#exit-codes).
 
 The update check is skipped automatically when `CI` is set. Pin the CLI version so a new release never changes a pipeline by surprise.
 

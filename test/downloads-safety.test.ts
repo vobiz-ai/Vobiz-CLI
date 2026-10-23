@@ -12,7 +12,7 @@ const rec = (url = `https://recordings.vobiz.ai/example/${ID}.wav`) => ({ record
 const api = (url?: string) =>
   fakeFetch({ [`GET ${A}/Recording/${ID}/`]: rec(url), [`GET /example/${ID}.wav`]: textReply(200, "AUDIO", { "content-type": "audio/wav" }) });
 
-describe("download writers (S3 #4)", () => {
+describe("download writers", () => {
   it.runIf(posix)("ignore a planted <out>.part symlink and never write through it", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vobiz-dl-"));
     const victim = join(dir, "victim.txt");
@@ -43,7 +43,7 @@ describe("download writers (S3 #4)", () => {
   });
 });
 
-describe("streamed body limits (S2 #9)", () => {
+describe("streamed body limits", () => {
   it("fails when the body stalls longer than the idle timeout", async () => {
     async function* stall() {
       yield new Uint8Array([1]);
@@ -70,7 +70,7 @@ describe("streamed body limits (S2 #9)", () => {
   });
 });
 
-describe("recording_url host checks (S2 #14)", () => {
+describe("recording_url host checks", () => {
   it("classifies internal hosts", () => {
     for (const h of ["localhost", "127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "169.254.169.254", "[::1]", "[fd00::1]", "[fe80::1]", "[::ffff:7f00:1]", "metadata.google.internal", "0.0.0.0"])
       expect(isInternalHost(h), h).toBe(true);
@@ -88,7 +88,7 @@ describe("recording_url host checks (S2 #14)", () => {
   });
 });
 
-describe("10dlc documents get file name (S3 #7) and SMS writers (S3 #4)", () => {
+describe("10dlc documents get file name and SMS writers", () => {
   it("derives a safe name from Content-Disposition", async () => {
     const { documentFileName } = await import("../src/commands/sms/tendlc.js");
     expect(documentFileName("optin.pdf", "doc1")).toBe("optin.pdf");
@@ -135,7 +135,7 @@ describe("10dlc documents get file name (S3 #7) and SMS writers (S3 #4)", () => 
   });
 });
 
-describe("forwarders need TLS for remote targets (S2 #6)", async () => {
+describe("forwarders need TLS for remote targets", async () => {
   const { checkForwardUrl } = await import("../src/commands/voice-shared.js");
   it("accepts wss/https anywhere and ws/http only on loopback without the flag", () => {
     expect(checkForwardUrl("wss://agent.example.com/media", "--to", { websocket: true })).toBe("wss://agent.example.com/media");

@@ -40,8 +40,9 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
 | 4 | Not found. |
 | 5 | Rate limited or insufficient balance. |
 | 6 | Confirmation required (pass --yes) or the action is not allowed. |
-| 7 | Outcome unknown: a side-effecting request timed out. Check the state before retrying. |
-| 8 | Timeout or network error. |
+| 7 | Outcome unknown: a side-effecting request timed out, lost its connection or got a 5xx. Check the state before retrying. |
+| 8 | Timeout or network error on a read (nothing was changed; safe to retry). |
+| 130 | Interrupted (Ctrl-C). |
 
 ## Commands
 
@@ -356,8 +357,8 @@ vobiz account channel-pricing [options]
 
 | Option | Description |
 |---|---|
-| `--type <resource>` | capacity to price: concurrent_calls or cps (one of: `concurrent_calls`, `cps`) |
-| `--quantity <n>` | capacity quantity (1-10000) |
+| `--type <resource>` | capacity to price: concurrent_calls or cps (required) (one of: `concurrent_calls`, `cps`) |
+| `--quantity <n>` | capacity quantity (1-10000) (required) |
 
 ### vobiz account channel-subscriptions
 
@@ -379,8 +380,8 @@ vobiz account channel-subscriptions create [options]
 
 | Option | Description |
 |---|---|
-| `--type <resource>` | capacity to price: concurrent_calls or cps (one of: `concurrent_calls`, `cps`) |
-| `--quantity <n>` | capacity quantity (1-10000) |
+| `--type <resource>` | capacity to price: concurrent_calls or cps (required) (one of: `concurrent_calls`, `cps`) |
+| `--quantity <n>` | capacity quantity (1-10000) (required) |
 
 ### vobiz account concurrency
 
@@ -397,6 +398,8 @@ Show the account profile (name, limits, pricing tier)
 ```
 vobiz account show [options]
 ```
+
+Aliases: `get`
 
 ### vobiz account transactions
 
@@ -461,7 +464,7 @@ vobiz api [method] [path] [options]
 | `--list` | list every operation in the spec |
 | `--tag <tag>` | with --list: only operations with this tag (case-insensitive) |
 | `--describe <operationId>` | show the parameters and body of one operation (sms:<id> or voice:<id> when ambiguous) |
-| `--max-fanout <n>` | allow more than 50 destinations in a body "to" field (API maximum 1000) |
+| `--max-fanout <n>` | allow this many destinations in a body "to" field (default 50, API maximum 1000); each is a separate billed call |
 
 ### vobiz apps
 
@@ -484,10 +487,10 @@ vobiz apps create [options]
 | Option | Description |
 |---|---|
 | `--app-name <value>` | app name (required) |
-| `--answer-url <value>` | answer url (required) |
+| `--answer-url <value>` | answer URL (required) |
 | `--answer-method <value>` | answer method (required) |
-| `--hangup-url <value>` | URL Vobiz notifies when a call on this application ends. |
-| `--hangup-method <value>` | HTTP method used for `hangup_url`, `GET` or `POST`. |
+| `--hangup-url <value>` | URL Vobiz notifies when a call on this application ends |
+| `--hangup-method <value>` | HTTP method used for --hangup-url, `GET` or `POST` |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz apps delete
@@ -547,10 +550,10 @@ vobiz apps update <app-id> [options]
 |---|---|
 | `--app-name <value>` | app name |
 | `--default-number-app` | default number app (--no-default-number-app to set false) |
-| `--answer-url <value>` | URL Vobiz fetches VobizXML from when a call reaches a number or endpoint linked to this application. |
-| `--answer-method <value>` | HTTP method used for `answer_url`, `GET` or `POST`. |
-| `--hangup-url <value>` | URL Vobiz notifies when a call on this application ends. |
-| `--hangup-method <value>` | HTTP method used for `hangup_url`, `GET` or `POST`. |
+| `--answer-url <value>` | URL Vobiz fetches VobizXML from when a call reaches a number or endpoint linked to this application |
+| `--answer-method <value>` | HTTP method used for --answer-url, `GET` or `POST` |
+| `--hangup-url <value>` | URL Vobiz notifies when a call on this application ends |
+| `--hangup-method <value>` | HTTP method used for --hangup-url, `GET` or `POST` |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz calls
@@ -606,7 +609,7 @@ vobiz calls dtmf <uuid> [options]
 
 | Option | Description |
 |---|---|
-| `--digits <digits>` | digits 0-9, *, #, A-D; w pauses 0.5s and W pauses 1s |
+| `--digits <digits>` | digits 0-9, *, #, A-D; w pauses 0.5s and W pauses 1s (required) |
 | `--leg <leg>` | which side hears it: aleg (caller), bleg (callee) or both (one of: `aleg`, `bleg`, `both`) |
 
 ### vobiz calls get
@@ -651,6 +654,8 @@ Aliases: `ls`
 |---|---|
 | `--queued` | list queued calls (placed, not yet connected; max 20) instead of live ones |
 | `--details` | fetch each call's details (one request per call) |
+| `--limit <n>` | return at most this many items |
+| `--all` | fetch every page |
 
 ### vobiz calls play
 
@@ -812,7 +817,7 @@ vobiz calls stream start <uuid> [options]
 
 | Option | Description |
 |---|---|
-| `--url <wss-url>` | WebSocket URL that receives the audio (wss://) |
+| `--url <wss-url>` | WebSocket URL that receives the audio (wss://) (required) |
 | `--bidirectional` | let the WebSocket send audio back into the call |
 | `--track <track>` | which audio to send (one of: `inbound`, `outbound`, `both`) |
 | `--format <format>` | audio encoding (one of: `pcm`, `mulaw`) |
@@ -1368,8 +1373,8 @@ vobiz endpoints create [options]
 | `--username <value>` | username (required) |
 | `--password <value>` | password (@file or @- for stdin keeps it out of shell history) (required) |
 | `--alias <value>` | alias (required) |
-| `--app-id <value>` | ID of the application that handles this endpoint's calls (sent as a string). |
-| `--application <value>` | deprecated: use --app-id. ID of the application (sent as app_id). |
+| `--app-id <value>` | ID of the application that handles this endpoint's calls (sent as a string) |
+| `--application <value>` | deprecated: use --app-id; ID of the application (sent as app_id) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 | `--reveal-secret` | print the returned SIP password once on stderr (off by default) |
 | `--secret-file <path>` | write the returned SIP password to this new file (mode 0600), for CI |
@@ -1419,8 +1424,8 @@ Aliases: `ls`
 | `--username-startswith <value>` | username startswith |
 | `--alias-contains <value>` | alias contains |
 | `--alias-exact <value>` | alias exact |
-| `--application-id-exact <n>` | application id exact |
-| `--application-id-isnull` | application id isnull (--no-application-id-isnull to set false) |
+| `--application-id-exact <n>` | application ID exact |
+| `--application-id-isnull` | application ID isnull (--no-application-id-isnull to set false) |
 | `--sub-account <value>` | sub account |
 
 ### vobiz endpoints update
@@ -1439,8 +1444,8 @@ vobiz endpoints update <endpoint-id> [options]
 |---|---|
 | `--alias <value>` | alias (required) |
 | `--password <value>` | password (@file or @- for stdin keeps it out of shell history) (required) |
-| `--app-id <value>` | ID of the application that handles this endpoint's calls (sent as a string). |
-| `--application <value>` | deprecated: use --app-id. ID of the application (sent as app_id). |
+| `--app-id <value>` | ID of the application that handles this endpoint's calls (sent as a string) |
+| `--application <value>` | deprecated: use --app-id; ID of the application (sent as app_id) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz feedback
@@ -1558,7 +1563,7 @@ vobiz numbers assign <e164> [options]
 
 | Option | Description |
 |---|---|
-| `--trunk <trunk-id>` | trunk ID (see `vobiz trunks list`) |
+| `--trunk <trunk-id>` | trunk ID (see `vobiz trunks list`) (required) |
 
 ### vobiz numbers assign-subaccount
 
@@ -1574,7 +1579,7 @@ vobiz numbers assign-subaccount <e164> [options]
 
 | Option | Description |
 |---|---|
-| `--sub-account <SA_id>` | sub-account Auth ID, e.g. SA_XXXXXXXX |
+| `--sub-account <SA_id>` | sub-account Auth ID, e.g. SA_XXXXXXXX (required) |
 
 ### vobiz numbers buy
 
@@ -1765,12 +1770,14 @@ vobiz partner accounts cdrs <customer-auth-id> [options]
 |---|---|
 | `--limit <n>` | return at most this many items |
 | `--all` | fetch every page |
-| `--start-date <value>` | start date (today, 7d, 2026-10-01) |
-| `--end-date <value>` | end date (today, 7d, 2026-10-01) |
+| `--start-date <value>` | start date (today, yesterday, 7d, 2026-10-01 or ISO) |
+| `--end-date <value>` | end date (today, yesterday, 7d, 2026-10-01 or ISO) |
 | `--call-direction <value>` | call direction (one of: `inbound`, `outbound`) |
 | `--status <value>` | status (one of: `answered`, `failed`, `busy`, `no_answer`) |
 | `--min-duration <n>` | min duration |
 | `--hangup-cause <value>` | hangup cause |
+| `--from <when>` | start date, same as --start-date (today, yesterday, 7d, 2026-10-01 or ISO) |
+| `--to <when>` | end date, same as --end-date |
 
 ### vobiz partner accounts create
 
@@ -1782,12 +1789,12 @@ vobiz partner accounts create [options]
 
 | Option | Description |
 |---|---|
-| `--name <value>` | Customer's full name. (required) |
-| `--email <value>` | Customer's email. (required) |
-| `--phone <value>` | E.164 format. (required) |
-| `--password <value>` | Min 8 chars, must include a number and a special character. (@file or @- for stdin keeps it out of shell history) (required) |
-| `--company <value>` | Legal company or business name. |
-| `--country <value>` | ISO 2-letter country code. (required) |
+| `--name <value>` | customer's full name (required) |
+| `--email <value>` | customer's email (required) |
+| `--phone <value>` | E.164 format (required) |
+| `--password <value>` | min 8 chars, must include a number and a special character (@file or @- for stdin keeps it out of shell history) (required) |
+| `--company <value>` | legal company or business name |
+| `--country <value>` | ISO 2-letter country code (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 | `--reveal-secret` | print the returned customer Auth Token once on stderr (off by default) |
 | `--secret-file <path>` | write the returned customer Auth Token to this new file (mode 0600), for CI |
@@ -1806,7 +1813,7 @@ Aliases: `ls`
 |---|---|
 | `--limit <n>` | return at most this many items |
 | `--all` | fetch every page |
-| `--search <value>` | Substring match on name or email. |
+| `--search <value>` | substring match on name or email |
 
 ### vobiz partner accounts numbers
 
@@ -1824,7 +1831,7 @@ vobiz partner accounts numbers <customer-auth-id> [options]
 |---|---|
 | `--limit <n>` | return at most this many items |
 | `--all` | fetch every page |
-| `--search <value>` | Substring match against the E.164 number. |
+| `--search <value>` | substring match against the E.164 number |
 
 ### vobiz partner accounts transactions
 
@@ -1842,9 +1849,11 @@ vobiz partner accounts transactions <customer-auth-id> [options]
 |---|---|
 | `--limit <n>` | return at most this many items |
 | `--all` | fetch every page |
-| `--from-date <value>` | from date (today, 7d, 2026-10-01) |
-| `--to-date <value>` | to date (today, 7d, 2026-10-01) |
+| `--from-date <value>` | from date (today, yesterday, 7d, 2026-10-01 or ISO) |
+| `--to-date <value>` | to date (today, yesterday, 7d, 2026-10-01 or ISO) |
 | `--transaction-type <value>` | transaction type (one of: `recharge`, `debit`, `refund`, `transfer`) |
+| `--from <when>` | start date, same as --from-date (today, yesterday, 7d, 2026-10-01 or ISO) |
+| `--to <when>` | end date, same as --to-date |
 
 ### vobiz partner accounts transfer-balance
 
@@ -1860,9 +1869,9 @@ vobiz partner accounts transfer-balance <customer-auth-id> [options]
 
 | Option | Description |
 |---|---|
-| `--amount <n>` | Positive decimal. (required) |
-| `--currency <value>` | Must match your partner account currency. (required) |
-| `--description <value>` | Note for your records. |
+| `--amount <n>` | positive decimal (required) |
+| `--currency <value>` | must match your partner account currency (required) |
+| `--description <value>` | note for your records |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz partner dashboard
@@ -1893,14 +1902,14 @@ vobiz partner kyc-sessions create [options]
 
 | Option | Description |
 |---|---|
-| `--account-auth-id <value>` | Customer's auth_id (from create-customer-account). (required) |
-| `--flow-type <value>` | Delivery mode. (default: email) (one of: `email`, `redirect`) |
-| `--customer-email <value>` | Required when `flow_type` is `email`. |
-| `--redirect-url <value>` | Required when `flow_type` is `redirect`. |
-| `--webhook-url <value>` | Vobiz POSTs the KYC result here. |
-| `--expires-in-days <n>` | Days before the KYC link expires. (default: 7) |
-| `--reminder-schedule <json>` | Auto reminder emails before expiry. |
-| `--metadata <json>` | Free-form key/value object echoed back on GET and webhooks. |
+| `--account-auth-id <value>` | customer's Auth ID (from `partner accounts create`) (required) |
+| `--flow-type <value>` | delivery mode (default: email) (one of: `email`, `redirect`) |
+| `--customer-email <value>` | required when --flow-type is `email` |
+| `--redirect-url <value>` | required when --flow-type is `redirect` |
+| `--webhook-url <value>` | Vobiz POSTs the KYC result here |
+| `--expires-in-days <n>` | days before the KYC link expires (default: 7) |
+| `--reminder-schedule <json>` | auto reminder emails before expiry |
+| `--metadata <json>` | free-form key/value object echoed back on GET and webhooks |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz partner kyc-sessions get
@@ -1930,7 +1939,7 @@ Aliases: `ls`
 | `--limit <n>` | return at most this many items |
 | `--all` | fetch every page |
 | `--status <value>` | status (one of: `email_sent`, `link_ready`, `opened`, `in_progress`, `kyc_completed`, `revoked`) |
-| `--account-auth-id <value>` | account auth id |
+| `--account-auth-id <value>` | account Auth ID |
 
 ### vobiz partner kyc-sessions resend
 
@@ -1996,7 +2005,7 @@ Delete a saved profile and its credentials
 vobiz profiles remove <name> [options]
 ```
 
-Aliases: `rm`
+Aliases: `rm`, `delete`
 
 | Argument | Required | Description |
 |---|---|---|
@@ -2079,7 +2088,7 @@ vobiz recordings export [options]
 
 | Option | Description |
 |---|---|
-| `--email <address>` | recipient of the download link (repeat for several) |
+| `--email <address>` | recipient of the download link (repeat for several) (required) |
 | `--from <when>` | start of the window (today, 7d, 2026-10-01 or ISO; default: 7 days ago) |
 | `--to <when>` | end of the window (default: now) |
 | `--age-days <n>` | instead of --from/--to: recordings exactly N days old |
@@ -2145,7 +2154,7 @@ vobiz setup sms [options]
 | `--number-key <key>` | with --buy: numberKey from search (looked up when omitted) |
 | `--webhook-url <url>` | https URL for message.received, message.delivered and message.failed (reused if it exists) |
 | `--webhook <id>` | use this existing messaging webhook instead |
-| `--secret <secret>` | with --webhook-url: signing secret for X-Webhook-Signature |
+| `--secret <secret>` | with --webhook-url: signing secret for X-Webhook-Signature (@file or @- for stdin keeps it out of shell history) |
 | `--event <name>` | with --webhook-url: event to deliver (repeatable; default: the three message events) |
 | `--no-webhook` | skip the webhook (you will poll message status instead) |
 
@@ -2201,6 +2210,8 @@ List the Vobiz Agent Skills bundled with this CLI
 ```
 vobiz skills list [options]
 ```
+
+Aliases: `ls`
 
 | Option | Description |
 |---|---|
@@ -2461,7 +2472,7 @@ vobiz sms 10dlc campaigns appeal <id> [options]
 
 | Option | Description |
 |---|---|
-| `--reason <text>` | what you changed since the rejection |
+| `--reason <text>` | what you changed since the rejection (required) |
 
 ### vobiz sms 10dlc campaigns create
 
@@ -2774,7 +2785,7 @@ vobiz sms 10dlc documents upload [options]
 
 | Option | Description |
 |---|---|
-| `--file <path>` | the file to upload |
+| `--file <path>` | the file to upload (required) |
 
 ### vobiz sms broadcasts
 
@@ -3087,8 +3098,8 @@ vobiz sms cost [options]
 
 | Option | Description |
 |---|---|
-| `--from <e164>` | your Vobiz messaging number |
-| `--to <e164>` | recipient; its country decides the price |
+| `--from <e164>` | your Vobiz messaging number (required) |
+| `--to <e164>` | recipient; its country decides the price (required) |
 | `--text <text>` | message body; its length and characters decide the segments |
 | `--text-file <path>` | read the body from a file, or - for stdin |
 | `--type <channel>` | sms (default) or mms (one of: `sms`, `mms`) |
@@ -3203,7 +3214,7 @@ vobiz sms numbers buy <e164> [options]
 
 | Option | Description |
 |---|---|
-| `--country <code>` | ISO country code of the number, e.g. US |
+| `--country <code>` | ISO country code of the number, e.g. US (required) |
 | `--number-key <key>` | numberKey from search (required for CA and GB; looked up when omitted) |
 
 ### vobiz sms numbers countries
@@ -3254,7 +3265,7 @@ vobiz sms numbers search [options]
 
 | Option | Description |
 |---|---|
-| `--country <code>` | ISO country code, e.g. US, CA, GB |
+| `--country <code>` | ISO country code, e.g. US, CA, GB (required) |
 | `--capabilities <list>` | required capabilities (one of: `SMS`, `MMS`, `SMS,MMS`) |
 | `--area-code <code>` | three-digit area code (US and CA only) |
 | `--limit <n>` | maximum results (the API returns at most 10) |
@@ -3347,7 +3358,7 @@ vobiz sms rcs-reachability <to> [options]
 
 | Option | Description |
 |---|---|
-| `--from <sender>` | the senderName of your RCS sender |
+| `--from <sender>` | the senderName of your RCS sender (required) |
 
 ### vobiz sms send
 
@@ -3359,8 +3370,8 @@ vobiz sms send [options]
 
 | Option | Description |
 |---|---|
-| `--from <sender>` | your Vobiz messaging number in E.164, or your RCS sender name for --type rcs |
-| `--to <e164>` | recipient in E.164 (repeatable or comma-separated) |
+| `--from <sender>` | your Vobiz messaging number in E.164, or your RCS sender name for --type rcs (required) |
+| `--to <e164>` | recipient in E.164 (repeatable or comma-separated) (required) |
 | `--text <text>` | message body (required for sms and rcs) |
 | `--text-file <path>` | read the message body from a file, or - for stdin |
 | `--media-url <url>` | https URL of media to attach (repeatable; MMS up to 10, RCS sends the first) |
@@ -3369,7 +3380,8 @@ vobiz sms send [options]
 | `--tag <label>` | your label, stored on every message; filter `sms messages list --tag` by it |
 | `--schedule-at <time>` | hold until this time: RFC 3339 (2026-11-01T09:00:00Z) or +30m, +2h, +1d |
 | `--idempotency-key <key>` | reuse a key from an earlier attempt so a retry never sends twice (default: generated and printed) |
-| `--max-fanout <n>` | allow more than 50 recipients in one command (each is billed); use sms broadcasts for bulk |
+| `--max-fanout <n>` | allow this many recipients (default 50); each is a separate billed message (use sms broadcasts for bulk) |
+| `--max-wait <seconds>` | with --wait: give up waiting after this many seconds (default: --timeout) |
 | `--failover-to-sms` | RCS only: send the text as SMS when RCS cannot be delivered |
 | `--rcs-suggestions <json>` | RCS only: suggestion buttons as a JSON array, @file.json or @- |
 | `--dlt-entity-id <id>` | India (TRAI DLT): Principal Entity ID |
@@ -3478,9 +3490,9 @@ vobiz sms senders templates create <sender-id> [options]
 
 | Option | Description |
 |---|---|
-| `--name <name>` | unique template name on this sender |
-| `--type <type>` | template type as the RCS platform defines it |
-| `--content <json>` | template content as JSON, @file.json or @- |
+| `--name <name>` | unique template name on this sender (required) |
+| `--type <type>` | template type as the RCS platform defines it (required) |
+| `--content <json>` | template content as JSON, @file.json or @- (required) |
 
 ### vobiz sms senders templates delete
 
@@ -3592,7 +3604,7 @@ vobiz sms webhooks create [options]
 
 | Option | Description |
 |---|---|
-| `--url <url>` | https URL that receives the POSTs |
+| `--url <url>` | https URL that receives the POSTs (required) |
 | `--secret <secret>` | shared secret for the X-Webhook-Signature HMAC (@file or @- for stdin keeps it out of shell history) |
 | `--event <name>` | event to deliver (repeatable; default: message.received, message.delivered, message.failed) |
 
@@ -3647,7 +3659,7 @@ vobiz sms webhooks update <id> [options]
 | Option | Description |
 |---|---|
 | `--url <url>` | new https URL |
-| `--secret <secret>` | new signing secret (@file or @- for stdin) |
+| `--secret <secret>` | new signing secret (@file or @- for stdin keeps it out of shell history) |
 | `--event <name>` | replace the event list (repeatable) |
 | `--active` | resume deliveries |
 | `--no-active` | pause deliveries and keep the subscription |
@@ -3672,7 +3684,7 @@ vobiz streams forward [options]
 
 | Option | Description |
 |---|---|
-| `--to <ws-url>` | your stream server: wss://, or ws:// on localhost (e.g. ws://localhost:8080/media) |
+| `--to <ws-url>` | your stream server: wss://, or ws:// on localhost (e.g. ws://localhost:8080/media) (required) |
 | `--port <port>` | local port to listen on (0 picks a free one; default: 8765) |
 | `--host <host>` | interface to listen on (default 127.0.0.1); anything else also needs --allow-lan |
 | `--allow-lan` | allow a non-loopback --host such as 0.0.0.0 (the proxy is then reachable from your network) |
@@ -3695,7 +3707,7 @@ vobiz streams test <wss-url> [options]
 
 | Argument | Required | Description |
 |---|---|---|
-| `wss-url` | yes | your stream server's URL (wss://; ws:// on localhost with --allow-insecure-url) |
+| `wss-url` | yes | your stream server's URL: wss://, or ws:// on localhost (e.g. ws://localhost:8080/media) |
 
 | Option | Description |
 |---|---|
@@ -3705,7 +3717,7 @@ vobiz streams test <wss-url> [options]
 | `--linger <n>` | seconds to keep listening after the last media frame (default: 1) |
 | `--stream-id <id>` | streamId to put in the start frame (default: a random UUID) |
 | `--call-id <id>` | callId to put in the start frame (default: a random UUID) |
-| `--allow-insecure-url` | allow ws:// on localhost |
+| `--allow-insecure-url` | allow a plain ws:// URL on a host other than localhost (audio is sent unencrypted) |
 
 ### vobiz sub-accounts
 
@@ -3727,11 +3739,11 @@ vobiz sub-accounts create [options]
 
 | Option | Description |
 |---|---|
-| `--name <value>` | Human-readable name for the sub-account. (required) |
-| `--email <value>` | Required when `kyc_mode` is `customer_use`. |
-| `--password <value>` | Login password for the sub-account. (@file or @- for stdin keeps it out of shell history) |
-| `--kyc-mode <value>` | `personal_use` inherits parent KYC. (default: personal_use) (one of: `personal_use`, `customer_use`) |
-| `--business-type <value>` | Legal constitution of the customer. (one of: `individual`, `proprietorship`, `private_limited`, `llp`, `partnership`, `public_limited`, `trust`, `society`, `huf`, `government`) |
+| `--name <value>` | human-readable name for the sub-account (required) |
+| `--email <value>` | required when --kyc-mode is `customer_use` |
+| `--password <value>` | login password for the sub-account (@file or @- for stdin keeps it out of shell history) |
+| `--kyc-mode <value>` | `personal_use` inherits parent KYC (default: personal_use) (one of: `personal_use`, `customer_use`) |
+| `--business-type <value>` | legal constitution of the customer (one of: `individual`, `proprietorship`, `private_limited`, `llp`, `partnership`, `public_limited`, `trust`, `society`, `huf`, `government`) |
 | `--enabled` | enabled (--no-enabled to set false) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 | `--reveal-secret` | print the returned sub-account Auth Token once on stderr (off by default) |
@@ -3802,7 +3814,7 @@ vobiz sub-accounts kyc cin confirm <sub-auth-id> [options]
 | Option | Description |
 |---|---|
 | `--company-name <value>` | company name (required) |
-| `--selected-cin <value>` | selected cin (required) |
+| `--selected-cin <value>` | selected CIN (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz sub-accounts kyc cin search
@@ -3846,8 +3858,8 @@ vobiz sub-accounts kyc digilocker initiate <sub-auth-id> [options]
 
 | Option | Description |
 |---|---|
-| `--redirect-url <value>` | redirect url (required) |
-| `--oauth-state <value>` | Opaque value echoed back on the redirect for CSRF protection. |
+| `--redirect-url <value>` | redirect URL (required) |
+| `--oauth-state <value>` | opaque value echoed back on the redirect for CSRF protection |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz sub-accounts kyc digilocker verify
@@ -3864,8 +3876,8 @@ vobiz sub-accounts kyc digilocker verify <sub-auth-id> [options]
 
 | Option | Description |
 |---|---|
-| `--access-request-id <value>` | access request id (required) |
-| `--linked-number <value>` | Optional. |
+| `--access-request-id <value>` | access request ID (required) |
+| `--linked-number <value>` | linked number |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz sub-accounts kyc finalize-pending
@@ -3910,11 +3922,11 @@ vobiz sub-accounts kyc session create <sub-auth-id> [options]
 
 | Option | Description |
 |---|---|
-| `--account-auth-id <value>` | The sub-account's auth_id (typically equal to the path `sub_auth_id`). (required) |
+| `--account-auth-id <value>` | the sub-account's Auth ID (typically equal to the path `sub_auth_id`) (required) |
 | `--flow-type <value>` | flow type (required) (default: email) (one of: `email`, `redirect`) |
-| `--customer-email <value>` | Required when `flow_type` is `email`. |
-| `--redirect-url <value>` | Required when `flow_type` is `redirect`. |
-| `--webhook-url <value>` | HTTPS endpoint Vobiz POSTs the KYC result to. |
+| `--customer-email <value>` | required when --flow-type is `email` |
+| `--redirect-url <value>` | required when --flow-type is `redirect` |
+| `--webhook-url <value>` | HTTPS endpoint Vobiz POSTs the KYC result to |
 | `--expires-in-days <n>` | expires in days (default: 7) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
@@ -3961,7 +3973,7 @@ vobiz sub-accounts kyc verify-pan <sub-auth-id> [options]
 
 | Option | Description |
 |---|---|
-| `--pan <value>` | pan (required) |
+| `--pan <value>` | PAN (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz sub-accounts list
@@ -3994,10 +4006,10 @@ vobiz sub-accounts update <sub-auth-id> [options]
 | Option | Description |
 |---|---|
 | `--name <value>` | name |
-| `--is-active` | Set to `false` to deactivate the sub-account. (--no-is-active to set false) |
-| `--kyc-mode <value>` | Change the verification mode. (one of: `personal_use`, `customer_use`) |
+| `--is-active` | set to `false` to deactivate the sub-account (--no-is-active to set false) |
+| `--kyc-mode <value>` | change the verification mode (one of: `personal_use`, `customer_use`) |
 | `--active` | activate or deactivate the sub-account (--no-active to set false) |
-| `--enabled` | deprecated: use --active. the API ignores enabled, so this sets is_active (--no-enabled to set false) |
+| `--enabled` | deprecated: use --active; the API ignores enabled, so this sets is_active (--no-enabled to set false) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz trunks
@@ -4020,30 +4032,30 @@ vobiz trunks create [options]
 
 | Option | Description |
 |---|---|
-| `--name <value>` | Trunk name. (required) |
-| `--trunk-direction <value>` | Direction of the trunk - `inbound` or `outbound` only (a trunk is one direction, not both). (one of: `inbound`, `outbound`) |
-| `--trunk-status <value>` | Trunk status to set - `enabled` or `disabled`. (one of: `enabled`, `disabled`) |
+| `--name <value>` | trunk name (required) |
+| `--trunk-direction <value>` | direction of the trunk - `inbound` or `outbound` only (a trunk is one direction, not both) (one of: `inbound`, `outbound`) |
+| `--trunk-status <value>` | trunk status to set - `enabled` or `disabled` (one of: `enabled`, `disabled`) |
 | `--secure` | secure (--no-secure to set false) |
-| `--trunk-domain <value>` | SIP domain. |
+| `--trunk-domain <value>` | SIP domain |
 | `--transport <value>` | transport (one of: `udp`, `tcp`, `tls`) |
 | `--inbound-destination <value>` | inbound destination |
 | `--description <value>` | description |
-| `--concurrent-calls-limit <n>` | Stored on the trunk. |
-| `--cps-limit <n>` | Stored on the trunk. |
-| `--credential-uuid <value>` | Attach an existing SIP credential (username / password / realm) by UUID. |
-| `--ipacl-uuid <value>` | Attach an existing IP access-control list (IP-based auth) by UUID. |
-| `--primary-uri-uuid <value>` | Primary origination URI UUID. |
-| `--fallback-uri-uuid <value>` | Fallback origination URI UUID. |
-| `--recording` | Enable call recording. (--no-recording to set false) |
-| `--enable-transcription` | Auto-transcribe recordings when `recording=true`. (--no-enable-transcription to set false) |
-| `--pii-redaction` | Redact PII from transcriptions. (--no-pii-redaction to set false) |
-| `--pii-entity-types <value>` | Comma-separated list of entity types to redact. |
-| `--webhook-url <value>` | Customer webhook for call-admission events (`CallInitiated` / `Hangup`). |
-| `--webhook-method <value>` | HTTP method for the webhook callback. (default: POST) (one of: `POST`, `GET`) |
-| `--recording-webhook-enabled` | Fire a `recording.completed` webhook to `webhook_url` after a recording is saved. (--no-recording-webhook-enabled to set false) |
-| `--username <value>` | Deprecated - use `credential_uuid`. |
-| `--password <value>` | Deprecated - use `credential_uuid`. (@file or @- for stdin keeps it out of shell history) |
-| `--ip-whitelist <value>` | Deprecated - use `ipacl_uuid`. (repeatable or comma-separated) |
+| `--concurrent-calls-limit <n>` | stored on the trunk |
+| `--cps-limit <n>` | stored on the trunk |
+| `--credential-uuid <value>` | attach an existing SIP credential (username / password / realm) by UUID |
+| `--ipacl-uuid <value>` | attach an existing IP access-control list (IP-based auth) by UUID |
+| `--primary-uri-uuid <value>` | primary origination URI UUID |
+| `--fallback-uri-uuid <value>` | fallback origination URI UUID |
+| `--recording` | enable call recording (--no-recording to set false) |
+| `--enable-transcription` | auto-transcribe recordings when `recording=true` (--no-enable-transcription to set false) |
+| `--pii-redaction` | redact PII from transcriptions (--no-pii-redaction to set false) |
+| `--pii-entity-types <value>` | comma-separated list of entity types to redact |
+| `--webhook-url <value>` | customer webhook for call-admission events (`CallInitiated` / `Hangup`) |
+| `--webhook-method <value>` | HTTP method for the webhook callback (default: POST) (one of: `POST`, `GET`) |
+| `--recording-webhook-enabled` | fire a `recording.completed` webhook to --webhook-url after a recording is saved (--no-recording-webhook-enabled to set false) |
+| `--username <value>` | deprecated: use --credential-uuid |
+| `--password <value>` | deprecated: use --credential-uuid (@file or @- for stdin keeps it out of shell history) |
+| `--ip-whitelist <value>` | deprecated: use --ipacl-uuid (repeatable or comma-separated) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz trunks credentials
@@ -4165,7 +4177,7 @@ vobiz trunks ip-acl create [options]
 | Option | Description |
 |---|---|
 | `--name <value>` | name (required) |
-| `--ip-address <value>` | ip address (required) |
+| `--ip-address <value>` | IP address (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz trunks ip-acl delete
@@ -4212,7 +4224,7 @@ vobiz trunks ip-acl update <ip-acl-id> [options]
 | Option | Description |
 |---|---|
 | `--name <value>` | name (required) |
-| `--ip-address <value>` | ip address (required) |
+| `--ip-address <value>` | IP address (required) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz trunks list
@@ -4250,11 +4262,11 @@ vobiz trunks origination-uris create [options]
 
 | Option | Description |
 |---|---|
-| `--uri <value>` | SIP URI of your inbound destination, for example `sip:sbc.example.com`. (required) |
-| `--description <value>` | Label for the origination URI. |
-| `--priority <n>` | Routing priority. (required) |
-| `--sip-uri <value>` | deprecated: use --uri. SIP URI of the destination. |
-| `--name <value>` | deprecated: use --description. Label for the origination URI. |
+| `--uri <value>` | SIP URI of your inbound destination, for example `sip:sbc.example.com` (required) |
+| `--description <value>` | label for the origination URI |
+| `--priority <n>` | routing priority (required) |
+| `--sip-uri <value>` | deprecated: use --uri; SIP URI of the destination |
+| `--name <value>` | deprecated: use --description; label for the origination URI |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz trunks origination-uris delete
@@ -4300,11 +4312,11 @@ vobiz trunks origination-uris update <uri-id> [options]
 
 | Option | Description |
 |---|---|
-| `--uri <value>` | SIP URI of your inbound destination. |
-| `--description <value>` | Label for the origination URI. |
-| `--priority <n>` | Routing priority. |
-| `--sip-uri <value>` | deprecated: use --uri. SIP URI of the destination. |
-| `--name <value>` | deprecated: use --description. Label for the origination URI. |
+| `--uri <value>` | SIP URI of your inbound destination |
+| `--description <value>` | label for the origination URI |
+| `--priority <n>` | routing priority |
+| `--sip-uri <value>` | deprecated: use --uri; SIP URI of the destination |
+| `--name <value>` | deprecated: use --description; label for the origination URI |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
 
 ### vobiz trunks update
@@ -4322,24 +4334,24 @@ vobiz trunks update <trunk-id> [options]
 | Option | Description |
 |---|---|
 | `--name <value>` | name |
-| `--trunk-direction <value>` | Direction of the trunk - `inbound` or `outbound` only. (one of: `inbound`, `outbound`) |
-| `--trunk-status <value>` | Trunk status to set - `enabled` or `disabled`. (one of: `enabled`, `disabled`) |
+| `--trunk-direction <value>` | direction of the trunk - `inbound` or `outbound` only (one of: `inbound`, `outbound`) |
+| `--trunk-status <value>` | trunk status to set - `enabled` or `disabled` (one of: `enabled`, `disabled`) |
 | `--secure` | secure (--no-secure to set false) |
 | `--trunk-domain <value>` | trunk domain |
 | `--transport <value>` | transport (one of: `udp`, `tcp`, `tls`) |
 | `--inbound-destination <value>` | inbound destination |
 | `--description <value>` | description |
 | `--concurrent-calls-limit <n>` | concurrent calls limit |
-| `--cps-limit <n>` | cps limit |
-| `--credential-uuid <value>` | credential uuid |
-| `--ipacl-uuid <value>` | ipacl uuid |
-| `--primary-uri-uuid <value>` | primary uri uuid |
-| `--fallback-uri-uuid <value>` | fallback uri uuid |
+| `--cps-limit <n>` | CPS limit |
+| `--credential-uuid <value>` | credential UUID |
+| `--ipacl-uuid <value>` | IP ACL UUID |
+| `--primary-uri-uuid <value>` | primary URI UUID |
+| `--fallback-uri-uuid <value>` | fallback URI UUID |
 | `--recording` | recording (--no-recording to set false) |
 | `--enable-transcription` | enable transcription (--no-enable-transcription to set false) |
-| `--pii-redaction` | pii redaction (--no-pii-redaction to set false) |
-| `--pii-entity-types <value>` | pii entity types |
-| `--webhook-url <value>` | Customer webhook for call-admission events (`CallInitiated` / `Hangup`). |
+| `--pii-redaction` | PII redaction (--no-pii-redaction to set false) |
+| `--pii-entity-types <value>` | PII entity types |
+| `--webhook-url <value>` | customer webhook for call-admission events (`CallInitiated` / `Hangup`) |
 | `--webhook-method <value>` | webhook method (default: POST) (one of: `POST`, `GET`) |
 | `--recording-webhook-enabled` | recording webhook enabled (--no-recording-webhook-enabled to set false) |
 | `--body <json>` | full JSON body: '{…}', @file.json or @- (stdin); flags are merged on top, and unlisted keys are allowed |
@@ -4380,7 +4392,7 @@ vobiz webhooks listen [options]
 | `--host <address>` | address to bind (default 127.0.0.1); anything else also needs --allow-lan |
 | `--allow-lan` | allow a non-loopback --host such as 0.0.0.0 (the receiver is then reachable from your network) |
 | `--forward <url>` | also send each request to this URL (e.g. your app) and relay its 2xx response back to Vobiz |
-| `--secret <secret>` | check each request's signature with this secret and refuse (401) any that fail (env: VOBIZ_WEBHOOK_SECRET) |
+| `--secret <secret>` | check each request's signature with this secret and refuse (401) any that fail; @file or @- for stdin keeps it out of shell history (env: VOBIZ_WEBHOOK_SECRET) |
 | `--public-url <url>` | the https URL Vobiz calls (your tunnel); required to check voice-callback signatures |
 | `--scheme <v3>` | refuse V2 voice-callback signatures (accept V3 only) (one of: `v3`) |
 | `--allow-insecure-url` | allow a plain http:// --forward to a host other than localhost (bodies are sent unencrypted) |
@@ -4395,12 +4407,12 @@ vobiz webhooks verify [options]
 
 | Option | Description |
 |---|---|
-| `--signature <value>` | the signature header value (X-Vobiz-Signature-V3, -V2, X-Webhook-Signature or X-Vobiz-Signature) |
+| `--signature <value>` | the signature header value (X-Vobiz-Signature-V3, -V2, X-Webhook-Signature or X-Vobiz-Signature) (required) |
 | `--url <callback-url>` | voice callbacks: the full URL Vobiz called (the query string is ignored) |
 | `--nonce <nonce>` | voice callbacks: the X-Vobiz-Signature-V3-Nonce (or -V2-Nonce) header value |
 | `--scheme <v3\|v2>` | voice callbacks: which signature version to check (default: try V3, then V2) |
 | `--body <text\|@file\|@->` | body-signed webhooks: the raw request body, @file for a file, @- for stdin |
-| `--secret <secret>` | signing secret: your Auth Token for voice callbacks (parent account's for -MA- headers), the subscription secret for messaging (env: VOBIZ_WEBHOOK_SECRET) |
+| `--secret <secret>` | signing secret: your Auth Token for voice callbacks (parent account's for -MA- headers), the subscription secret for messaging; @file or @- for stdin keeps it out of shell history (env: VOBIZ_WEBHOOK_SECRET) |
 
 ### vobiz whoami
 

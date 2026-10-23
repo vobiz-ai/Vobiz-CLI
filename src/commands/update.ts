@@ -3,7 +3,7 @@
  * binary itself (package managers own that), so it is safe to run anywhere.
  */
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { posix } from "node:path";
 import type { Command } from "commander";
 import type { Ctx } from "../core/context.js";
 import { VobizError } from "../core/errors.js";
@@ -23,8 +23,9 @@ export function detectInstallMethod(execPath = process.argv[1] ?? "", env: NodeJ
   if (/\/_npx\//.test(p)) return "npx";
   if (/node_modules\//.test(p)) return "npm";
   if (p) {
-    const pkgRoot = dirname(dirname(execPath));
-    if (exists(join(pkgRoot, ".git")) && exists(join(pkgRoot, "package.json"))) return "source";
+    // Forward slashes on every platform: Node's fs accepts them on Windows too, and the result is testable.
+    const pkgRoot = posix.dirname(posix.dirname(p));
+    if (exists(posix.join(pkgRoot, ".git")) && exists(posix.join(pkgRoot, "package.json"))) return "source";
   }
   if (process.execPath && !/\bnode(\.exe)?$/i.test(process.execPath)) return "binary";
   return "npm";

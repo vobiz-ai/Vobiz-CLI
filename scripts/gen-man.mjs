@@ -3,9 +3,10 @@
 // Usage: npm run build && npm run man:gen      Preview: man ./man/vobiz.1
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { EXIT_CODES, flatten, loadCommandTree, readVersion, root, usageLine } from "./lib/command-tree.mjs";
+import { flatten, loadExitCodes, loadCommandTree, readVersion, root, usageLine } from "./lib/command-tree.mjs";
 
 const tree = await loadCommandTree();
+const { EXIT_CODE_DOCS } = await loadExitCodes();
 const version = await readVersion();
 
 // roff escaping in one pass (so an escape is never re-escaped): backslashes as \e, hyphens as \-, then leading
@@ -66,7 +67,7 @@ out.push(
     ["NO_COLOR, FORCE_COLOR", "Standard color handling."],
   ].flatMap(([k, v]) => [".TP", `.B ${esc(k)}`, esc(v)]),
   ".SH EXIT STATUS",
-  ...EXIT_CODES.flatMap(([code, text]) => [".TP", `.B ${code}`, esc(text)]),
+  ...EXIT_CODE_DOCS.flatMap(({ code, meaning }) => [".TP", `.B ${code}`, esc(meaning)]),
   ".SH FILES",
   ".TP",
   ".I ~/.config/vobiz/credentials.json",

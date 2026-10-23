@@ -33,18 +33,20 @@ vobiz docs search "record a conference"  # search the docs from the terminal
 
 **Exit codes.**
 
+<!-- BEGIN GENERATED exit-codes-agents -->
 | Code | Meaning | What the agent should do |
 |---|---|---|
-| 0 | Success | Continue |
-| 1 | Server error on a read, or unknown failure | Report; retry once only for reads |
-| 2 | Usage error or invalid input | Fix the command; check `vobiz <command> --help` |
-| 3 | Auth failed, missing or forbidden | Ask the user to run `vobiz login` or check the credentials |
-| 4 | Not found | Re-list to find the right ID |
-| 5 | Rate limited or insufficient balance | Wait (rate limit) or tell the user (balance) |
-| 6 | Confirmation required or not allowed | Ask the user, then re-run with `--yes` |
-| 7 | Outcome unknown: a write timed out, lost its connection, or got a 5xx/408 answer (`retryable: false`) | Do not retry. Check `vobiz calls list`, `vobiz cdr recent`, `vobiz sms messages list` or `vobiz account transactions list` first |
-| 8 | Timeout or network error on a read | Retry the read |
-| 130 | Interrupted (Ctrl-C) | Ask the user before running it again |
+| 0 | Success. | Continue. |
+| 1 | Server error or unknown failure. A 5xx on a read is retryable; a 5xx on a write is exit 7. | Report it; retry once, and only a read. |
+| 2 | Usage error or invalid input. | Fix the command; check its --help. |
+| 3 | Authentication failed, credentials missing, access forbidden or account suspended. | Ask the user to run vobiz login or check the credentials. |
+| 4 | Not found. | List again to find the right ID. |
+| 5 | Rate limited or insufficient balance. | Wait (rate limit) or tell the user (balance). |
+| 6 | Confirmation required (pass --yes) or the action is not allowed. | Ask the user, then run it again with --yes. |
+| 7 | Outcome unknown: a side-effecting request (call, message, purchase, transfer) timed out, lost its connection, or got a 5xx or 408 answer on a write. It may have taken effect, so it is not retryable; check the state first. The CLI never retries on its own. | Do not retry. Check vobiz calls list, vobiz cdr recent, vobiz sms messages list or vobiz account transactions list first. |
+| 8 | Timeout or network error on a read (nothing was changed; safe to retry). | Retry the read. |
+| 130 | Interrupted (Ctrl-C). | Ask the user before running it again. |
+<!-- END GENERATED exit-codes-agents -->
 
 **Confirmation.** Every command that spends money, contacts a person, or changes or deletes something asks for confirmation. Without a terminal it refuses with exit code 6 unless `--yes` is passed. An agent must:
 
@@ -80,7 +82,7 @@ Use the `vobiz` CLI for anything on the Vobiz account (calls, SMS, numbers, SIP 
 - Always pass `--output json`; read data from stdout and errors from stderr.
 - Before any call, message, purchase, release, transfer or delete: run it with `--dry-run`, show me the details,
   and wait for my explicit yes. Only then re-run with `--yes`.
-- Exit code 7 means the outcome is unknown (timeouts and 5xx on writes): check state with `vobiz calls list`, `vobiz cdr recent`,
+- Exit code 7 means the outcome is unknown (a write timed out, lost its connection, or got a 5xx or 408 answer): check state with `vobiz calls list`, `vobiz cdr recent`,
   `vobiz sms messages list` or `vobiz account transactions list`; never retry blindly. `calls create` has no idempotency key.
 - Exit code 3: ask me to run `vobiz login`. Never ask for, print or store the Auth Token.
 - Use `vobiz <command> --help` and `vobiz api --list` instead of guessing flags or endpoints.

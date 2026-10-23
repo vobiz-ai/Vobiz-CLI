@@ -11,19 +11,18 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-/** The documented, stable exit codes; keep in step with `vobiz help exit-codes` (src/commands/help-topics.ts). */
-export const EXIT_CODES = [
-  [0, "Success."],
-  [1, "Server error or unknown failure."],
-  [2, "Usage error or invalid input."],
-  [3, "Authentication failed, credentials missing, or access forbidden."],
-  [4, "Not found."],
-  [5, "Rate limited or insufficient balance."],
-  [6, "Confirmation required (pass --yes) or the action is not allowed."],
-  [7, "Outcome unknown: a side-effecting request timed out, lost its connection or got a 5xx. Check the state before retrying."],
-  [8, "Timeout or network error on a read (nothing was changed; safe to retry)."],
-  [130, "Interrupted (Ctrl-C)."],
-];
+/**
+ * The exit-code docs from the built CLI (dist/core/exit-codes.js, source src/core/exit-codes.ts): the same text as
+ * `vobiz help exit-codes`. Returns the module: { EXIT_CODE_DOCS, exitCodesMarkdown, fillGeneratedBlocks, … }.
+ */
+export async function loadExitCodes() {
+  const modulePath = resolve(root, "dist", "core", "exit-codes.js");
+  if (!existsSync(modulePath)) {
+    process.stderr.write(`error: ${modulePath} is missing: run \`npm run build\` first\n`);
+    process.exit(1);
+  }
+  return import(pathToFileURL(modulePath).href);
+}
 
 /**
  * @typedef {{ flags: string, long?: string, short?: string, description: string, takesValue: boolean, choices?: string[] }} OptionNode

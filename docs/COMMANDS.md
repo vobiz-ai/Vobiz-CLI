@@ -34,13 +34,13 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
 | Code | Meaning |
 |---|---|
 | 0 | Success. |
-| 1 | Server error or unknown failure. |
+| 1 | Server error or unknown failure. A 5xx on a read is retryable; a 5xx on a write is exit 7. |
 | 2 | Usage error or invalid input. |
-| 3 | Authentication failed, credentials missing, or access forbidden. |
+| 3 | Authentication failed, credentials missing, access forbidden or account suspended. |
 | 4 | Not found. |
 | 5 | Rate limited or insufficient balance. |
 | 6 | Confirmation required (pass --yes) or the action is not allowed. |
-| 7 | Outcome unknown: a side-effecting request timed out, lost its connection or got a 5xx. Check the state before retrying. |
+| 7 | Outcome unknown: a side-effecting request (call, message, purchase, transfer) timed out, lost its connection, or got a 5xx or 408 answer on a write. It may have taken effect, so it is not retryable; check the state first. The CLI never retries on its own. |
 | 8 | Timeout or network error on a read (nothing was changed; safe to retry). |
 | 130 | Interrupted (Ctrl-C). |
 

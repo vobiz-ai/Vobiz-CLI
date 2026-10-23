@@ -2,7 +2,7 @@
 
 **Your whole Vobiz account from the terminal, your scripts, your CI, and your AI agents.**
 
-`vobiz` is the official command-line interface for [Vobiz](https://www.vobiz.ai), the programmable telephony platform: voice calls, SIP trunking, phone numbers, SMS/MMS/RCS and AI voice agents in 130+ countries. One binary, 278 commands, every operation in the Vobiz Voice and Messaging APIs, with the guard rails a tool that places calls and spends money needs.
+`vobiz` is the official command-line interface for [Vobiz](https://www.vobiz.ai), the programmable telephony platform: voice calls, SIP trunking, phone numbers, SMS/MMS/RCS and AI voice agents in 130+ countries. One binary, 277 commands and command groups, every operation in the Vobiz Voice and Messaging OpenAPI documents, with the guard rails a tool that places calls and spends money needs.
 
 [![CI](https://github.com/vobiz-ai/Vobiz-CLI/actions/workflows/ci.yml/badge.svg)](https://github.com/vobiz-ai/Vobiz-CLI/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@vobiz/cli)](https://www.npmjs.com/package/@vobiz/cli)
@@ -47,7 +47,7 @@ status     ended
 |---|---|
 | **Complete** | Every operation in the Vobiz OpenAPI documents has a command, generated from the spec so nothing drifts. Anything new is one `vobiz api` call away. |
 | **Safe by default** | Calls, messages, purchases, releases, transfers and deletions show what they will do and ask. `--dry-run` everywhere. A failed write is never retried blindly. Tokens never reach your screen, logs or files. |
-| **Built for scripts** | `table` on a terminal, `json` when piped, plus `jsonl`, `yaml`, `tsv`; `--fields`, `--query`, `--quiet`; stable exit codes. |
+| **Built for scripts** | `table` on a terminal, `json` when piped, plus `jsonl`, `yaml`, `tsv`, `plain`; `--fields`, `--query`, `--quiet`; stable exit codes. |
 | **Built for agents** | Claude Code, Codex and Cursor can drive it: machine-readable errors, third-party text marked as untrusted, one command to connect the Vobiz MCP server and install the Vobiz Agent Skills. |
 | **Everywhere** | npm, Homebrew, Docker, Scoop, install scripts, standalone binaries for macOS, Linux and Windows with checksums and build attestations. |
 
@@ -64,11 +64,13 @@ status     ended
 | Docker | `docker run --rm -e VOBIZ_AUTH_ID -e VOBIZ_AUTH_TOKEN ghcr.io/vobiz-ai/vobiz-cli numbers list` |
 | Binary | `vobiz-<version>-<os>-<arch>` from [GitHub Releases](https://github.com/vobiz-ai/Vobiz-CLI/releases) (bundles Node.js; nothing else needed) |
 
+Run `vobiz update` to check for a newer version and see how to upgrade.
+
 Release archives are listed in `SHA256SUMS` and carry a signed build-provenance attestation; the install scripts verify the checksum before installing. [docs/INSTALL.md](docs/INSTALL.md) covers each channel, shell completion (`vobiz completion zsh|bash|fish|powershell`), the man page, verification, updates and uninstalling.
 
 ## Sign in
 
-Copy your **Auth ID** and **Auth Token** from the [Vobiz console](https://console.vobiz.ai), then run `vobiz login`. The CLI verifies them with Vobiz and stores them with mode 0600. Keep several accounts with `--profile <name>` and switch with `vobiz profiles use <name>`. In CI, skip `login` and set `VOBIZ_AUTH_ID` and `VOBIZ_AUTH_TOKEN` from your secret store.
+Copy your **Auth ID** and **Auth Token** from the [Vobiz console](https://console.vobiz.ai), then run `vobiz login`. The CLI verifies them with Vobiz and stores them with mode 0600. Keep several accounts with `--profile <name>` and switch with `vobiz profiles use <name>`. Then run `vobiz doctor` to check the setup: Node.js, config file permissions, connectivity, credentials, clock skew and proxy settings. In CI, skip `login` and set `VOBIZ_AUTH_ID` and `VOBIZ_AUTH_TOKEN` from your secret store.
 
 ```console
 $ vobiz whoami
@@ -187,25 +189,27 @@ The contract agents rely on: data on stdout, everything else on stderr; `--outpu
 
 - **Ask before acting.** Every billable or destructive command prints the account, destination, caller ID, URL host and price, then asks. Without a terminal it needs `--yes` (exit code `6` otherwise).
 - **Dry runs.** `--dry-run` prints the exact request, secrets redacted, and sends nothing.
-- **No blind retries.** Side-effecting requests are never retried. A timeout or 5xx on a write exits `7`; `sms send` prints an idempotency key you can reuse; `calls create` has none, so check `vobiz calls list --queued` and `vobiz cdr recent` first.
+- **No blind retries.** Side-effecting requests are never retried. A timeout, lost connection, or 5xx/408 answer on a write exits `7`; `sms send` prints an idempotency key you can reuse; `calls create` has none, so check `vobiz calls list --queued` and `vobiz cdr recent` first.
 - **Bounded fan-out.** At most 50 distinct destinations per `calls create` or `sms send` unless you raise `--max-fanout`.
 - **Credentials stay home.** Sent only to `https://*.vobiz.ai`; never printed, logged or written into project files; stored 0600. `vobiz doctor` checks all of it.
 - **HTTPS only** for answer, callback and stream URLs. **No telemetry:** the CLI connects only to the Vobiz API, the Vobiz Docs MCP server (`docs search`), the npm registry (a daily version check, off in CI or with `--no-update-check`) and URLs you pass it.
 
 ## Exit codes
 
+<!-- BEGIN GENERATED exit-codes -->
 | Code | Meaning |
 |---|---|
-| 0 | Success |
-| 1 | Server error or unknown failure |
-| 2 | Usage error or invalid input |
-| 3 | Authentication failed, credentials missing, or forbidden |
-| 4 | Not found |
-| 5 | Rate limited or insufficient balance |
-| 6 | Confirmation required (pass `--yes`) or not allowed |
-| 7 | Outcome unknown: a side-effecting request timed out, lost its connection or got a 5xx; check state before retrying |
-| 8 | Timeout or network error on a read (nothing was changed; safe to retry) |
-| 130 | Interrupted (Ctrl-C) |
+| 0 | Success. |
+| 1 | Server error or unknown failure. A 5xx on a read is retryable; a 5xx on a write is exit 7. |
+| 2 | Usage error or invalid input. |
+| 3 | Authentication failed, credentials missing, access forbidden or account suspended. |
+| 4 | Not found. |
+| 5 | Rate limited or insufficient balance. |
+| 6 | Confirmation required (pass --yes) or the action is not allowed. |
+| 7 | Outcome unknown: a side-effecting request (call, message, purchase, transfer) timed out, lost its connection, or got a 5xx or 408 answer on a write. It may have taken effect, so it is not retryable; check the state first. The CLI never retries on its own. |
+| 8 | Timeout or network error on a read (nothing was changed; safe to retry). |
+| 130 | Interrupted (Ctrl-C). |
+<!-- END GENERATED exit-codes -->
 
 ## Configuration
 
@@ -220,7 +224,7 @@ The contract agents rely on: data on stdout, everything else on stderr; `--outpu
 | `--base-url`, `--sms-base-url` | `VOBIZ_BASE_URL`, `VOBIZ_SMS_BASE_URL` | Gateway overrides, `https://*.vobiz.ai` only |
 | `--verbose`, `--debug`, `--no-color` | `VOBIZ_LOG`, `NO_COLOR` | Logging and color |
 
-Profiles and settings live in `~/.config/vobiz` (`%APPDATA%\vobiz` on Windows, or `$VOBIZ_CONFIG_DIR`); `vobiz config path` prints the location. If your account restricts API access by IP, allow the addresses your scripts use: see [IP whitelisting](https://www.vobiz.ai/docs/concepts/ip-whitelisting).
+Profiles and settings live in `~/.config/vobiz` (`%APPDATA%\vobiz` on Windows, or `$VOBIZ_CONFIG_DIR`); `vobiz config path` prints the location. Run `vobiz help env` for every environment variable, including proxy settings (`HTTPS_PROXY`, `NODE_USE_ENV_PROXY=1`). If your account restricts API access by IP, allow the addresses your scripts use: see [IP whitelisting](https://www.vobiz.ai/docs/concepts/ip-whitelisting).
 
 ## Development
 
@@ -237,7 +241,7 @@ Commands are generated from the OpenAPI documents in `spec/`; [CONTRIBUTING.md](
 
 [Vobiz](https://www.vobiz.ai) is a global programmable telephony platform: SIP trunking, voice APIs, SMS, WhatsApp and AI voice agent integrations in 130+ countries. The [Vobiz MCP server](https://github.com/vobiz-ai/Vobiz-MCP-Server) is the CLI's sibling for chat-based agents.
 
-**Support:** support@vobiz.ai · [Documentation](https://www.vobiz.ai/docs/resources/cli) · [Issues](https://github.com/vobiz-ai/Vobiz-CLI/issues) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
+**Support:** support@vobiz.ai · `vobiz feedback` (opens a prefilled GitHub issue) · [Documentation](https://www.vobiz.ai/docs/resources/cli) · [Issues](https://github.com/vobiz-ai/Vobiz-CLI/issues) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## License
 

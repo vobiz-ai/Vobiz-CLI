@@ -5,31 +5,38 @@
 import type { Command } from "commander";
 import { findCommand } from "../cli.js";
 import type { Ctx } from "../core/context.js";
-import { VobizError } from "../core/errors.js";
+import { EXIT, VobizError, type ErrorKind } from "../core/errors.js";
+import { EXIT_CODE_DOCS } from "../core/exit-codes.js";
+
+/** `vobiz help exit-codes`: the shared table (src/core/exit-codes.ts), then the error kinds behind each code. */
+function exitCodesText(): string {
+  const pad = (n: number) => String(n).padStart(3);
+  const kinds = new Map<number, string[]>();
+  for (const [kind, code] of Object.entries(EXIT)) {
+    if (kind === "ok" || kind === "usage") continue;
+    kinds.set(code, [...(kinds.get(code) ?? []), kind as ErrorKind]);
+  }
+  return [
+    "Exit codes (stable; scripts may branch on them)",
+    "",
+    ...EXIT_CODE_DOCS.map((e) => `${pad(e.code)}  ${e.meaning}`),
+    "",
+    'Error kinds by exit code (the "error" field of the JSON error line):',
+    "",
+    ...[...kinds].sort(([a], [b]) => a - b).map(([code, list]) => `${pad(code)}  ${list.join(", ")}`),
+    "",
+    `After exit 7: ${EXIT_CODE_DOCS.find((e) => e.code === 7)?.agent ?? ""}`,
+    "",
+    "With --output json, jsonl or yaml, or whenever stdout is not a terminal, errors are printed to stderr as one JSON line:",
+    '  {"error":"<kind>","message":"…","status":<http status or null>,"retryable":<bool>,"hint":"…"}',
+    "",
+  ].join("\n");
+}
 
 export const HELP_TOPICS: Record<string, { summary: string; text: string }> = {
   "exit-codes": {
     summary: "stable exit codes for scripts",
-    text: `Exit codes (stable; scripts may branch on them)
-
-  0  ok
-  1  server error or unexpected failure (backend_error, service_unavailable, unexpected_response, internal_error);
-     a 5xx on a read is retryable, a 5xx on a write is exit 7
-  2  usage error or invalid input (invalid_input, unsupported, unknown command or option)
-  3  authentication: missing_credentials, auth_failed, forbidden, account_suspended
-  4  not_found
-  5  rate_limited or insufficient_balance
-  6  confirmation_required or not_allowed (a write without --yes when stdin is not a terminal, or a declined prompt)
-  7  outcome_unknown: a side-effecting request (call, message, purchase, transfer) timed out, lost its
-     connection, or got a 5xx/408 answer. It may have taken effect, so "retryable" is false. Check the current
-     state first (vobiz calls list, vobiz cdr recent, vobiz sms messages list, vobiz account transactions
-     list); the CLI never retries on its own.
-  8  timeout or network_error on a read (nothing was changed, safe to retry)
-130  interrupted (Ctrl-C)
-
-With --output json, jsonl or yaml, or whenever stdout is not a terminal, errors are printed to stderr as one JSON line:
-  {"error":"<kind>","message":"…","status":<http status or null>,"retryable":<bool>,"hint":"…"}
-`,
+    text: exitCodesText(),
   },
   env: {
     summary: "environment variables",

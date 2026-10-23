@@ -39,7 +39,7 @@ number tags (`numbers update --tags`).
   destination, caller ID, URL host and price when known, then asks. Without a terminal it needs `--yes` (exit `6`).
 - `--dry-run` prints the exact request, secrets redacted, and sends nothing. Local writes (config, profiles, login and
   logout, skills, MCP client config) honour it too: they print what would change, marked `[dry-run]`, and write nothing.
-- Side-effecting requests are never retried. A timeout or 5xx on a write exits `7` (outcome unknown).
+- Side-effecting requests are never retried. A timeout, lost connection, or 5xx/408 answer on a write exits `7` (outcome unknown).
 - Credentials resolve as flags > environment > profile, are sent only to `https://*.vobiz.ai`, are stored with mode
   0600 and are never printed or logged. `--debug` redacts secrets in bodies.
 - Answer, callback and stream URLs must be HTTPS (plain HTTP only for localhost or with `--allow-insecure-url`).
@@ -57,18 +57,20 @@ number tags (`numbers update --tags`).
 In JSON mode a failure writes one line to stderr: `{"error","message","status","retryable","hint"}`. The exit codes
 are stable (`vobiz help exit-codes`):
 
+<!-- BEGIN GENERATED exit-codes -->
 | Code | Meaning |
 |---|---|
-| 0 | Success |
-| 1 | Server error or unknown failure |
-| 2 | Usage error or invalid input |
-| 3 | Authentication failed, credentials missing, or forbidden |
-| 4 | Not found |
-| 5 | Rate limited or insufficient balance |
-| 6 | Confirmation required (pass `--yes`) or not allowed |
-| 7 | Outcome unknown: a side-effecting request timed out, lost its connection or got a 5xx; check state first |
-| 8 | Timeout or network error on a read (nothing was changed; safe to retry) |
-| 130 | Interrupted (Ctrl-C) |
+| 0 | Success. |
+| 1 | Server error or unknown failure. A 5xx on a read is retryable; a 5xx on a write is exit 7. |
+| 2 | Usage error or invalid input. |
+| 3 | Authentication failed, credentials missing, access forbidden or account suspended. |
+| 4 | Not found. |
+| 5 | Rate limited or insufficient balance. |
+| 6 | Confirmation required (pass --yes) or the action is not allowed. |
+| 7 | Outcome unknown: a side-effecting request (call, message, purchase, transfer) timed out, lost its connection, or got a 5xx or 408 answer on a write. It may have taken effect, so it is not retryable; check the state first. The CLI never retries on its own. |
+| 8 | Timeout or network error on a read (nothing was changed; safe to retry). |
+| 130 | Interrupted (Ctrl-C). |
+<!-- END GENERATED exit-codes -->
 
 ## Generated files
 

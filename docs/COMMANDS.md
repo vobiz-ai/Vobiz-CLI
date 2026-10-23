@@ -2145,7 +2145,7 @@ vobiz setup sms [options]
 | `--number-key <key>` | with --buy: numberKey from search (looked up when omitted) |
 | `--webhook-url <url>` | https URL for message.received, message.delivered and message.failed (reused if it exists) |
 | `--webhook <id>` | use this existing messaging webhook instead |
-| `--secret <secret>` | with --webhook-url: signing secret for X-Webhook-Signature |
+| `--secret <secret>` | with --webhook-url: signing secret for X-Webhook-Signature (@file or @- for stdin keeps it out of shell history) |
 | `--event <name>` | with --webhook-url: event to deliver (repeatable; default: the three message events) |
 | `--no-webhook` | skip the webhook (you will poll message status instead) |
 
@@ -3647,7 +3647,7 @@ vobiz sms webhooks update <id> [options]
 | Option | Description |
 |---|---|
 | `--url <url>` | new https URL |
-| `--secret <secret>` | new signing secret (@file or @- for stdin) |
+| `--secret <secret>` | new signing secret (@file or @- for stdin keeps it out of shell history) |
 | `--event <name>` | replace the event list (repeatable) |
 | `--active` | resume deliveries |
 | `--no-active` | pause deliveries and keep the subscription |
@@ -4380,7 +4380,7 @@ vobiz webhooks listen [options]
 | `--host <address>` | address to bind (default 127.0.0.1); anything else also needs --allow-lan |
 | `--allow-lan` | allow a non-loopback --host such as 0.0.0.0 (the receiver is then reachable from your network) |
 | `--forward <url>` | also send each request to this URL (e.g. your app) and relay its 2xx response back to Vobiz |
-| `--secret <secret>` | check each request's signature with this secret and refuse (401) any that fail (env: VOBIZ_WEBHOOK_SECRET) |
+| `--secret <secret>` | check each request's signature with this secret and refuse (401) any that fail; @file or @- for stdin keeps it out of shell history (env: VOBIZ_WEBHOOK_SECRET) |
 | `--public-url <url>` | the https URL Vobiz calls (your tunnel); required to check voice-callback signatures |
 | `--scheme <v3>` | refuse V2 voice-callback signatures (accept V3 only) (one of: `v3`) |
 | `--allow-insecure-url` | allow a plain http:// --forward to a host other than localhost (bodies are sent unencrypted) |
@@ -4400,7 +4400,7 @@ vobiz webhooks verify [options]
 | `--nonce <nonce>` | voice callbacks: the X-Vobiz-Signature-V3-Nonce (or -V2-Nonce) header value |
 | `--scheme <v3\|v2>` | voice callbacks: which signature version to check (default: try V3, then V2) |
 | `--body <text\|@file\|@->` | body-signed webhooks: the raw request body, @file for a file, @- for stdin |
-| `--secret <secret>` | signing secret: your Auth Token for voice callbacks (parent account's for -MA- headers), the subscription secret for messaging (env: VOBIZ_WEBHOOK_SECRET) |
+| `--secret <secret>` | signing secret: your Auth Token for voice callbacks (parent account's for -MA- headers), the subscription secret for messaging; @file or @- for stdin keeps it out of shell history (env: VOBIZ_WEBHOOK_SECRET) |
 
 ### vobiz whoami
 

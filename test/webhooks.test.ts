@@ -26,6 +26,21 @@ describe("webhooks verify", () => {
     expect(r.json()).toEqual({ valid: true, scheme: "callback-url", version: "v3", base_url: URL_ });
   });
 
+  it("--secret takes @file and @- like every other secret flag, never the literal \"@-\"", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "vobiz-secret-"));
+    writeFileSync(join(dir, "secret"), `${SECRET}\n`);
+    const base = ["webhooks", "verify", "--url", URL_, "--nonce", NONCE, "--signature", V3, "--json"];
+    const fromFile = await runCli([...base, "--secret", `@${join(dir, "secret")}`]);
+    expect(fromFile.code, fromFile.err).toBe(0);
+    expect(fromFile.err).not.toContain("shell history");
+    const fromStdin = await runCli([...base, "--secret", "@-"], { stdin: SECRET });
+    expect(fromStdin.code, fromStdin.err).toBe(0);
+    expect(fromStdin.json()).toMatchObject({ valid: true });
+    const both = await runCli(["webhooks", "verify", "--signature", BODY_SIG, "--body", "@-", "--secret", "@-", "--json"], { stdin: BODY });
+    expect(both.code).toBe(2);
+    expect(both.err).toContain("both read stdin");
+  });
+
   it("falls back to V2, and --scheme pins the version", async () => {
     expect((await runCli(["webhooks", "verify", "--url", URL_, "--nonce", NONCE, "--signature", V2, "--json"], { env })).json()).toMatchObject({ valid: true, version: "v2" });
     const pinned = await runCli(["webhooks", "verify", "--url", URL_, "--nonce", NONCE, "--signature", V2, "--scheme", "v3", "--json"], { env });

@@ -33,7 +33,8 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
  && mkdir -p /home/node/.config/vobiz && chown -R node:node /home/node/.config && chmod 700 /home/node/.config/vobiz
 WORKDIR /app
 # The daily npm version check makes no sense inside an immutable image: update by pulling a newer tag.
-ENV NODE_ENV=production VOBIZ_NO_UPDATE_CHECK=1
+# VOBIZ_DOCKER=1 makes `vobiz update` print the docker pull command instead of an npm one.
+ENV NODE_ENV=production VOBIZ_NO_UPDATE_CHECK=1 VOBIZ_DOCKER=1
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/spec ./spec

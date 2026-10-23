@@ -189,6 +189,30 @@ describe("vobiz calls list / get / watch / hangup", () => {
     expect(api.last()).toMatchObject({ path: `${A}/Call/`, query: { status: "queued" } });
   });
 
+  it("list --limit trims the single-page response on the client; --all and no flag return every call", async () => {
+    const api = fakeFetch({ [`GET ${A}/Call`]: { api_id: "x", calls: ["c1", "c2", "c3"] } });
+    let r = await runCli(["calls", "list", "--limit", "2", "--json"], { fetch: api.fetch });
+    expect(r.code, r.err).toBe(0);
+    expect(r.json()).toEqual({ api_id: "x", calls: ["c1", "c2"] });
+    expect(api.last().query).toEqual({ status: "live" });
+    r = await runCli(["calls", "list", "--limit", "1", "--output", "plain"], { fetch: api.fetch });
+    expect(r.out).toBe("c1\n");
+    r = await runCli(["calls", "list", "--all", "--json"], { fetch: api.fetch });
+    expect(r.json()).toEqual({ api_id: "x", calls: ["c1", "c2", "c3"] });
+    r = await runCli(["calls", "list", "--limit", "0"], { fetch: api.fetch });
+    expect(r.code).toBe(2);
+  });
+
+  it("list --details --limit fetches details for the first calls only", async () => {
+    const api = fakeFetch({
+      [`GET ${A}/Call`]: { calls: ["c1", "c2"] },
+      [`GET ${A}/Call/c1`]: { call_uuid: "c1", call_status: "in-progress" },
+    });
+    const r = await runCli(["calls", "list", "--details", "--limit", "1", "--json"], { fetch: api.fetch });
+    expect(r.json()).toEqual([{ call_uuid: "c1", call_status: "in-progress" }]);
+    expect(api.calls).toHaveLength(2);
+  });
+
   it("list --details fetches each call", async () => {
     const api = fakeFetch({
       [`GET ${A}/Call`]: { calls: ["c1", "gone"] },

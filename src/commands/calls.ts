@@ -19,6 +19,7 @@ import { VobizError, usage } from "../core/errors.js";
 import { op } from "../core/ops.js";
 import { toE164 } from "../core/phone.js";
 import { CALLER_KEYS, RESOURCE_NAME_KEYS, untrustedAction } from "../core/untrusted.js";
+import { addListOptions } from "./provisioning-shared.js";
 import { checkUrl, hostOf, intArg, isRec, normalizeDestinations, secondsArg, watchCall, type Rec } from "./voice-shared.js";
 
 const MAKE_CALL = op("make-call");
@@ -278,20 +279,24 @@ Examples:
 }
 
 function registerReads(calls: Command, ctx: Ctx) {
-  calls
+  const list = calls
     .command("list")
     .alias("ls")
     .description("List live calls (or queued calls with --queued)")
     .option("--queued", "list queued calls (placed, not yet connected; max 20) instead of live ones")
-    .option("--details", "fetch each call's details (one request per call)")
-    .addHelpText("after", "\nExamples:\n  vobiz calls list\n  vobiz calls list --queued --details")
-    .action(untrustedAction(ctx, CALL_UNTRUSTED, async (o: { queued?: boolean; details?: boolean }) => {
+    .option("--details", "fetch each call's details (one request per call)");
+  // The API returns every live (or queued) call in one response; --limit trims it here, --all is the default.
+  addListOptions(list)
+    .addHelpText("after", "\nExamples:\n  vobiz calls list\n  vobiz calls list --limit 5\n  vobiz calls list --queued --details")
+    .action(untrustedAction(ctx, CALL_UNTRUSTED, async (o: { queued?: boolean; details?: boolean; limit?: number; all?: boolean }) => {
       const status = o.queued ? "queued" : "live";
       const body = await ctx.client.call<Rec>(o.queued ? LIST_QUEUED : LIST_LIVE, { query: { status } });
-      const uuids = Array.isArray(body?.calls) ? (body.calls as unknown[]).map(String) : [];
+      const limit = o.all ? undefined : o.limit;
+      const all = Array.isArray(body?.calls) ? (body.calls as unknown[]).map(String) : [];
+      const uuids = limit === undefined ? all : all.slice(0, limit);
       if (!o.details) {
         const mode = ctx.out.mode;
-        if ((mode === "json" || mode === "yaml") && !ctx.flags.fields?.length && !ctx.flags.quiet) ctx.out.print(body);
+        if ((mode === "json" || mode === "yaml") && !ctx.flags.fields?.length && !ctx.flags.quiet) ctx.out.print(uuids.length === all.length ? body : { ...body, calls: uuids });
         else ctx.out.print(uuids.map((call_uuid) => ({ call_uuid })), { columns: ["call_uuid"], empty: `No ${status} calls.` });
         return;
       }

@@ -137,6 +137,7 @@ export function register(program: Command, ctx: Ctx): void {
 
   skills
     .command("list")
+    .alias("ls")
     .description("List the Vobiz Agent Skills bundled with this CLI")
     .option("--dir <path>", "also show whether each skill is installed in this folder")
     .action((opts: { dir?: string }) => {

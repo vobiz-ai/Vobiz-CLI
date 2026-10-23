@@ -399,6 +399,8 @@ Show the account profile (name, limits, pricing tier)
 vobiz account show [options]
 ```
 
+Aliases: `get`
+
 ### vobiz account transactions
 
 The account ledger: debits, credits and their reference types
@@ -2001,7 +2003,7 @@ Delete a saved profile and its credentials
 vobiz profiles remove <name> [options]
 ```
 
-Aliases: `rm`
+Aliases: `rm`, `delete`
 
 | Argument | Required | Description |
 |---|---|---|
@@ -2206,6 +2208,8 @@ List the Vobiz Agent Skills bundled with this CLI
 ```
 vobiz skills list [options]
 ```
+
+Aliases: `ls`
 
 | Option | Description |
 |---|---|

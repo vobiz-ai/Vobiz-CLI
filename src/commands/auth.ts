@@ -227,7 +227,7 @@ function registerProfiles(program: Command, ctx: Ctx) {
 
   profiles
     .command("remove")
-    .alias("rm")
+    .aliases(["rm", "delete"])
     .argument("<name>", "profile to remove")
     .description("Delete a saved profile and its credentials")
     .action(async (name: string) => {

@@ -103,7 +103,8 @@ jobs:
           npm --version
           # Prereleases go to the `next` dist-tag so `npm i -g @vobiz/cli` keeps installing the latest stable.
           if [ "$PRERELEASE" = true ]; then DIST_TAG=next; else DIST_TAG=latest; fi
-          TGZ="pack/vobiz-cli-$V.tgz"
+          # The ./ prefix matters: npm reads a bare "pack/name.tgz" as a GitHub owner/repo shorthand and tries to clone it.
+          TGZ="./pack/vobiz-cli-$V.tgz"
           test -f "$TGZ" && [ "$(ls pack | wc -l)" -eq 1 ] || { echo "expected exactly $TGZ"; ls pack; exit 1; }
           npm publish "$TGZ" --ignore-scripts --provenance --access public --tag "$DIST_TAG"
           for i in $(seq 1 30); do

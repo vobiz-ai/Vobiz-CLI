@@ -6,6 +6,15 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `vobiz help exit-codes`, docs/COMMANDS.md, the man page, README, docs/AGENTS.md and docs/ARCHITECTURE.md share one
+  exit-code text (src/core/exit-codes.ts). Code 7 names a lost connection and a 5xx or 408 answer on a write.
+- `vobiz config` lists only the settings it uses: `output`, `color`, `updateCheck` and `defaultProfile`.
+- `sub-accounts kyc --test` and `kyc finalize-pending` stay callable but are left out of `--help`.
+- `--help` reads "show help for this command" in docs/COMMANDS.md too.
+- Docs: version pins use 0.1.2 and explain how to pick a version; uninstall rows for Docker and standalone binaries.
+
 ## [0.1.2] - 2026-10-23
 
 ### Fixed

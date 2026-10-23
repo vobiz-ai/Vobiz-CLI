@@ -50,7 +50,7 @@ export function oneLine(value: string, max = DETAIL_MAX): string {
 function renderDetail(d: string | ConfirmDetail): string {
   const o = typeof d === "string" ? { value: d } : d;
   const v = oneLine(o.value, o.max ?? DETAIL_MAX);
-  return o.fromApi ? `"${v.replace(/"/g, '\\"')}"` : v;
+  return o.fromApi ? `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"` : v;
 }
 
 export function formatSummary(s: ConfirmSummary): string {

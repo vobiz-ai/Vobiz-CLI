@@ -23,6 +23,7 @@ describe("download writers", () => {
     expect(r.code, r.err).toBe(0);
     expect(readFileSync(victim, "utf8")).toBe("original");
     expect(lstatSync(out).isFile()).toBe(true);
+    // The lstat above is what this test checks (the download landed as a regular file, not through the planted .part symlink); it is not a guard for this read.
     expect(readFileSync(out, "utf8")).toBe("AUDIO");
     expect(readdirSync(dir).sort()).toEqual(["rec.wav", "rec.wav.part", "victim.txt"]);
   });

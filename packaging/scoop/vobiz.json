@@ -1,13 +1,13 @@
 {
-  "version": "0.1.2",
+  "version": "0.1.0",
   "description": "Official Vobiz CLI: voice calls, SMS, phone numbers, SIP trunks and VobizXML",
   "homepage": "https://www.vobiz.ai/docs/resources/cli",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/vobiz-ai/Vobiz-CLI/releases/download/v0.1.2/vobiz-0.1.2-win-x64.zip",
-      "hash": "410b826b443476cebf8623da46721f4083a9e135db14f667a07bdaac18002c3b",
-      "extract_dir": "vobiz-0.1.2-win-x64"
+      "url": "https://github.com/vobiz-ai/Vobiz-CLI/releases/download/v0.1.0/vobiz-0.1.0-win-x64.zip",
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "extract_dir": "vobiz-0.1.0-win-x64"
     }
   },
   "bin": "vobiz.exe",

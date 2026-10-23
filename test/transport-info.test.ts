@@ -17,9 +17,9 @@ describe("transport input checks", () => {
     expect(isPlainVersion("1.2.3")).toBe(true);
     expect(isPlainVersion("1.2.3-beta.1")).toBe(true);
     expect(isPlainVersion("9.9.9\x1b]0;pwned\x07")).toBe(false);
-    const evil = fakeFetch({ "GET /-/package/@vobiz%2fcli/dist-tags": { latest: "9.9.9\x1b[2J" }, "GET /-/package/@vobiz/cli/dist-tags": { latest: "9.9.9\x1b[2J" } });
+    const evil = fakeFetch({ "GET /-/package/%40vobiz%2Fcli/dist-tags": { latest: "9.9.9\x1b[2J" }, "GET /-/package/@vobiz/cli/dist-tags": { latest: "9.9.9\x1b[2J" } });
     expect(await fetchLatestVersion(evil.fetch)).toBeUndefined();
-    const good = fakeFetch({ "GET /-/package/@vobiz%2fcli/dist-tags": { latest: "9.9.9" }, "GET /-/package/@vobiz/cli/dist-tags": { latest: "9.9.9" } });
+    const good = fakeFetch({ "GET /-/package/%40vobiz%2Fcli/dist-tags": { latest: "9.9.9" }, "GET /-/package/@vobiz/cli/dist-tags": { latest: "9.9.9" } });
     expect(await fetchLatestVersion(good.fetch)).toBe("9.9.9");
   });
 

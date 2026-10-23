@@ -3,7 +3,7 @@ import { checkForUpdate, compareVersions } from "../src/core/update.js";
 import { CLI_VERSION } from "../src/core/version.js";
 import { fakeFetch, makeCtx } from "./helpers.js";
 
-const registry = (latest: string) => fakeFetch({ "GET /-/package/@vobiz%2fcli/dist-tags": { latest } });
+const registry = (latest: string) => fakeFetch({ "GET /-/package/%40vobiz%2Fcli/dist-tags": { latest } });
 
 describe("update notifier", () => {
   it("compares versions", () => {

@@ -190,7 +190,7 @@ The contract agents rely on: data on stdout, everything else on stderr; `--outpu
 - **No blind retries.** Side-effecting requests are never retried. A timeout or 5xx on a write exits `7`; `sms send` prints an idempotency key you can reuse; `calls create` has none, so check `vobiz calls list --queued` and `vobiz cdr recent` first.
 - **Bounded fan-out.** At most 50 distinct destinations per `calls create` or `sms send` unless you raise `--max-fanout`.
 - **Credentials stay home.** Sent only to `https://*.vobiz.ai`; never printed, logged or written into project files; stored 0600. `vobiz doctor` checks all of it.
-- **HTTPS only** for answer, callback and stream URLs. **No telemetry** unless you turn it on.
+- **HTTPS only** for answer, callback and stream URLs. **No telemetry:** the CLI connects only to the Vobiz API, the Vobiz Docs MCP server (`docs search`), the npm registry (a daily version check, off in CI or with `--no-update-check`) and URLs you pass it.
 
 ## Exit codes
 

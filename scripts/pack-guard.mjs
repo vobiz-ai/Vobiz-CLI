@@ -5,6 +5,7 @@
 //   1. dist/index.js exists (`npm run build` ran).
 //   2. No dist/internal/** file would be packed: a maintainer build may compile src/internal, and the
 //      `vobiz internal …` group must never ship. package.json `files` excludes it; this re-checks the real pack list.
+//   3. The documents every package must carry (README, CHANGELOG, LICENSE) are in the pack list.
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -26,4 +27,6 @@ if (!files.length) fail("npm pack --dry-run listed no files.");
 const internal = files.filter((p) => p.startsWith("dist/internal/") || p.startsWith("src/"));
 if (internal.length) fail(`refusing to pack internal files:\n  ${internal.join("\n  ")}\nKeep "!dist/internal/**" in package.json "files".`);
 if (files.some((p) => /(^|\/)\.env(\.|$)/.test(p))) fail("refusing to pack a .env file.");
+const missing = ["README.md", "CHANGELOG.md", "LICENSE", "dist/index.js"].filter((p) => !files.includes(p));
+if (missing.length) fail(`the package would not include ${missing.join(", ")}; add it to package.json "files".`);
 process.stderr.write(`pack-guard: ok (${files.length} files, no dist/internal)\n`);

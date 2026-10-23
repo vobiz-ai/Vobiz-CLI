@@ -155,7 +155,7 @@ export function register(program: Command, ctx: Ctx): void {
     .option("--list", "list every operation in the spec")
     .option("--tag <tag>", "with --list: only operations with this tag (case-insensitive)")
     .option("--describe <operationId>", "show the parameters and body of one operation (sms:<id> or voice:<id> when ambiguous)")
-    .option("--max-fanout <n>", `allow more than 50 destinations in a body "to" field (API maximum ${API_MAX_FANOUT})`, intArg(1, API_MAX_FANOUT))
+    .option("--max-fanout <n>", `allow this many destinations in a body "to" field (default 50, API maximum ${API_MAX_FANOUT}); each is a separate billed call`, intArg(1, API_MAX_FANOUT))
     .addHelpText(
       "after",
       "\nExamples:\n  vobiz api --list --tag Trunks\n  vobiz api --describe make-call\n  vobiz api GET /api/v1/auth/me\n  vobiz api GET '/api/v1/Account/{auth_id}/Call/' --param status=live\n  vobiz api GET /messages --sms --param limit=5",

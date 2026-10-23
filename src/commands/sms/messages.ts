@@ -148,7 +148,7 @@ function registerSend(sms: Command, ctx: Ctx): void {
     .option("--schedule-at <time>", "hold until this time: RFC 3339 (2026-11-01T09:00:00Z) or +30m, +2h, +1d")
     .option("--idempotency-key <key>", "reuse a key from an earlier attempt so a retry never sends twice (default: generated and printed)")
     .addOption(
-      new Option("--max-fanout <n>", `allow more than ${DEFAULT_MAX_RECIPIENTS} recipients in one command (each is billed); use sms broadcasts for bulk`).argParser(
+      new Option("--max-fanout <n>", `allow this many recipients (default ${DEFAULT_MAX_RECIPIENTS}); each is a separate billed message (use sms broadcasts for bulk)`).argParser(
         intArg("--max-fanout", 1, 100_000),
       ),
     )

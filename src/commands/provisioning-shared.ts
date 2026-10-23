@@ -255,18 +255,41 @@ function checkBodyUrls(body: Record<string, unknown>, fromFlags: Record<string, 
 
 export interface QuerySpec {
   fields: FieldSpec[];
+  /** The spec's date-window params that --from/--to (the CLI-wide names) also set. */
+  window?: { from: string; to: string };
 }
+
+const WHEN = "(today, yesterday, 7d, 2026-10-01 or ISO)";
 
 /** Flags for the filter query params of `op` (pagination params are handled by --limit/--all). */
 export function addQueryOptions(cmd: Command, op: Operation, skip: string[] = []): QuerySpec {
   const params = op.queryParams.filter((p) => !PAGINATION_PARAMS.has(p.name) && !skip.includes(p.name));
-  return { fields: addParamOptions(cmd, params, (p) => (/_date$/.test(p.name) ? " (today, 7d, 2026-10-01)" : "")) };
+  const fields = addParamOptions(cmd, params, (p) => (/_date$/.test(p.name) ? ` ${WHEN}` : ""));
+  // Date windows are --from/--to everywhere else (cdr, account transactions, recordings export): offer the same
+  // names here, next to the spec's own --start-date/--end-date or --from-date/--to-date.
+  const names = new Set(params.map((p) => p.name));
+  const pair = [["start_date", "end_date"], ["from_date", "to_date"]].find(([a, b]) => names.has(a) && names.has(b));
+  const window = pair && !names.has("from") && !names.has("to") ? { from: pair[0], to: pair[1] } : undefined;
+  if (window) {
+    cmd.option("--from <when>", `start date, same as --${kebab(window.from)} ${WHEN}`);
+    cmd.option("--to <when>", `end date, same as --${kebab(window.to)}`);
+  }
+  return { fields, window };
 }
 
 export function buildQuery(ctx: Ctx, opts: Opts, spec: QuerySpec): Record<string, unknown> {
   const q: Record<string, unknown> = {};
+  const o: Opts = { ...opts };
+  if (spec.window) {
+    for (const [alias, name] of [["from", spec.window.from], ["to", spec.window.to]] as const) {
+      if (o[alias] === undefined) continue;
+      const attr = camel(kebab(name));
+      if (o[attr] !== undefined) throw usage(`--${alias} and --${kebab(name)} set the same date; pass one.`);
+      o[attr] = o[alias];
+    }
+  }
   for (const f of spec.fields) {
-    let v = opts[f.attr];
+    let v = o[f.attr];
     if (v === undefined) continue;
     if (/_date$/.test(f.name) && typeof v === "string") v = toYmd(parseTime(v, ctx.now()));
     q[f.name] = Array.isArray(v) ? v.join(",") : v;

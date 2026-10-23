@@ -1766,12 +1766,14 @@ vobiz partner accounts cdrs <customer-auth-id> [options]
 |---|---|
 | `--limit <n>` | return at most this many items |
 | `--all` | fetch every page |
-| `--start-date <value>` | start date (today, 7d, 2026-10-01) |
-| `--end-date <value>` | end date (today, 7d, 2026-10-01) |
+| `--start-date <value>` | start date (today, yesterday, 7d, 2026-10-01 or ISO) |
+| `--end-date <value>` | end date (today, yesterday, 7d, 2026-10-01 or ISO) |
 | `--call-direction <value>` | call direction (one of: `inbound`, `outbound`) |
 | `--status <value>` | status (one of: `answered`, `failed`, `busy`, `no_answer`) |
 | `--min-duration <n>` | min duration |
 | `--hangup-cause <value>` | hangup cause |
+| `--from <when>` | start date, same as --start-date (today, yesterday, 7d, 2026-10-01 or ISO) |
+| `--to <when>` | end date, same as --end-date |
 
 ### vobiz partner accounts create
 
@@ -1843,9 +1845,11 @@ vobiz partner accounts transactions <customer-auth-id> [options]
 |---|---|
 | `--limit <n>` | return at most this many items |
 | `--all` | fetch every page |
-| `--from-date <value>` | from date (today, 7d, 2026-10-01) |
-| `--to-date <value>` | to date (today, 7d, 2026-10-01) |
+| `--from-date <value>` | from date (today, yesterday, 7d, 2026-10-01 or ISO) |
+| `--to-date <value>` | to date (today, yesterday, 7d, 2026-10-01 or ISO) |
 | `--transaction-type <value>` | transaction type (one of: `recharge`, `debit`, `refund`, `transfer`) |
+| `--from <when>` | start date, same as --from-date (today, yesterday, 7d, 2026-10-01 or ISO) |
+| `--to <when>` | end date, same as --to-date |
 
 ### vobiz partner accounts transfer-balance
 

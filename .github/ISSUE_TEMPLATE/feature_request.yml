@@ -1,0 +1,11 @@
+name: Feature request
+description: Suggest a new command, flag or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: What do you want to do?, description: "The task you want to run on Vobiz from your terminal, a script or CI." }
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes: { label: Proposed command or change, description: "Command name, flags, and the Vobiz API endpoint it would use, if you know it." }

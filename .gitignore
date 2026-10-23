@@ -1,0 +1,23 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.claude/*
+!.claude/skills/
+*.log
+*.tmp
+.DS_Store
+.vscode/
+.idea/
+bin/
+node_modules
+
+# Generated at build time (npm run build:assets); shipped in npm, Homebrew and release archives.
+completions/
+man/
+.manual-test/

@@ -1,0 +1,32 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`numbers list/get/search/health > lists numbers with a search filter and prints the raw body as json 1`] = `
+{
+  "items": [
+    {
+      "application_id": "2057",
+      "country": "IN",
+      "currency": "INR",
+      "e164": "+919876543210",
+      "id": "n1",
+      "monthly_fee": 300,
+      "region": "Karnataka",
+      "setup_fee": 100,
+      "status": "active",
+    },
+    {
+      "country": "IN",
+      "currency": "INR",
+      "e164": "+9198765432101",
+      "id": "n2",
+      "monthly_fee": 200,
+      "region": "Mumbai",
+      "setup_fee": 100,
+      "status": "active",
+    },
+  ],
+  "page": 1,
+  "per_page": 25,
+  "total": 2,
+}
+`;

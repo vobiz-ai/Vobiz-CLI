@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<Response>
+  <Speak language="xx-YY" volume="3">Hi</Speak>
+  <Gather timeout="10" finishOnKey="" inputType="dtmf">
+    <Speak>Press</Speak>
+    <Dial><Number>12</Number></Dial>
+  </Gather>
+  <Hangup/>
+  <play>https://example.com/a.mp3</play>
+  <Stream bidirectional="yes">wss://ai.example.com/s</Stream>
+</Response>

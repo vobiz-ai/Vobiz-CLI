@@ -6,6 +6,12 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-23
+
+### Fixed
+
+- The release workflow publishes the packed tarball by an explicit `./pack/...` path. npm read the bare `pack/vobiz-cli-<version>.tgz` as a GitHub `owner/repo` shorthand and tried to clone it, so 0.1.1 never reached npm. 0.1.2 is the first version on npm; it is otherwise identical to 0.1.1.
+
 ## [0.1.1] - 2026-10-23
 
 ### Added
@@ -79,6 +85,7 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 - CI on Node.js 22 and 24 (lint, build, tests, spec and docs drift, package and Docker smoke tests, a standalone
   binary build), CodeQL, OpenSSF Scorecard and Dependabot.
 
-[Unreleased]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vobiz-ai/Vobiz-CLI/releases/tag/v0.1.0

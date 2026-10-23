@@ -94,9 +94,9 @@ profile         default
 | `trunks` | SIP trunks, credentials, IP access lists, origination URIs | `vobiz trunks credentials create --username pbx --password @-` |
 | `apps`, `endpoints` | voice applications (answer URLs) and SIP endpoints | `vobiz apps create --app-name ivr --answer-url https://… --answer-method POST` |
 | `sub-accounts`, `partner` | sub-accounts and KYC; the reseller partner API | `vobiz sub-accounts create --name "Mumbai team"` |
-| `sms` | send, delivery, conversations, opt-outs, webhooks, broadcasts, RCS senders, US 10DLC | `vobiz sms send --from +1… --to +1… --text "Hi" --wait` |
+| `sms` | send, delivery, conversations, opt-outs, webhooks (callbacks), broadcasts, RCS senders, US 10DLC | `vobiz sms send --from +1… --to +1… --text "Hi" --wait` |
 | `xml` | build, validate and locally serve VobizXML | `vobiz xml build --say "Hello" --gather https://…/next` |
-| `webhooks` | verify Vobiz signatures, receive webhooks locally | `vobiz webhooks listen --forward http://localhost:3000/hook --secret @-` |
+| `webhooks` | verify Vobiz webhook signatures, receive webhooks locally | `vobiz webhooks listen --forward http://localhost:3000/hook --secret @-` |
 | `diagnose` | explain why a call or message ended the way it did | `vobiz diagnose call <uuid>` |
 | `streams` | test and proxy the WebSocket server behind `<Stream>` | `vobiz streams test wss://agent.example.com/audio` |
 | `setup` | guided: a number for your AI voice agent, or a number plus webhook for SMS | `vobiz setup voice-agent --number +91… --trunk <id>` |

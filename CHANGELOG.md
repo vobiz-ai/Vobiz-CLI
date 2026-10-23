@@ -6,13 +6,32 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- Usage errors from argument parsing (unknown option or command, missing argument) print the same one-line JSON
+  error as every other failure (`invalid_input`, exit 2) when output is JSON (piped stdout, `--json`,
+  `-o json|jsonl|yaml`); text mode is unchanged.
+- `webhooks verify`, `webhooks listen` and `setup sms` read `--secret @file` and `--secret @-` (stdin) like every
+  other secret flag; before, the value was used literally.
+- `streams test` accepts `ws://` on localhost without `--allow-insecure-url`, and `--allow-insecure-url` now allows
+  a remote `ws://` server, the same rule as `streams forward`.
+- `partner accounts cdrs` and `partner accounts transactions` accept `--from`/`--to` for their date window, like
+  `cdr`, `account transactions` and `recordings export`.
+- The Docker image sets `VOBIZ_DOCKER=1`, so `vobiz update` suggests `docker pull`.
+- Help text: flag descriptions taken from the spec use the CLI's help voice and flag names, and deprecated aliases
+  read the same everywhere.
+
+### Security
+
+- `scripts/sync-skills.mjs` and `scripts/sync-spec.mjs` check status, content type and size of downloads, verify
+  the tag's commit, vet archive members before extracting and write only inside `skills/` or `spec/`; the path
+  template filler and the `recordings export --email` check run in linear time.
 
 ## [0.1.0] - 2026-10-23
 
 ### Added
 
-- `vobiz` command tree (277 commands) covering every operation in the Vobiz Voice and Messaging OpenAPI documents:
+- `vobiz` command tree (278 commands) covering every operation in the Vobiz Voice and Messaging OpenAPI documents:
   `login`/`logout`/`whoami`/`profiles`/`config`/`doctor`, `account`, `calls` (create with `--wait`, in-call control,
   audio streams, `watch`), `conferences`, `recordings`, `cdr`, `numbers`, `trunks` (credentials, IP ACLs, origination
   URIs), `apps`, `endpoints`, `sub-accounts` (KYC, test mode), `partner`, the full `sms` tree (send with cost preview

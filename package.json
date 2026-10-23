@@ -11,7 +11,7 @@
   "bin": { "vobiz": "dist/index.js" },
   "main": "dist/cli.js",
   "man": "./man/vobiz.1",
-  "files": ["dist/**/*.js", "!dist/internal/**", "spec/*.yaml", "skills/**", "README.md", "LICENSE", "completions/**", "man/**"],
+  "files": ["dist/**/*.js", "!dist/internal/**", "spec/*.yaml", "skills/**", "README.md", "CHANGELOG.md", "LICENSE", "completions/**", "man/**"],
   "engines": { "node": ">=22.12" },
   "repository": { "type": "git", "url": "git+https://github.com/vobiz-ai/Vobiz-CLI.git" },
   "publishConfig": { "access": "public", "provenance": true },

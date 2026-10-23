@@ -20,13 +20,18 @@ spec/                    the vendored Vobiz Voice and Messaging OpenAPI document
 
 - **Spec-driven.** Every HTTP call resolves an operation by id: `ctx.client.call(op("make-call"), { path, query, body })`.
   `op()` fails at startup if the id is missing, so a spec rename breaks the build, not a user. Behaviour the spec does
-  not describe goes to [SPEC-GAPS.md](SPEC-GAPS.md), not into code.
+  not describe stays out of the code until the spec describes it.
 - **Nouns and verbs.** `vobiz <noun> <verb>`: plural nouns (`numbers`, `trunks`), standard verbs
   (`list get create update delete`) plus domain verbs (`calls hangup`, `numbers buy`). Ids are positional, flags are
   kebab-case, phone numbers are E.164.
 - **Your account only.** Account paths come from the resolved Auth ID; no command accepts an account id.
 - **Lists.** `--limit` caps the number of records, `--all` follows pagination; single-page endpoints apply `--limit`
   on the client.
+
+## Operations not yet in the CLI
+
+These operations join the CLI once they are in the vendored OpenAPI documents: call transfer (`calls transfer`) and
+number tags (`numbers update --tags`).
 
 ## Safety model
 

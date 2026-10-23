@@ -1,11 +1,11 @@
 /**
  * Contract between the vendored spec, the command tree and the docs:
  *   - every spec operation is reached by some command (an `op("<id>")` reference in src/) or is listed in
- *     docs/SPEC-GAPS.md;
+ *     docs/internal/SPEC-GAPS.md;
  *   - every command and option is documented, no command option shadows a global flag, and every leaf's
  *     --help works.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Option } from "commander";
@@ -28,7 +28,9 @@ function sources(dir: string): string[] {
 const SRC = sources(join(ROOT, "src")).map((file) => ({ file, text: readFileSync(file, "utf8") }));
 const REFERENCED = new Set<string>();
 for (const { text } of SRC) for (const m of text.matchAll(/\bop\("([^"]+)"\)/g)) REFERENCED.add(m[1]);
-const GAPS = readFileSync(join(ROOT, "docs", "SPEC-GAPS.md"), "utf8");
+// The gap list is maintainer-only; without it every operation must be reached by a command.
+const GAPS_FILE = join(ROOT, "docs", "internal", "SPEC-GAPS.md");
+const GAPS = existsSync(GAPS_FILE) ? readFileSync(GAPS_FILE, "utf8") : "";
 
 const program = () => buildProgram(makeCtx().ctx);
 const tree = listCommandTree(program());
@@ -45,7 +47,7 @@ describe("spec coverage", () => {
   });
 
   for (const o of OPERATIONS) {
-    it(`${o.api}:${o.id} is reached by a command or listed in SPEC-GAPS.md`, () => {
+    it(`${o.api}:${o.id} is reached by a command or listed in the gap list`, () => {
       const used = REFERENCED.has(o.id) || REFERENCED.has(`${o.api}:${o.id}`);
       const gap = GAPS.includes(`\`${o.id}\``);
       expect(used || gap, `${o.method} ${o.path}`).toBe(true);

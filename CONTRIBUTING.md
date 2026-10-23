@@ -4,7 +4,7 @@ Thanks for helping make the Vobiz CLI better. Bug reports, fixes, new commands a
 
 ## Ground rules
 
-- **Spec first.** Every HTTP call comes from an operation in the vendored OpenAPI documents in `spec/` (`ctx.client.call(op("<operationId>"), …)`). Don't invent fields or paths. If the API does something the spec does not describe, add an entry to [`docs/SPEC-GAPS.md`](docs/SPEC-GAPS.md) instead. `npm run spec:sync` refreshes `spec/` from the published Vobiz docs.
+- **Spec first.** Every HTTP call comes from an operation in the vendored OpenAPI documents in `spec/` (`ctx.client.call(op("<operationId>"), …)`). Don't invent fields or paths. If you need something the spec does not describe, leave it out and describe it in the pull request or an issue. `npm run spec:sync` refreshes `spec/` from the published Vobiz docs.
 - **Safe by default.** Any command that spends money, contacts a real person, or changes or deletes something must:
   - go through `requireConfirmation` (prompt on a terminal, exit code 6 without `--yes` otherwise)
   - support `--dry-run`

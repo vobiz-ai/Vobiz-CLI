@@ -231,7 +231,7 @@ npm run check          # lint, build, 1,900+ tests
 npm run dev -- --help
 ```
 
-Commands are generated from the OpenAPI documents in `spec/`; [CONTRIBUTING.md](CONTRIBUTING.md) explains how to add one, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) the conventions, [docs/RELEASING.md](docs/RELEASING.md) the release pipeline, and [docs/SPEC-GAPS.md](docs/SPEC-GAPS.md) what the spec does not cover yet.
+Commands are generated from the OpenAPI documents in `spec/`; [CONTRIBUTING.md](CONTRIBUTING.md) explains how to add one, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) the conventions, and [docs/RELEASING.md](docs/RELEASING.md) the release pipeline.
 
 ## Built by Team Vobiz
 

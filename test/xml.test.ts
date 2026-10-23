@@ -257,7 +257,7 @@ describe("xml serve", () => {
   });
 });
 
-describe("xml hardening (S3 #9, #18)", async () => {
+describe("xml hardening", async () => {
   const { parseXml, escapeXml } = await import("../src/agent/xml.js");
   it("xml build rejects C0 control characters in text and attributes", async () => {
     expect(() => escapeXml("hi\x01")).toThrow(/U\+0001/);

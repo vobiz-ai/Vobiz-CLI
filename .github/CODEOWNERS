@@ -1,5 +1,5 @@
-# Code owners. The ruleset in deploy/github/ruleset-main.json requires a code-owner review and re-approval after
-# the last push, so these entries are enforced once the ruleset is applied (see docs/internal/security/OWNER-ACTIONS.md).
+# Code owners. The branch ruleset on main requires a code-owner review and re-approval after the last push, so
+# these entries are enforced (see "Branch ruleset on main" in docs/RELEASING.md).
 # Both owners resolve today: voice_team_admins has admin on vobiz-ai/Vobiz-CLI. Later lines win.
 * @vobiz-ai/voice_team_admins @Piyush-sahoo
 

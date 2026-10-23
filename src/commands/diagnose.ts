@@ -284,7 +284,7 @@ export function printDiagnosis(ctx: Ctx, d: Diagnosis): void {
   ctx.stdout.write(lines.join("\n") + "\n");
 }
 
-/** Third-party text in diagnosed records (S6 #4). */
+/** Third-party text in diagnosed records. */
 const DIAGNOSE_UNTRUSTED = [...CALLER_KEYS, ...RESOURCE_NAME_KEYS, ...MESSAGE_TEXT_KEYS];
 
 export function register(program: Command, ctx: Ctx): void {

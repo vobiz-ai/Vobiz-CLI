@@ -102,7 +102,7 @@ describe("partner", () => {
   });
 });
 
-describe("--secret-file is created before the request (S3 #12)", async () => {
+describe("--secret-file is created before the request", async () => {
   const fs = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const path = await import("node:path");

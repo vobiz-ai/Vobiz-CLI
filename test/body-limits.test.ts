@@ -12,7 +12,7 @@ const streamOf = (chunks: number, size: number, delayMs = 0) =>
     },
   });
 
-describe("response size caps (S2 #10, #11)", () => {
+describe("response size caps", () => {
   it("readBodyCapped stops past the limit and trusts a large Content-Length up front", async () => {
     await expect(readBodyCapped(new Response(streamOf(10, 1000)), 5000)).rejects.toMatchObject({ kind: "unexpected_response" });
     expect((await readBodyCapped(new Response(streamOf(4, 1000)), 5000)).length).toBe(4000);

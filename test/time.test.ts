@@ -44,7 +44,7 @@ describe("phone", () => {
   });
 });
 
-describe("toE164 strictness (S3 #8)", () => {
+describe("toE164 strictness", () => {
   it("rejects characters it would otherwise drop", () => {
     for (const bad of ["+1 415 555 0100 #2", "+1 415 555 0100 / 7", "+44 20 7946 0958 (×3)", "+91９876543210", "+91​98765٣ 43210", "+91+9876543210", "91 98765 43210+", "+1\t4155550100"])
       expect(() => toE164(bad), JSON.stringify(bad)).toThrow(/ASCII digits/);
@@ -55,7 +55,7 @@ describe("toE164 strictness (S3 #8)", () => {
   });
 });
 
-describe("time parsing bounds (S3 #13)", () => {
+describe("time parsing bounds", () => {
   const now = new Date("2026-10-22T12:00:00Z");
   it("rejects absurd relative offsets instead of sending NaN", () => {
     expect(() => parseTime("99999999999999d", now)).toThrow(/too far/);

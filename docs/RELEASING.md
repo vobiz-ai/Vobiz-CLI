@@ -12,7 +12,7 @@ A release is one tag. Pushing `vX.Y.Z` runs [`release.yml`](../.github/workflows
 | `homebrew` | PR to `vobiz-ai/homebrew-tap` | Stable releases only; skipped with a notice until `TAP_PUSH_TOKEN` exists |
 | `scoop` | `packaging/scoop/vobiz.json` on `main` | Stable releases only; opens a PR instead if the branch ruleset rejects the push |
 
-The workflow runs only in `vobiz-ai/Vobiz-CLI` (never in the internal mirror) and only for tags.
+The workflow runs only in `vobiz-ai/Vobiz-CLI` (never in forks or mirrors) and only for tags.
 
 ## One-time setup (account owner)
 

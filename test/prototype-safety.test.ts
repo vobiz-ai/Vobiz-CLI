@@ -4,7 +4,7 @@ import { parseQueryPairs } from "../src/commands/api.js";
 import { getPath, project, queryPath } from "../src/core/output.js";
 import { fakeFetch, runCli } from "./helpers.js";
 
-describe("prototype safety (S3 #6, #11)", () => {
+describe("prototype safety", () => {
   it("--fields with __proto__ never pollutes Object.prototype", async () => {
     const api = fakeFetch({ "GET /api/v1/x": JSON.parse('{"meta":{"__proto__":{"isAdmin":true}}}') });
     const r = await runCli(["api", "GET", "/api/v1/x", "--fields", "meta.__proto__.isAdmin", "--json"], { fetch: api.fetch });

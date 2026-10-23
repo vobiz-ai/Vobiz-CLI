@@ -206,7 +206,7 @@ describe("client config paths", () => {
   });
 });
 
-describe("mcp install path safety (S3 #1, #11, #14, #15)", () => {
+describe("mcp install path safety", () => {
   const posix = process.platform !== "win32";
 
   it.runIf(posix)("refuses a symlinked config and never reads or replaces it", async () => {

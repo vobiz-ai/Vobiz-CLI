@@ -50,7 +50,8 @@ const words = (name: string): string =>
     .split(/_+/)
     .filter(Boolean)
     .map((w) => (w.toLowerCase() === "ipacl" ? "IP ACL" : ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w))
-    .join(" ");
+    .join(" ")
+    .replace(/\bauth ID\b/i, "Auth ID");
 
 /**
  * First sentence of a spec description, in the CLI's help voice: no markdown emphasis, lower-case start (unless it
@@ -63,7 +64,10 @@ function shortDescription(p: Param, fields: ReadonlySet<string> = new Set()): st
   first = first
     .replace(/^Deprecated\s+[-–—:]\s+use\b/i, "deprecated: use")
     .replace(/`([a-z][a-z0-9_]*)`/g, (m, name: string) => (fields.has(name) ? `--${kebab(name)}` : m))
-    .replace(/\.$/, "");
+    .replace(/\.$/, "")
+    // The product's credential name, and the one operationId the spec cites in prose, as a user sees them.
+    .replace(/(^|[^`_a-z])auth_id\b/g, "$1Auth ID")
+    .replace(/\(from create-customer-account\)/, "(from `partner accounts create`)");
   if (/^optional$/i.test(first)) first = "";
   // Lower-case the first word unless it is an acronym ("URL", "SIP"), a mixed-case name ("VobizXML") or a proper noun.
   first = first.replace(/^([A-Z])([a-z]+)\b/, (m, a: string, rest: string) => (ACRONYMS.has(m.toLowerCase()) || PROPER.has(m) ? m : a.toLowerCase() + rest));

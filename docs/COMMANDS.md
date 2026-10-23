@@ -1898,7 +1898,7 @@ vobiz partner kyc-sessions create [options]
 
 | Option | Description |
 |---|---|
-| `--account-auth-id <value>` | customer's auth_id (from create-customer-account) (required) |
+| `--account-auth-id <value>` | customer's Auth ID (from `partner accounts create`) (required) |
 | `--flow-type <value>` | delivery mode (default: email) (one of: `email`, `redirect`) |
 | `--customer-email <value>` | required when --flow-type is `email` |
 | `--redirect-url <value>` | required when --flow-type is `redirect` |
@@ -1935,7 +1935,7 @@ Aliases: `ls`
 | `--limit <n>` | return at most this many items |
 | `--all` | fetch every page |
 | `--status <value>` | status (one of: `email_sent`, `link_ready`, `opened`, `in_progress`, `kyc_completed`, `revoked`) |
-| `--account-auth-id <value>` | account auth ID |
+| `--account-auth-id <value>` | account Auth ID |
 
 ### vobiz partner kyc-sessions resend
 
@@ -3915,7 +3915,7 @@ vobiz sub-accounts kyc session create <sub-auth-id> [options]
 
 | Option | Description |
 |---|---|
-| `--account-auth-id <value>` | the sub-account's auth_id (typically equal to the path `sub_auth_id`) (required) |
+| `--account-auth-id <value>` | the sub-account's Auth ID (typically equal to the path `sub_auth_id`) (required) |
 | `--flow-type <value>` | flow type (required) (default: email) (one of: `email`, `redirect`) |
 | `--customer-email <value>` | required when --flow-type is `email` |
 | `--redirect-url <value>` | required when --flow-type is `redirect` |

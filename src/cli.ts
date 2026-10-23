@@ -148,6 +148,13 @@ export function buildProgram(ctx: Ctx): Command {
   });
 
   for (const register of COMMAND_GROUPS) register(program, ctx);
+  // Commander's built-in "help" subcommand and -h option use its own lower-case wording; match the CLI's voice.
+  const polish = (cmd: Command) => {
+    cmd.helpOption("-h, --help", "show help for this command");
+    if (cmd !== program && cmd.commands.length) cmd.helpCommand("help [command]", "Show help for a command");
+    cmd.commands.forEach(polish);
+  };
+  polish(program);
   return program;
 }
 

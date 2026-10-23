@@ -40,7 +40,7 @@ Options:
                                  redacted (env: VOBIZ_LOG=debug)
   --no-update-check              skip the daily version check (env:
                                  VOBIZ_NO_UPDATE_CHECK, CI)
-  -h, --help                     display help for command
+  -h, --help                     show help for this command
 
 Commands:
   login [options]                Save and verify a Vobiz Auth ID and Auth Token

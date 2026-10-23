@@ -1,6 +1,6 @@
 {
   "name": "@vobiz/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Official Vobiz CLI: voice calls, in-call control, conferences, SMS/MMS/RCS, phone numbers, SIP trunks, VobizXML, call records, sub-accounts and the Vobiz Agent Skills, from your terminal and CI.",
   "keywords": ["vobiz", "cli", "telephony", "voice-api", "sms", "rcs", "sip-trunking", "ivr", "vobizxml", "ai-agents", "mcp"],
   "homepage": "https://www.vobiz.ai/docs/resources/cli",

@@ -654,6 +654,8 @@ Aliases: `ls`
 |---|---|
 | `--queued` | list queued calls (placed, not yet connected; max 20) instead of live ones |
 | `--details` | fetch each call's details (one request per call) |
+| `--limit <n>` | return at most this many items |
+| `--all` | fetch every page |
 
 ### vobiz calls play
 

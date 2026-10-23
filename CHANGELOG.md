@@ -6,6 +6,8 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-23
+
 ### Added
 
 - `sms send --max-wait <seconds>` bounds `--wait` (default: `--timeout`), like `calls create --max-wait`.
@@ -25,6 +27,24 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 - The Docker image sets `VOBIZ_DOCKER=1`, so `vobiz update` suggests `docker pull`.
 - Help text: flag descriptions taken from the spec use the CLI's help voice and flag names, and deprecated aliases
   read the same everywhere.
+- `calls list` accepts `--limit` and `--all` like every other list; the live and queued call endpoints return one
+  page, so `--limit` trims it in the CLI.
+- `vobiz update` reports `install_method: "source"` (and suggests `git pull && npm ci && npm run build`) when it runs
+  from a git checkout.
+- New public `docs/ARCHITECTURE.md` (command tree conventions, safety model, output modes, exit codes), linked from the
+  README, CONTRIBUTING and CLAUDE.md.
+- `scripts/pack-guard.mjs` fails the pack when README, CHANGELOG or LICENSE would be missing from the package.
+
+### Fixed
+
+- `--dry-run` is honoured by local writes: `config set`/`unset`, `profiles use`/`rename`, `login` and `logout` print
+  a `[dry-run]` line and the change, and write nothing (`profiles remove`, `skills install`/`update` and
+  `mcp install` already did).
+- `vobiz completion bash` scoped value completion per command: a flag shared by several commands (`--status`,
+  `--type`, `--format`, `--direction`) offered the first command's values everywhere.
+- The "come from third parties" note on stderr names only fields that are printed: `cdr` with `--fields` or `--query`
+  that leave `caller_id_name` out, and tables whose columns leave the field out, no longer print it.
+- Public test, script and source comments no longer carry internal review labels.
 
 ### Security
 
@@ -59,5 +79,6 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 - CI on Node.js 22 and 24 (lint, build, tests, spec and docs drift, package and Docker smoke tests, a standalone
   binary build), CodeQL, OpenSSF Scorecard and Dependabot.
 
-[Unreleased]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/vobiz-ai/Vobiz-CLI/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vobiz-ai/Vobiz-CLI/releases/tag/v0.1.0

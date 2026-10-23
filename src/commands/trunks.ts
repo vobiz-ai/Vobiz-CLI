@@ -10,8 +10,8 @@ import { crud, examples, type FlagAlias } from "./provisioning-shared.js";
 
 /** The API reads `uri` and `description`; `sip_uri` and `name` are accepted with 200 but ignored (live 2026-10-22). */
 const ORIGINATION_URI_ALIASES: FlagAlias[] = [
-  { flag: "sip-uri", to: "uri", deprecated: true, description: "SIP URI of the destination." },
-  { flag: "name", to: "description", deprecated: true, description: "Label for the origination URI." },
+  { flag: "sip-uri", to: "uri", deprecated: true, description: "SIP URI of the destination" },
+  { flag: "name", to: "description", deprecated: true, description: "label for the origination URI" },
 ];
 
 export function register(program: Command, ctx: Ctx): void {

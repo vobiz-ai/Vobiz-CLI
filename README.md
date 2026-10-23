@@ -12,19 +12,33 @@
 ```console
 $ npm install --global @vobiz/cli
 $ vobiz login
-✓ Logged in to Acme Corp (MA_XXXXXXXX) as profile "default"
+Find your Auth ID and Auth Token in the Vobiz console: https://console.vobiz.ai
+? Auth ID: MA_XXXXXXXX
+? Auth Token: ••••••••••••••••
+✓ Logged in to Acme Corp (MA_XXXXXXXX, main account). Saved profile "default" (default) to ~/.config/vobiz/credentials.json.
 
 $ vobiz account balance
-CURRENCY  BALANCE   AVAILABLE_BALANCE  STATUS
-INR       23906.83  23906.83           active
+FIELD              VALUE
+currency           INR
+balance            23906.83
+available_balance  23906.83
+status             active
+…
 
 $ vobiz calls create --from +918012345678 --to +919876543210 --answer-url https://example.com/answer --wait
 Place a call to +919876543210 (billed)
   account: MA_XXXXXXXX (profile "default")
+  to: +919876543210
   caller ID: +918012345678
   answer URL host: example.com
 ? Continue? (y/N) y
-call 4f5abfa8-…: queued → in-progress → ended   (5 s, answered, NORMAL_CLEARING, USD 0.05)
+call 4f5abfa8-…: queued
+call 4f5abfa8-…: in-progress
+call 4f5abfa8-…: ended
+FIELD      VALUE
+call_uuid  4f5abfa8-…
+status     ended
+…
 ```
 
 ## Why this CLI
@@ -58,29 +72,34 @@ Copy your **Auth ID** and **Auth Token** from the [Vobiz console](https://consol
 
 ```console
 $ vobiz whoami
-ACCOUNT    AUTH_ID      TYPE          SOURCE
-Acme Corp  MA_XXXXXXXX  main account  profile "default"
+FIELD           VALUE
+auth_id         MA_XXXXXXXX
+account_type    main account
+account_name    Acme Corp
+source          profile
+profile         default
+…
 ```
 
 ## What you can do
 
 | Group | Commands | Examples |
 |---|---|---|
-| `account` | details, balance, concurrency, transactions | `vobiz account transactions list --from 7d` |
+| `account` | profile, balance, concurrency, transactions, CPS and concurrency capacity | `vobiz account transactions list --from 7d` |
 | `calls` | create, list, get, watch, hang up, record, play, speak, DTMF, audio streams | `vobiz calls watch <uuid>` |
 | `conferences` | list, get, end, mute/deafen/kick members, record | `vobiz conferences members mute standup all` |
 | `recordings` | list, get, download, delete, bulk export | `vobiz recordings download <id> --out call.wav` |
 | `cdr` | list, search, recent, get, CSV export | `vobiz cdr export --from yesterday --out cdr.csv` |
 | `numbers` | list, search inventory, buy, release, route to a trunk, app or sub-account | `vobiz numbers update +91… --app <id>` |
-| `trunks` | SIP trunks, credentials, IP access lists, origination URIs | `vobiz trunks credentials create --trunk <id> --username pbx --password @-` |
-| `apps`, `endpoints` | voice applications (answer URLs) and SIP endpoints | `vobiz apps create --app-name ivr --answer-url https://…` |
+| `trunks` | SIP trunks, credentials, IP access lists, origination URIs | `vobiz trunks credentials create --username pbx --password @-` |
+| `apps`, `endpoints` | voice applications (answer URLs) and SIP endpoints | `vobiz apps create --app-name ivr --answer-url https://… --answer-method POST` |
 | `sub-accounts`, `partner` | sub-accounts and KYC; the reseller partner API | `vobiz sub-accounts create --name "Mumbai team"` |
 | `sms` | send, delivery, conversations, opt-outs, webhooks, broadcasts, RCS senders, US 10DLC | `vobiz sms send --from +1… --to +1… --text "Hi" --wait` |
 | `xml` | build, validate and locally serve VobizXML | `vobiz xml build --say "Hello" --gather https://…/next` |
 | `webhooks` | verify Vobiz signatures, receive webhooks locally | `vobiz webhooks listen --forward http://localhost:3000/hook --secret @-` |
 | `diagnose` | explain why a call or message ended the way it did | `vobiz diagnose call <uuid>` |
 | `streams` | test and proxy the WebSocket server behind `<Stream>` | `vobiz streams test wss://agent.example.com/audio` |
-| `setup` | guided: a number for your AI voice agent, or a number plus webhook for SMS | `vobiz setup voice-agent --trunk <id>` |
+| `setup` | guided: a number for your AI voice agent, or a number plus webhook for SMS | `vobiz setup voice-agent --number +91… --trunk <id>` |
 | `mcp`, `skills`, `docs` | connect AI clients to the Vobiz MCP server, install the Agent Skills, search the docs | `vobiz mcp install cursor` |
 | `api` | raw requests against any operation in the spec | `vobiz api GET /api/v1/auth/me` |
 
@@ -92,12 +111,15 @@ Every command and flag is in [docs/COMMANDS.md](docs/COMMANDS.md) and in `vobiz 
 
 ```console
 $ vobiz numbers search --country IN --limit 3
-E164           REGION  SETUP_FEE  MONTHLY_FEE  CURRENCY
-+918012345678  KA      0          1            INR
+E164           COUNTRY  REGION  SETUP_FEE  MONTHLY_FEE  CURRENCY
++918012345678  IN       KA      0          1            INR
 …
 $ vobiz numbers buy +918012345678
-Buy +918012345678 (setup INR 0, monthly INR 1)
+Buy +918012345678
   account: MA_XXXXXXXX (profile "default")
+  number: +918012345678
+  location: KA, IN
+  cost: INR 0 setup now, then INR 1/month
 ? Continue? (y/N) y
 $ vobiz setup voice-agent --number +918012345678 --answer-url https://agent.example.com/answer
 ```
@@ -107,26 +129,47 @@ $ vobiz setup voice-agent --number +918012345678 --answer-url https://agent.exam
 ```console
 $ vobiz cdr export --from 7d --out cdr.csv
 $ vobiz diagnose call 968fe850-fc3d-43e9-bafe-52caca895a83
-  hangup_cause: USER_BUSY (4010, "End Of XML Instructions") ended by Vobiz
-  The call was not answered (no answer time, 0 billable seconds). …
+…
+What happened:
+  - The call was not answered (no answer time, 0 billable seconds).
+  - Hangup code 3010, "Busy Line" (call rejection): Destination is busy.
+  - hangup_cause USER_BUSY: The called party is busy (already on another call or declined).
+  - Ended by: Callee.
+
+What to check next:
+  1. Retry later or implement voicemail fallback.
 ```
 
 **Send a message and follow it to delivery**
 
 ```console
 $ vobiz sms send --from +12628044436 --to +16478723288 --text "Your table is ready" --wait
-Send a real, billed SMS to 1 recipient (USD 0.01)
-  idempotency key: cli-88023521-…  (reuse with --idempotency-key to retry safely)
+Send a real, billed SMS to 1 recipient
+  account: MA_XXXXXXXX (profile "default")
+  from: +12628044436
+  to: +16478723288
+  recipients: 1
+  text: "Your table is ready" (19 characters)
+  idempotency key: cli-88023521-…
+  cost: USD 0.0079 for 1 recipient (1 segment each)
 ? Continue? (y/N) y
-status: sent
+Idempotency key: cli-88023521-… (pass --idempotency-key cli-88023521-… to retry without sending twice)
+Waiting for 1 message to reach a final status (queued)…
+ID         TO            STATUS     ERRORCODE  ERRORMESSAGE
+msg_01JB2  +16478723288  delivered
 ```
 
 **Pipe anything**
 
 ```console
-$ vobiz numbers list --output json --query '[*].e164' --quiet
+$ vobiz numbers list --quiet
 +918012345678
 +918012345679
+$ vobiz numbers list --json --query 'objects[*].e164'
+[
+  "+918012345678",
+  "+918012345679"
+]
 $ vobiz cdr recent --output tsv > calls.tsv
 ```
 
@@ -138,7 +181,7 @@ vobiz skills install                # copy the 15 Vobiz Agent Skills into .claud
 vobiz docs search "gather speech"   # search the Vobiz docs through the Docs MCP server, no credentials needed
 ```
 
-The contract agents rely on: data on stdout, everything else on stderr; `--output json` everywhere; errors as `{"error","message","status","retryable"}`; exit code `7` means "outcome unknown, check state before retrying"; third-party text (message bodies, caller names, webhook payloads) is marked with `_untrusted_fields`. [docs/AGENTS.md](docs/AGENTS.md) has copy-paste instructions for `CLAUDE.md` and `AGENTS.md` files.
+The contract agents rely on: data on stdout, everything else on stderr; `--output json` everywhere; errors as one JSON line `{"error","message","status","retryable","hint"}`; exit code `7` means "outcome unknown, check state before retrying"; third-party text (message bodies, caller names, webhook payloads) is marked with `_untrusted_fields`. [docs/AGENTS.md](docs/AGENTS.md) has copy-paste instructions for `CLAUDE.md` and `AGENTS.md` files.
 
 ## Safety model
 
@@ -160,8 +203,9 @@ The contract agents rely on: data on stdout, everything else on stderr; `--outpu
 | 4 | Not found |
 | 5 | Rate limited or insufficient balance |
 | 6 | Confirmation required (pass `--yes`) or not allowed |
-| 7 | Outcome unknown: a side-effecting request timed out or got a 5xx; check state before retrying |
-| 8 | Timeout or network error on a read |
+| 7 | Outcome unknown: a side-effecting request timed out, lost its connection or got a 5xx; check state before retrying |
+| 8 | Timeout or network error on a read (nothing was changed; safe to retry) |
+| 130 | Interrupted (Ctrl-C) |
 
 ## Configuration
 

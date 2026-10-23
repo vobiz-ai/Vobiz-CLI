@@ -40,8 +40,9 @@ Every command accepts the global options. Run `vobiz <command> --help` for the s
 | 4 | Not found. |
 | 5 | Rate limited or insufficient balance. |
 | 6 | Confirmation required (pass --yes) or the action is not allowed. |
-| 7 | Outcome unknown: a side-effecting request timed out. Check the state before retrying. |
-| 8 | Timeout or network error. |
+| 7 | Outcome unknown: a side-effecting request timed out, lost its connection or got a 5xx. Check the state before retrying. |
+| 8 | Timeout or network error on a read (nothing was changed; safe to retry). |
+| 130 | Interrupted (Ctrl-C). |
 
 ## Commands
 
@@ -461,7 +462,7 @@ vobiz api [method] [path] [options]
 | `--list` | list every operation in the spec |
 | `--tag <tag>` | with --list: only operations with this tag (case-insensitive) |
 | `--describe <operationId>` | show the parameters and body of one operation (sms:<id> or voice:<id> when ambiguous) |
-| `--max-fanout <n>` | allow more than 50 destinations in a body "to" field (API maximum 1000) |
+| `--max-fanout <n>` | allow this many destinations in a body "to" field (default 50, API maximum 1000); each is a separate billed call |
 
 ### vobiz apps
 
@@ -3369,7 +3370,7 @@ vobiz sms send [options]
 | `--tag <label>` | your label, stored on every message; filter `sms messages list --tag` by it |
 | `--schedule-at <time>` | hold until this time: RFC 3339 (2026-11-01T09:00:00Z) or +30m, +2h, +1d |
 | `--idempotency-key <key>` | reuse a key from an earlier attempt so a retry never sends twice (default: generated and printed) |
-| `--max-fanout <n>` | allow more than 50 recipients in one command (each is billed); use sms broadcasts for bulk |
+| `--max-fanout <n>` | allow this many recipients (default 50); each is a separate billed message (use sms broadcasts for bulk) |
 | `--failover-to-sms` | RCS only: send the text as SMS when RCS cannot be delivered |
 | `--rcs-suggestions <json>` | RCS only: suggestion buttons as a JSON array, @file.json or @- |
 | `--dlt-entity-id <id>` | India (TRAI DLT): Principal Entity ID |

@@ -1,0 +1,16 @@
+# Code owners. The ruleset in deploy/github/ruleset-main.json requires a code-owner review and re-approval after
+# the last push, so these entries are enforced once the ruleset is applied (see docs/internal/security/OWNER-ACTIONS.md).
+# Both owners resolve today: voice_team_admins has admin on vobiz-ai/Vobiz-CLI. Later lines win.
+* @vobiz-ai/voice_team_admins @Piyush-sahoo
+
+# Release, install and supply-chain surface: workflows, installers, build and packaging scripts, the package manifest.
+/.github/           @vobiz-ai/voice_team_admins @Piyush-sahoo
+/install.sh         @vobiz-ai/voice_team_admins @Piyush-sahoo
+/install.ps1        @vobiz-ai/voice_team_admins @Piyush-sahoo
+/scripts/           @vobiz-ai/voice_team_admins @Piyush-sahoo
+/Dockerfile         @vobiz-ai/voice_team_admins @Piyush-sahoo
+/package.json       @vobiz-ai/voice_team_admins @Piyush-sahoo
+/package-lock.json  @vobiz-ai/voice_team_admins @Piyush-sahoo
+/packaging/         @vobiz-ai/voice_team_admins @Piyush-sahoo
+/deploy/            @vobiz-ai/voice_team_admins @Piyush-sahoo
+/SECURITY.md        @vobiz-ai/voice_team_admins @Piyush-sahoo

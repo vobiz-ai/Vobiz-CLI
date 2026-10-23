@@ -1,0 +1,372 @@
+name: Release
+
+# Publishes a tagged version (git tag v1.2.3 && git push origin v1.2.3), see docs/RELEASING.md:
+#   verify → npm (@vobiz/cli, trusted publishing with provenance) → single-executable binaries for five platforms →
+#   checksums + build-provenance attestations → GitHub release → GHCR multi-arch image → Homebrew tap PR → Scoop manifest.
+# Nothing is staged and no npm token exists: npm trusts this repository's OIDC identity (npmjs.com → @vobiz/cli →
+# Settings → Trusted publisher: GitHub Actions, vobiz-ai / Vobiz-CLI, workflow release.yml, environment npm). The `npm`
+# GitHub environment can carry required reviewers if a human gate is wanted. Each job gets only the token permissions
+# it needs.
+#
+# Docker `:latest` is NOT retagged on every tag push. It moves only when the tag is a stable release (vX.Y.Z, no
+# prerelease suffix) AND it is the highest stable semver tag in the repository, so pushing a backport tag (e.g. v1.2.4
+# after v1.3.0) or a prerelease (v1.4.0-rc.1) never moves it. To (re)point `:latest` by hand, run this workflow from the
+# tag (Run workflow → "Use workflow from" → the tag) with "latest" ticked; the same stable + highest-semver check applies.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      latest:
+        description: "Also tag the Docker image :latest (only honoured for the highest stable vX.Y.Z tag)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    # Only the public repository publishes; mirrors (e.g. the internal repo) never release.
+    if: github.repository == 'vobiz-ai/Vobiz-CLI' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false # no shared cache in publishing workflows (cache poisoning)
+      - run: npm ci --ignore-scripts
+      - name: Check versions match the tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          V=$(node -p "require('./package.json').version")
+          [ "$V" = "$TAG" ] || { echo "package.json is $V, tag is $TAG"; exit 1; }
+          LV=$(node -p "require('./package-lock.json').version")
+          [ "$LV" = "$TAG" ] || { echo "package-lock.json is $LV, tag is $TAG"; exit 1; }
+          grep -q "^## \[$TAG\]" CHANGELOG.md || { echo "CHANGELOG.md has no ## [$TAG] section"; exit 1; }
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          case "$TAG" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac >> "$GITHUB_OUTPUT"
+      # The full check (lint, build, tests) and the dev-inclusive audit run here, in a job without id-token, so the
+      # test toolchain and its ~80 dev dependencies never run next to the npm OIDC token.
+      - run: npm run check
+      - run: npm audit --audit-level=high
+      - name: Pack the npm tarball (prepack checks dist/internal is excluded and builds completions + man)
+        run: |
+          mkdir -p "$RUNNER_TEMP/pack"
+          npm pack --pack-destination "$RUNNER_TEMP/pack"
+          ls "$RUNNER_TEMP/pack"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/pack/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  npm:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@vobiz/cli
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC) and provenance
+    steps:
+      # No checkout, no npm ci, no build: this job publishes the exact tarball `verify` packed and tested, with
+      # --ignore-scripts, so no package code or dev dependency runs while the OIDC token is available.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false # no shared cache in publishing workflows (cache poisoning)
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-package
+          path: pack
+      - name: Publish to npm (trusted publishing, provenance)
+        env:
+          V: ${{ needs.verify.outputs.version }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          # Trusted publishing needs npm 11.5.1 or newer; Node 24 ships a newer npm.
+          npm --version
+          # Prereleases go to the `next` dist-tag so `npm i -g @vobiz/cli` keeps installing the latest stable.
+          if [ "$PRERELEASE" = true ]; then DIST_TAG=next; else DIST_TAG=latest; fi
+          TGZ="pack/vobiz-cli-$V.tgz"
+          test -f "$TGZ" && [ "$(ls pack | wc -l)" -eq 1 ] || { echo "expected exactly $TGZ"; ls pack; exit 1; }
+          npm publish "$TGZ" --ignore-scripts --provenance --access public --tag "$DIST_TAG"
+          for i in $(seq 1 30); do
+            npm view "@vobiz/cli@$V" version >/dev/null 2>&1 && break
+            [ "$i" = 30 ] && { echo "@vobiz/cli@$V did not appear on the registry"; exit 1; }
+            sleep 10
+          done
+          echo "### Published @vobiz/cli@$V to npm ($DIST_TAG, provenance attached)" >> "$GITHUB_STEP_SUMMARY"
+
+  binaries:
+    needs: verify
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { runner: macos-14, target: darwin-arm64 }
+          # GitHub retired the macos-13 image; macos-15-intel is the supported Intel macOS runner.
+          - { runner: macos-15-intel, target: darwin-x64 }
+          - { runner: ubuntu-24.04, target: linux-x64 }
+          - { runner: ubuntu-24.04-arm, target: linux-arm64 }
+          - { runner: windows-2022, target: win-x64 }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false # no shared cache in publishing workflows (cache poisoning)
+      - run: npm ci --ignore-scripts
+      - run: npm run build && npm run build:assets
+      - name: Build the single executable (${{ matrix.target }})
+        run: node scripts/build-sea.mjs --out bin
+      - name: Check the archive name
+        shell: bash
+        env:
+          V: ${{ needs.verify.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: test -f "bin/vobiz-$V-$TARGET.tar.gz" || test -f "bin/vobiz-$V-$TARGET.zip"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: binary-${{ matrix.target }}
+          path: |
+            bin/vobiz-*.tar.gz
+            bin/vobiz-*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  github-release:
+    needs: [verify, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release and upload the archives
+      id-token: write # actions/attest-build-provenance
+      attestations: write # actions/attest-build-provenance
+    steps:
+      # Each leg's artifact goes to its own directory (no merge-multiple), and each must hold exactly its own
+      # archive, so one leg (or an extra artifact) can never replace another platform's binary.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: binary-*
+          path: artifacts
+      - name: Check and collect the archives
+        env:
+          V: ${{ needs.verify.outputs.version }}
+        run: |
+          set -eu
+          TARGETS="darwin-arm64 darwin-x64 linux-x64 linux-arm64 win-x64"
+          [ "$(ls artifacts | sort | tr '\n' ' ')" = "binary-darwin-arm64 binary-darwin-x64 binary-linux-arm64 binary-linux-x64 binary-win-x64 " ] \
+            || { echo "unexpected artifacts:"; ls artifacts; exit 1; }
+          mkdir -p release
+          for t in $TARGETS; do
+            case "$t" in win-*) f="vobiz-$V-$t.zip" ;; *) f="vobiz-$V-$t.tar.gz" ;; esac
+            [ "$(ls "artifacts/binary-$t")" = "$f" ] || { echo "binary-$t must contain exactly $f:"; ls -la "artifacts/binary-$t"; exit 1; }
+            mv "artifacts/binary-$t/$f" release/
+          done
+      - name: Checksums
+        run: |
+          cd release
+          sha256sum vobiz-*.tar.gz vobiz-*.zip > SHA256SUMS
+          cat SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          test "$(wc -l < SHA256SUMS)" -eq 5 || { echo "expected 5 archives"; exit 1; }
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: release/SHA256SUMS
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          files: |
+            release/vobiz-*.tar.gz
+            release/vobiz-*.zip
+            release/SHA256SUMS
+          generate_release_notes: true
+          prerelease: ${{ needs.verify.outputs.prerelease == 'true' }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sha256sums
+          path: release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  docker:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io/vobiz-ai/vobiz-cli
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Decide the image tags (`:latest` only for the highest stable semver tag)
+        id: tags
+        env:
+          IMAGE: ghcr.io/vobiz-ai/vobiz-cli
+          EVENT: ${{ github.event_name }}
+          LATEST_INPUT: ${{ inputs.latest }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          TAGS="$IMAGE:$GITHUB_REF_NAME"$'\n'"$IMAGE:${GITHUB_REF_NAME#v}"
+          HIGHEST=$(git ls-remote --tags --refs "$REPO_URL" 'refs/tags/v*' | sed 's#.*refs/tags/v##' \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+          WANT_LATEST=false
+          if [ "$EVENT" = push ] || [ "$LATEST_INPUT" = true ]; then WANT_LATEST=true; fi
+          if [ "$WANT_LATEST" = true ] && echo "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+             && [ "v$HIGHEST" = "$GITHUB_REF_NAME" ]; then
+            TAGS="$TAGS"$'\n'"$IMAGE:latest"
+            echo "Also tagging :latest ($GITHUB_REF_NAME is the highest stable tag)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Not tagging :latest (ref $GITHUB_REF_NAME, highest stable v$HIGHEST, requested $WANT_LATEST)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          { echo "tags<<EOF"; echo "$TAGS"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: VERSION=${{ needs.verify.outputs.version }}
+          provenance: mode=max
+          sbom: true
+
+  homebrew:
+    # Stable releases only. Opens a PR to vobiz-ai/homebrew-tap; skipped (with a notice) until TAP_PUSH_TOKEN exists.
+    needs: [verify, github-release]
+    if: needs.verify.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Is TAP_PUSH_TOKEN configured?
+        id: secret
+        env:
+          TAP_PUSH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+        run: |
+          if [ -n "$TAP_PUSH_TOKEN" ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::TAP_PUSH_TOKEN is not set; skipping the Homebrew tap update (see docs/RELEASING.md)."
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.secret.outputs.present == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.secret.outputs.present == 'true'
+        with:
+          name: sha256sums
+          path: release
+      - name: Fill in the formula
+        if: steps.secret.outputs.present == 'true'
+        env:
+          V: ${{ needs.verify.outputs.version }}
+        run: node scripts/update-homebrew-formula.mjs --only homebrew --version "$V" --sums release/SHA256SUMS
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.secret.outputs.present == 'true'
+        with:
+          repository: vobiz-ai/homebrew-tap
+          token: ${{ secrets.TAP_PUSH_TOKEN }}
+          path: tap
+      - name: Open a pull request on vobiz-ai/homebrew-tap
+        if: steps.secret.outputs.present == 'true'
+        env:
+          V: ${{ needs.verify.outputs.version }}
+          GH_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
+        run: |
+          mkdir -p tap/Formula
+          cp packaging/homebrew/vobiz.rb tap/Formula/vobiz.rb
+          cd tap
+          if git diff --quiet -- Formula/vobiz.rb && [ -z "$(git status --porcelain Formula/vobiz.rb)" ]; then
+            echo "Formula already at $V"; exit 0
+          fi
+          BRANCH="vobiz-$V"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add Formula/vobiz.rb
+          git commit -m "vobiz $V"
+          git push --force origin "$BRANCH"
+          if ! gh pr create --repo vobiz-ai/homebrew-tap --head "$BRANCH" --title "vobiz $V" \
+            --body "Updates the Vobiz CLI formula to $V from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/v$V."; then
+            # Succeed only when the PR really exists already; any other failure fails the job.
+            [ "$(gh pr list --repo vobiz-ai/homebrew-tap --head "$BRANCH" --state open --json number --jq length)" -ge 1 ] \
+              || { echo "::error::could not open the Homebrew tap pull request for $BRANCH"; exit 1; }
+            echo "A pull request for $BRANCH already exists."
+          fi
+
+  scoop:
+    # Stable releases only. Commits packaging/scoop/vobiz.json to main, or opens a PR when the ruleset blocks the push.
+    # The manifest is generated by the TAGGED commit's script (never main's), the checkout keeps no credentials, and
+    # the token is handed only to the push and PR commands.
+    needs: [verify, github-release]
+    if: needs.verify.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit the manifest
+      pull-requests: write # fallback PR when main is protected
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # the tag being released
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sha256sums
+          path: ${{ runner.temp }}/release
+      - name: Fill in the manifest (script from the tag)
+        env:
+          V: ${{ needs.verify.outputs.version }}
+        run: node scripts/update-homebrew-formula.mjs --only scoop --version "$V" --sums "$RUNNER_TEMP/release/SHA256SUMS"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: main
+          persist-credentials: false
+      - name: Commit to main (or open a PR)
+        env:
+          V: ${{ needs.verify.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp packaging/scoop/vobiz.json main/packaging/scoop/vobiz.json
+          cd main
+          git diff --quiet -- packaging/scoop/vobiz.json && { echo "Manifest already at $V"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packaging/scoop/vobiz.json
+          git commit -m "chore(scoop): vobiz $V"
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$AUTH"
+          if git -c "http.https://github.com/.extraheader=$AUTH" push origin HEAD:main; then exit 0; fi
+          BRANCH="scoop/vobiz-$V"
+          git -c "http.https://github.com/.extraheader=$AUTH" push --force origin "HEAD:refs/heads/$BRANCH"
+          if ! gh pr create --base main --head "$BRANCH" --title "chore(scoop): vobiz $V" \
+            --body "Updates the Scoop manifest to the $V release assets."; then
+            # GITHUB_TOKEN may not be allowed to open PRs (repository setting); fail loudly unless the PR already exists.
+            [ "$(gh pr list --head "$BRANCH" --state open --json number --jq length)" -ge 1 ] \
+              || { echo "::error::could not push to main or open a PR for $BRANCH; update packaging/scoop/vobiz.json by hand"; exit 1; }
+            echo "A pull request for $BRANCH already exists."
+          fi

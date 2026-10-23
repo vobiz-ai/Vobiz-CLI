@@ -1,0 +1,267 @@
+/**
+ * Ctx is the one object every command receives. It owns the global flags (filled by cli.ts before each action),
+ * the config store, the streams, prompts, and lazily created credentials and client: a command that never makes
+ * a request never needs credentials, and `vobiz help` works without a login.
+ *
+ * Everything with side effects (fetch, prompts, stdin, opening a browser, clock) is injectable so command tests
+ * run against fakes; see test/helpers.ts `makeCtx`.
+ */
+import { spawn } from "node:child_process";
+import { ConfigStore } from "./config.js";
+import { resolveCredentials, type ResolvedCredentials } from "./credentials.js";
+import { VobizClient, type LogLevel } from "./client.js";
+import { Printer, type OutputMode, type Stream } from "./output.js";
+import { rememberSecret, scrubSecrets } from "./redact.js";
+import { VobizError } from "./errors.js";
+import { cleanMessage } from "./sanitize.js";
+
+export interface GlobalFlags {
+  profile?: string;
+  authId?: string;
+  authToken?: string;
+  output?: OutputMode;
+  json?: boolean;
+  fields?: string[];
+  /** --query path applied to printed data after --fields (see parseQuery in output.ts). */
+  query?: string;
+  quiet?: boolean;
+  yes?: boolean;
+  dryRun?: boolean;
+  wait?: boolean;
+  baseUrl?: string;
+  smsBaseUrl?: string;
+  /** Per-request timeout in seconds. */
+  timeout: number;
+  color: boolean;
+  verbose?: boolean;
+  debug?: boolean;
+  /** Only honoured together with --debug. */
+  showSecrets?: boolean;
+  updateCheck: boolean;
+}
+
+export interface Prompts {
+  confirm(message: string, defaultValue?: boolean): Promise<boolean>;
+  input(message: string): Promise<string>;
+  /** Hidden input (tokens). */
+  password(message: string): Promise<string>;
+}
+
+export interface StdinLike {
+  isTTY?: boolean;
+  /** Reads all of stdin as text. */
+  read(): Promise<string>;
+}
+
+export interface CtxOptions {
+  env?: NodeJS.ProcessEnv;
+  store?: ConfigStore;
+  stdout?: Stream;
+  stderr?: Stream;
+  stdin?: StdinLike;
+  fetch?: typeof fetch;
+  prompts?: Prompts;
+  now?: () => Date;
+  /**
+   * Opens a URL in the user's browser (login --browser, docs open). The default only launches a browser for an
+   * interactive user: with VOBIZ_NO_BROWSER or CI set, or stdout not a TTY, it prints the URL instead.
+   */
+  openUrl?: (url: string) => Promise<void>;
+  flags?: Partial<GlobalFlags>;
+}
+
+export const defaultFlags = (): GlobalFlags => ({ timeout: 30, color: true, updateCheck: true });
+
+export class Ctx {
+  readonly env: NodeJS.ProcessEnv;
+  readonly store: ConfigStore;
+  readonly stdout: Stream;
+  readonly stderr: Stream;
+  readonly stdin: StdinLike;
+  readonly fetch: typeof fetch;
+  readonly prompts: Prompts;
+  readonly now: () => Date;
+  readonly openUrl: (url: string) => Promise<void>;
+  /** Filled from the parsed command line by cli.ts before every action. */
+  flags: GlobalFlags;
+  /** Set by a command that wants a non-zero exit without throwing (e.g. `doctor` with failed checks). */
+  exitCode = 0;
+  readonly out: Printer;
+  private _creds?: ResolvedCredentials;
+  private _client?: VobizClient;
+
+  constructor(o: CtxOptions = {}) {
+    this.env = o.env ?? process.env;
+    this.store = o.store ?? new ConfigStore(undefined);
+    this.stdout = o.stdout ?? process.stdout;
+    this.stderr = o.stderr ?? process.stderr;
+    this.stdin = o.stdin ?? { isTTY: process.stdin.isTTY, read: readProcessStdin };
+    this.fetch = o.fetch ?? globalThis.fetch;
+    this.prompts = o.prompts ?? inquirerPrompts();
+    this.now = o.now ?? (() => new Date());
+    this.openUrl = o.openUrl ?? ((url: string) => openUrlGuarded(url, { env: this.env, stdout: this.stdout, stderr: this.stderr }));
+    this.flags = { ...defaultFlags(), ...o.flags };
+    const ctx = this;
+    this.out = new Printer({
+      get flags() {
+        return ctx.flags;
+      },
+      env: this.env,
+      stdout: this.stdout,
+      stderr: this.stderr,
+      get defaultOutput() {
+        try {
+          return ctx.store.settings().output;
+        } catch {
+          return undefined;
+        }
+      },
+    });
+  }
+
+  get isTTY(): { stdin: boolean; stdout: boolean; stderr: boolean } {
+    return { stdin: !!this.stdin.isTTY, stdout: !!this.stdout.isTTY, stderr: !!this.stderr.isTTY };
+  }
+
+  /** Resolved credentials (flags > env > profile). Throws missing_credentials on first use when there are none. */
+  get creds(): ResolvedCredentials {
+    if (!this._creds) {
+      this._creds = resolveCredentials(this.flags, this.store, this.env, (m) => this.log("warn", m));
+      rememberSecret(this._creds.authToken);
+      if (this._creds.source === "profile") {
+        const problem = this.store.credentialsPermissionProblem();
+        if (problem) this.log("warn", problem);
+      }
+    }
+    return this._creds;
+  }
+
+  /** Client bound to `creds`, the global timeout and --dry-run. */
+  get client(): VobizClient {
+    return (this._client ??= this.makeClient(() => this.creds));
+  }
+
+  /** A client for explicit credentials (login verifies new credentials before saving them). */
+  makeClient(creds: ResolvedCredentials | (() => ResolvedCredentials)): VobizClient {
+    return new VobizClient({
+      creds,
+      fetch: this.fetch,
+      timeoutMs: this.flags.timeout * 1000,
+      log: (level, msg) => this.log(level, msg),
+      dryRun: () => !!this.flags.dryRun,
+    });
+  }
+
+  /** Forget cached credentials/client (after login or profile switches). */
+  resetAuth(): void {
+    this._creds = undefined;
+    this._client = undefined;
+  }
+
+  /** Diagnostics to stderr: `verbose` needs --verbose or --debug, `debug` needs --debug or VOBIZ_LOG=debug. */
+  log(level: LogLevel, message: string): void {
+    const debug = !!this.flags.debug || this.env.VOBIZ_LOG === "debug";
+    if (level === "debug" && !debug) return;
+    if (level === "verbose" && !(this.flags.verbose || debug)) return;
+    if (level === "info" && this.flags.quiet) return;
+    const prefix = level === "warn" ? "warning: " : level === "info" ? "" : `[${level}] `;
+    // Known secret values never reach a log line, except with --debug --show-secrets (which asks for them).
+    const text = this.flags.debug && this.flags.showSecrets ? message : scrubSecrets(message);
+    this.stderr.write(prefix + cleanMessage(text) + "\n");
+  }
+}
+
+async function readProcessStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const c of process.stdin) chunks.push(typeof c === "string" ? Buffer.from(c) : c);
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/** @inquirer/prompts, rendered on stderr so stdout stays data-only. Loaded lazily (it is not needed in CI). */
+function inquirerPrompts(): Prompts {
+  const ctx = { output: process.stderr, clearPromptOnDone: false };
+  return {
+    async confirm(message, defaultValue = false) {
+      const { confirm } = await import("@inquirer/prompts");
+      return confirm({ message, default: defaultValue }, ctx);
+    },
+    async input(message) {
+      const { input } = await import("@inquirer/prompts");
+      return input({ message, validate: (v) => (v.trim() ? true : "Required") }, ctx);
+    },
+    async password(message) {
+      const { password } = await import("@inquirer/prompts");
+      return password({ message, mask: "•", validate: (v) => (v.trim() ? true : "Required") }, ctx);
+    },
+  };
+}
+
+type SpawnFn = typeof spawn;
+
+/** True when launching a browser would not surprise someone: an interactive terminal, not CI, not a test runner, no opt-out. */
+export function browserAllowed(env: NodeJS.ProcessEnv = process.env, isTTY: boolean = Boolean(process.stdout.isTTY)): boolean {
+  return isTTY && !env.CI && !env.VOBIZ_NO_BROWSER && env.NODE_ENV !== "test" && !env.VITEST;
+}
+
+/**
+ * The default `openUrl`: spawns the platform opener only for an interactive session. With VOBIZ_NO_BROWSER or CI
+ * set, under a test runner, or when stdout is not a terminal (pipes, agents), it prints "Not opening a browser here; open <url> yourself." to stderr instead.
+ */
+export async function openUrlGuarded(
+  url: string,
+  o: { env: NodeJS.ProcessEnv; stdout: Stream; stderr: Stream },
+  spawnFn: SpawnFn = spawn,
+): Promise<void> {
+  if (!browserAllowed(o.env, Boolean(o.stdout.isTTY))) {
+    o.stderr.write(`Not opening a browser here; open ${url} yourself.\n`);
+    return;
+  }
+  await openInBrowser(url, spawnFn);
+}
+
+/** Alias kept for callers/tests written against the review-fix branch. */
+export function mayOpenBrowser(env: NodeJS.ProcessEnv, stdout: Stream): boolean {
+  return browserAllowed(env, Boolean(stdout.isTTY));
+}
+
+/**
+ * Why `url` may not be handed to the platform opener, or undefined when it may. Only http(s) URLs without
+ * whitespace or control characters are opened; on Windows the shell metacharacters `" ^ < > |` (and `%` escapes
+ * that decode to one of them or to `&`) are refused as defence in depth, although no shell is involved.
+ */
+export function openUrlProblem(url: string, platform: NodeJS.Platform = process.platform): string | undefined {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return "is not a valid URL";
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return "is not an http(s) URL";
+  if (/[\s\x00-\x1f\x7f]/.test(url)) return "contains whitespace or control characters";
+  if (platform === "win32") {
+    if (/["^<>|`]/.test(url)) return 'contains one of " ^ < > | `';
+    if (/%(22|5e|3c|3e|7c|60)/i.test(u.pathname + u.hash)) return "contains an encoded shell metacharacter";
+  }
+  return undefined;
+}
+
+/**
+ * Launches the platform's URL handler with the URL as one argv entry and no shell. Windows uses
+ * `rundll32 url.dll,FileProtocolHandler <url>` rather than `cmd /c start`, because cmd.exe would run `&` and `|`.
+ */
+export async function openInBrowser(url: string, spawnFn: SpawnFn = spawn, platform: NodeJS.Platform = process.platform): Promise<void> {
+  const problem = openUrlProblem(url, platform);
+  if (problem) throw new VobizError("invalid_input", `Not opening ${JSON.stringify(url)}: it ${problem}.`);
+  const [cmd, args] =
+    platform === "darwin" ? ["open", [url]] : platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url]] : ["xdg-open", [url]];
+  await new Promise<void>((resolve) => {
+    try {
+      const child = spawnFn(cmd, args as string[], { stdio: "ignore", detached: true, shell: false, windowsVerbatimArguments: false });
+      child.on("error", () => resolve());
+      child.unref();
+      resolve();
+    } catch {
+      resolve();
+    }
+  });
+}

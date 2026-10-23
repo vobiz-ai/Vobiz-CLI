@@ -1,0 +1,52 @@
+/**
+ * `vobiz update [--check]`: tells you how to upgrade for the way the CLI was installed. It never replaces the
+ * binary itself (package managers own that), so it is safe to run anywhere.
+ */
+import type { Command } from "commander";
+import type { Ctx } from "../core/context.js";
+import { VobizError } from "../core/errors.js";
+import { compareVersions, fetchLatestVersion } from "../core/update.js";
+import { CLI_VERSION } from "../core/version.js";
+
+export type InstallMethod = "homebrew" | "docker" | "binary" | "npx" | "npm";
+
+/** Best guess from the executable path; used only to choose which upgrade command to print. */
+export function detectInstallMethod(execPath = process.argv[1] ?? "", env: NodeJS.ProcessEnv = process.env): InstallMethod {
+  const p = execPath.replace(/\\/g, "/");
+  if (env.VOBIZ_DOCKER === "1") return "docker";
+  if (/\/(Cellar|homebrew|linuxbrew)\//i.test(p)) return "homebrew";
+  if (/\/_npx\//.test(p)) return "npx";
+  if (/node_modules\//.test(p)) return "npm";
+  if (process.execPath && !/\bnode(\.exe)?$/i.test(process.execPath)) return "binary";
+  return "npm";
+}
+
+const HOW: Record<InstallMethod, string> = {
+  npm: "npm install -g @vobiz/cli@latest",
+  npx: "npx @vobiz/cli@latest (npx always runs the version you name)",
+  homebrew: "brew upgrade vobiz-ai/tap/vobiz",
+  docker: "docker pull ghcr.io/vobiz-ai/vobiz-cli:latest",
+  binary: "curl -fsSL https://raw.githubusercontent.com/vobiz-ai/Vobiz-CLI/main/install.sh | sh",
+};
+
+export function register(program: Command, ctx: Ctx): void {
+  program
+    .command("update")
+    .description("Check for a newer CLI version and show how to upgrade")
+    .option("--check", "only report whether an update exists (exit 0 either way)")
+    .action(async (opts: { check?: boolean }) => {
+      const latest = await fetchLatestVersion(ctx.fetch, Math.min(ctx.flags.timeout * 1000, 10_000));
+      if (!latest) throw new VobizError("network_error", "Could not read the latest version from the npm registry.");
+      ctx.store.patchSettings({ lastUpdateCheck: ctx.now().toISOString(), latestKnownVersion: latest });
+      const method = detectInstallMethod(undefined, ctx.env);
+      const available = compareVersions(latest, CLI_VERSION) > 0;
+      const data = { current: CLI_VERSION, latest, update_available: available, install_method: method, upgrade_command: available ? HOW[method] : null };
+      if (ctx.out.mode === "table" || ctx.out.mode === "plain") {
+        ctx.stdout.write(
+          available
+            ? `vobiz ${CLI_VERSION} -> ${latest} is available.${opts.check ? "" : `\nUpgrade with:\n  ${HOW[method]}`}\n`
+            : `vobiz ${CLI_VERSION} is the latest version.\n`,
+        );
+      } else ctx.out.print(data);
+    });
+}

@@ -114,7 +114,7 @@ function registerAccounts(partner: Command, ctx: Ctx): void {
 
   const cdrs = addListOptions(accounts.command("cdrs").argument(...CUSTOMER_ARG).description("List a customer's call detail records"));
   const cdrQ = addQueryOptions(cdrs, CDRS);
-  cdrs.addHelpText("after", examples("vobiz partner accounts cdrs MA_XXXXXXXX --start-date yesterday --call-direction outbound"));
+  cdrs.addHelpText("after", examples("vobiz partner accounts cdrs MA_XXXXXXXX --from yesterday --call-direction outbound"));
   cdrs.action(async (customer: string, opts: Opts) => {
     await runList(ctx, CDRS, { path: { customer_auth_id: customer }, query: buildQuery(ctx, opts, cdrQ) }, opts, {
       columns: ["created_at", "call_direction", "caller_id_number", "destination_number", "duration", "hangup_cause", "cost"],

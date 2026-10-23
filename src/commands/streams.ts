@@ -31,7 +31,7 @@ import {
   serveWebSockets,
   type WebSocketConnection,
 } from "../agent/websocket.js";
-import { checkForwardUrl, checkUrl, collect, intArg, isRec, secondsArg, sleep, type Rec } from "./voice-shared.js";
+import { checkForwardUrl, collect, intArg, isRec, secondsArg, sleep, type Rec } from "./voice-shared.js";
 
 export const STREAM_DOCS = "https://www.vobiz.ai/docs/xml/stream/stream-events";
 const ENCODINGS = { mulaw: "audio/x-mulaw", l16: "audio/x-l16" } as const;
@@ -541,7 +541,7 @@ export function register(program: Command, ctx: Ctx): void {
 
   streams
     .command("test")
-    .argument("<wss-url>", "your stream server's URL (wss://; ws:// on localhost with --allow-insecure-url)")
+    .argument("<wss-url>", "your stream server's URL: wss://, or ws:// on localhost (e.g. ws://localhost:8080/media)")
     .description("Act as Vobiz against your stream server: send start and media frames, check what it sends back")
     .addOption(new Option("--codec <codec>", "inbound audio encoding").choices(["mulaw", "l16"]).default("mulaw"))
     .addOption(new Option("--sample-rate <hz>", "inbound sample rate (μ-law: 8000; L16: 8000 or 16000)").choices(["8000", "16000"]).default("8000"))
@@ -549,7 +549,7 @@ export function register(program: Command, ctx: Ctx): void {
     .option("--linger <n>", "seconds to keep listening after the last media frame (default: 1)", secondsArg(60))
     .option("--stream-id <id>", "streamId to put in the start frame (default: a random UUID)")
     .option("--call-id <id>", "callId to put in the start frame (default: a random UUID)")
-    .option("--allow-insecure-url", "allow ws:// on localhost")
+    .option("--allow-insecure-url", "allow a plain ws:// URL on a host other than localhost (audio is sent unencrypted)")
     .addHelpText(
       "after",
       `
@@ -560,13 +560,14 @@ clearAudio and stop your server sends. Exit code 1 when your server breaks the p
 
 Examples:
   vobiz streams test wss://agent.example.com/media
-  vobiz streams test ws://localhost:8080/media --allow-insecure-url --codec l16 --sample-rate 16000 --seconds 5
+  vobiz streams test ws://localhost:8080/media --codec l16 --sample-rate 16000 --seconds 5
   vobiz streams test wss://agent.example.com/media --json | jq .errors
 
 Frame reference: ${STREAM_DOCS}`,
     )
     .action(async (raw: string, opts: { codec: Codec; sampleRate: string; seconds?: number; linger?: number; streamId?: string; callId?: string; allowInsecureUrl?: boolean }) => {
-      const url = checkUrl(raw, "<wss-url>", { websocket: true, allowInsecure: opts.allowInsecureUrl });
+      // The CLI itself connects (as with streams forward): ws:// is fine on localhost, elsewhere only when allowed.
+      const url = checkForwardUrl(raw, "<wss-url>", { websocket: true, allowInsecure: opts.allowInsecureUrl });
       const sampleRate = tryParseIntStrict(opts.sampleRate, { min: 8000, max: 16000 });
       if (sampleRate === undefined) throw usage(`--sample-rate must be 8000 or 16000 (got "${opts.sampleRate}").`);
       if (opts.codec === "mulaw" && sampleRate !== 8000) throw usage("μ-law streams are 8000 Hz only; use --codec l16 for 16000.");

@@ -3696,7 +3696,7 @@ vobiz streams test <wss-url> [options]
 
 | Argument | Required | Description |
 |---|---|---|
-| `wss-url` | yes | your stream server's URL (wss://; ws:// on localhost with --allow-insecure-url) |
+| `wss-url` | yes | your stream server's URL: wss://, or ws:// on localhost (e.g. ws://localhost:8080/media) |
 
 | Option | Description |
 |---|---|
@@ -3706,7 +3706,7 @@ vobiz streams test <wss-url> [options]
 | `--linger <n>` | seconds to keep listening after the last media frame (default: 1) |
 | `--stream-id <id>` | streamId to put in the start frame (default: a random UUID) |
 | `--call-id <id>` | callId to put in the start frame (default: a random UUID) |
-| `--allow-insecure-url` | allow ws:// on localhost |
+| `--allow-insecure-url` | allow a plain ws:// URL on a host other than localhost (audio is sent unencrypted) |
 
 ### vobiz sub-accounts
 

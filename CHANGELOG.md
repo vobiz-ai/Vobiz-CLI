@@ -6,6 +6,10 @@ All notable changes to the Vobiz CLI are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `sms send` reports unknown recipient outcomes separately instead of counting them as accepted.
+
 ## [0.1.3] - 2026-10-23
 
 ### Added

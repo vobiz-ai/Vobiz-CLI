@@ -124,6 +124,34 @@ describe("sms send", () => {
     expect(r.code).toBe(7);
   });
 
+  it("does not count an unknown recipient outcome as accepted", async () => {
+    let sends = 0;
+    const { r, api } = await run(
+      ["sms", "send", "--from", "+14155550100", "--to", "+14155550123,+14155550124", "--text", "Hi"],
+      {
+        "GET /messages/cost-preview": preview,
+        "POST /messages": () => (++sends === 1 ? reply(201, { ...MSG, to: "+14155550123" }) : networkError()),
+      },
+    );
+    expect(r.code).toBe(7);
+    expect(api.calls.filter((c) => c.method === "POST")).toHaveLength(2);
+    expect(r.json().messages).toMatchObject([
+      { to: "+14155550123", status: "sent" },
+      { to: "+14155550124", status: "unknown" },
+    ]);
+    expect(r.err).toContain("1 of 2 accepted, 1 unknown.");
+    expect(r.err).not.toContain("2 of 2 accepted");
+  });
+
+  it("counts a confirmed send as accepted even when its delivery status is unknown", async () => {
+    const { r } = await run(["sms", "send", "--from", "+14155550100", "--to", "+14155550123", "--text", "Hi"], {
+      "GET /messages/cost-preview": preview,
+      "POST /messages": reply(201, { ...MSG, status: "unknown" }),
+    });
+    expect(r.code).toBe(0);
+    expect(r.err).toContain("1 of 1 accepted.");
+  });
+
   describe("--wait", () => {
     beforeEach(() => void (pollSettings.intervalMs = 1));
     afterEach(() => void (pollSettings.intervalMs = 2000));

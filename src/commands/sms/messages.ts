@@ -222,11 +222,16 @@ Examples:
 
       const messages: Rec[] = [];
       let unknownOutcome = false;
+      let unknownSends = 0; // requests whose outcome the CLI could not confirm
       for (const [i, recipient] of to.entries()) {
         const body = { ...base, to: [recipient], idempotencyKey: recipientKey(key, recipient) };
         try {
           const res = await ctx.client.call<Rec>(SEND, { body, sideEffect: true });
-          messages.push(isRec(res) ? res : { to: recipient, status: "unknown" });
+          if (isRec(res)) messages.push(res);
+          else {
+            unknownSends++;
+            messages.push({ to: recipient, status: "unknown" });
+          }
         } catch (err) {
           if (to.length === 1) throw err;
           if (err instanceof VobizError && err.status === 422) {
@@ -236,6 +241,7 @@ Examples:
           if (!(err instanceof VobizError)) throw err;
           const unknown = err.kind === "outcome_unknown";
           unknownOutcome ||= unknown;
+          if (unknown) unknownSends++;
           messages.push({ to: recipient, status: unknown ? "unknown" : "not_sent", errorCode: err.kind, errorMessage: err.message });
           if (unknown || !messages.some((m) => typeof m.id === "string")) {
             // Stop at an unknown outcome (the network may be down) or when nothing has gone out yet.
@@ -253,8 +259,9 @@ Examples:
       if ((mode === "json" || mode === "yaml") && !ctx.flags.quiet && !ctx.flags.fields?.length) ctx.out.print({ idempotencyKey: key, messages });
       else ctx.out.print(messages, { columns: ["id", "to", "status", "errorCode", "errorMessage"], idKey: "id" });
 
-      const sent = messages.length - failed.length;
-      if (!ctx.flags.wait) ctx.out.status(`${sent} of ${messages.length} accepted. "sent" means handed to the network; check delivery with \`vobiz sms messages get <id>\` or --wait.`);
+      const accepted = messages.length - failed.length - unknownSends;
+      if (!ctx.flags.wait)
+        ctx.out.status(`${accepted} of ${messages.length} accepted${unknownSends ? `, ${unknownSends} unknown` : ""}. "sent" means handed to the network; check delivery with \`vobiz sms messages get <id>\` or --wait.`);
       if (unknownOutcome) ctx.exitCode = EXIT.outcome_unknown;
       else if (!finished) {
         ctx.out.warn(`Not every message reached a final status within ${opts.maxWait ?? ctx.flags.timeout}s.`);

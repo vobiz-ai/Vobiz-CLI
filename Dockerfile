@@ -8,7 +8,7 @@
 # Base image pinned by digest (multi-arch index of node:24-alpine, Node 24.22.1 / Alpine 3.24.2), so a rebuild is
 # reproducible and a re-pushed tag cannot change what we ship. Dependabot (docker ecosystem) bumps the digest.
 # Refresh by hand: docker buildx imagetools inspect node:24-alpine  (the top-level "Digest:"), in both stages.
-FROM node:24-alpine@sha256:6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d AS build
+FROM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 # --ignore-scripts: dependency lifecycle scripts never run; the build below is explicit.
@@ -17,7 +17,7 @@ COPY . .
 # build:assets generates completions/ and man/ from dist/cli.js. skills/ is optional; mkdir keeps the runtime COPY valid.
 RUN npm run build && npm run build:assets && npm prune --omit=dev && mkdir -p skills completions man
 
-FROM node:24-alpine@sha256:6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d
+FROM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="Vobiz CLI" \
       org.opencontainers.image.description="Official Vobiz CLI: voice calls, SMS, phone numbers, SIP trunks, VobizXML and call records from your terminal and CI" \
